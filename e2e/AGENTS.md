@@ -2,35 +2,41 @@
 
 ## Overview
 
-`e2e/` covers browser-only Playwright flows against the production frontend bundle with the `@platform/*` boundary resolved to a mocked browser implementation. These specs validate user-visible behavior with stable mocked backend state, not real Rust or SITL integration.
+`e2e/` covers browser-only Playwright UI flows against the production frontend bundle with `IRONWING_PLATFORM=web`. The browser suite exercises the real Web/WASM platform adapter and connects to `mavkit::sim::DemoVehicle` by selecting the Demo transport in the UI.
+
+Browser E2E is a UI lane: tests interact only through rendered controls, links, and visible UI state. Do not use `@platform/mock`, `src/platform/mock/*`, `window.__IRONWING_MOCK_PLATFORM__`, app-internal command overrides, fake platform events, or synthetic backend state.
 
 ## Where To Look
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Playwright config | `../playwright.config.ts` | Local serial workers, CI dual workers, build + preview web server |
-| Mock platform | `../src/platform/mock/` | Browser-only invoke/listen/fetch shim |
-| Playwright fixture | `fixtures/mock-platform.ts` | Command overrides and emitted events |
-| Minimal liveness check | `smoke.spec.ts` | Fastest spec to debug harness issues |
-| Happy-path connect flow | `connect-telemetry.spec.ts` | Most complete mocked flow |
-| Validation / cancel negatives | `invalid-udp-bind.spec.ts`, `wrong-port-cancel.spec.ts` | Error handling and cleanup expectations |
+| Playwright config | `../playwright.config.ts` | Builds/previews `IRONWING_PLATFORM=web`, artifacts, retries, workers |
+| Specs | `specs/*.spec.ts` | One short, readable spec file per workspace by default |
+| Test fixture | `support/test.ts` | Exports Playwright `test`, `expect`, and the app page object |
+| App/page objects | `support/app.ts`, `support/pages/*` | Thin app composition plus one focused page object per surface |
+| Scenario data | `support/data/*` | Typed mission plans, setup sections, and edit candidates |
+| Layout helpers | `support/layout.ts` | Viewport canaries and simple overflow assertions |
 
 ## Workflow
 
 - Run with `pnpm run e2e:browser` or `pnpm run e2e:browser:headed`.
-- Playwright builds the frontend with `IRONWING_PLATFORM=mock`, starts a local preview server, then runs the browser suite against that server.
-- Local runs stay on `workers: 1`; CI uses `workers: 2` to reduce wall-clock time without fully parallelizing individual spec files.
+- Playwright builds the frontend with `IRONWING_PLATFORM=web`, starts a local preview server, then runs the browser suite against that server.
+- Specs connect by selecting `Demo` in the connection transport UI, choosing a demo preset, and pressing Connect. Wait for real connected state and telemetry emitted through the Web/WASM adapter.
+- Local runs stay on `workers: 1`; CI uses limited parallelism to reduce wall-clock time without fully parallelizing every browser interaction.
 - Failure artifacts (trace, screenshot, video) are enabled via Playwright config.
 
 ## Spec Conventions
 
-- Test real flows through stable `data-testid` selectors and visible state changes.
-- Prefer setup/cleanup that returns the mock backend and UI to Idle before asserting the main scenario.
-- Configure mocked command behavior through `fixtures/mock-platform.ts` instead of patching DOM state.
-- Keep specs focused on user-visible transitions: connect, disconnect, error surfacing, disabled/enabled controls, telemetry arrival.
+- Keep specs compact and non-parity. Default to one spec file per workspace; smoke is the harness check.
+- Specs should explain the scenario with `test.step(...)`: arrange/connect, open the workspace, perform the user action, and assert the result. A reader should understand what is being proven without opening support files.
+- Put selectors, button-click mechanics, branching, retries, and web-first assertions in focused page objects under `support/pages/*`. Do not create god support files that collect unrelated workspaces.
+- Put reusable scenario data in `support/data/*`; keep it typed and immutable.
+- Workspace specs may be deeper when the workspace is important: setup should open every section and prove at least one safe parameter write/apply/reload round-trip; mission should prove multi-item authoring plus upload/readback.
+- Use normal UI navigation and controls. Do not patch DOM state, inject app commands, dispatch fake platform events, or seed backend state.
+- Avoid file picker mocks. For logs and firmware, assert that the UI opens and empty, unsupported, or capability-limited states are sane.
 - Keep active browser proofs self-contained under `e2e/`; do not import removed legacy helpers or React-era test code.
 
 ## Scope Limits
 
-- The mock platform is not a production browser transport architecture.
-- These tests do not prove real Tauri, Rust, or SITL integration. That thin native coverage now lives in `../e2e-native/` via WebDriverIO.
+- Deep domain behavior, edge-case command handling, serialization, and MAVLink contract coverage belong in focused unit/contract tests.
+- Browser E2E does not prove native Tauri, desktop transports, or SITL integration. Native coverage remains separate in `../e2e-native/` via WebDriverIO and real SITL; do not modify that lane from browser E2E work.

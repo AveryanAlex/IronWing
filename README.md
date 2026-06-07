@@ -113,14 +113,14 @@ Android supports UDP, BLE, and Classic SPP transports. Serial is excluded (doesn
 
 ## End-to-End Testing (Playwright)
 
-Browser-based E2E tests now run against the production frontend bundle with the `@platform/*` boundary resolved to a mocked browser implementation. This is a **browser-only UI workflow**: it validates user-visible behavior, not real Tauri, Rust, or SITL integration.
+Browser-based E2E tests run against the production frontend bundle with `IRONWING_PLATFORM=web`. This is a **browser UI workflow**: it validates user-visible behavior through the real Web/WASM adapter and the built-in MAVKit demo vehicle, not native Tauri or SITL integration.
 
 ### How it works
 
-1. Playwright builds the frontend with `IRONWING_PLATFORM=mock`, which swaps the native `@platform/*` imports for browser-safe mock implementations.
+1. Playwright builds the frontend with `IRONWING_PLATFORM=web`, which uses the browser Web/WASM platform adapter.
 2. Playwright starts a local Vite preview server for the built app.
-3. The browser tests configure mocked command results and emitted events through the `window.__IRONWING_MOCK_PLATFORM__` controller exposed by `src/platform/mock/backend.ts`.
-4. Specs drive the app through real browser interactions and assert visible state changes.
+3. Specs select the Demo transport in the rendered connection UI and connect to `mavkit::sim::DemoVehicle`.
+4. Specs drive the app through real browser interactions and assert visible state changes. They do not patch app internals, dispatch fake platform events, or use command overrides.
 
 ### Quick start
 
@@ -140,18 +140,22 @@ pnpm run e2e                  # Run all browser and native E2E lanes sequentiall
 
 ### Current test scope
 
-Four spec files in `e2e/`:
+Compact demo-backed specs live under `e2e/specs/`. The default shape is one readable spec file per workspace. Specs use `test.step(...)` to show the user journey; selector-heavy clicking/waiting logic lives in focused page objects under `e2e/support/pages/`, and reusable scenario data lives under `e2e/support/data/`.
 
-- **smoke.spec.ts** — Verifies the app loads and reaches the idle connection state in browser-only mode.
-- **connect-telemetry.spec.ts** — Mocked connect/telemetry/disconnect cycle: selects TCP transport, connects, receives mocked link/vehicle/telemetry events, then disconnects and confirms idle state.
-- **wrong-port-cancel.spec.ts** — Negative path: starts a deferred mocked connection, verifies "Connecting" state and UI lockout, cancels, and confirms clean return to idle with controls re-enabled.
-- **invalid-udp-bind.spec.ts** — Negative path: submits a mocked `connect_link` failure and verifies the app surfaces the validation error cleanly.
+- **smoke.spec.ts** — Boots the web bundle, selects Demo, connects, and verifies the live overview.
+- **connection.spec.ts** — Checks Demo transport help, diagnostics, connect/disconnect/reconnect, and phone vehicle drawer access.
+- **overview.spec.ts** — Checks live overview state and the compact connected layout canary.
+- **telemetry.spec.ts** / **hud.spec.ts** — Check live demo flight metrics and instruments.
+- **mission.spec.ts** — Authors a mixed mission, uploads it to the demo vehicle, clears local state, reads it back, and checks undo/redo plus survey/fence/rally planning tools.
+- **setup.spec.ts** — Downloads demo parameters, opens every setup section, applies guided and raw safe parameter edits, reloads from the vehicle, and verifies persistence.
+- **logs.spec.ts** / **firmware.spec.ts** / **settings.spec.ts** — Check workspace-specific empty, capability-limited/recovery, and mutable settings surfaces.
 
 Each Playwright invocation still runs serially (`workers: 1`). Traces, screenshots, and video are captured on failure.
 
 ### Scope limits
 
-- These tests do **not** prove real Tauri or Rust integration.
+- These tests do **not** prove native Tauri or SITL integration.
+- Deep serialization, command edge cases, firmware flashing, log parsing, and broad MAVLink contract coverage belong in unit/contract tests or the native/SITL lane as appropriate.
 - `pnpm run dev:desktop` remains the real SITL workflow: it starts ArduPilot SITL and launches the native Tauri app with the matching TCP address prefilled.
 
 ## Native End-to-End Testing (WebDriverIO)

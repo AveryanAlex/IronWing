@@ -11,7 +11,7 @@
 | Native IPC surface | `tauri/core.ts`, `tauri/event.ts`, `tauri/http.ts` | Thin re-exports of Tauri APIs |
 | Pure web IPC surface | `web/core.ts`, `web/event.ts`, `web/http.ts` | Browser/WASM runtime for SvelteKit/Vite builds |
 | Agent remote UI IPC surface | `remote/core.ts`, `remote/event.ts`, `remote/http.ts` | Browser-facing bridge to a running Tauri app |
-| Mocked browser IPC surface | `mock/core.ts`, `mock/event.ts`, `mock/http.ts` | Browser-only invoke/event/fetch stubs |
+| Mocked browser IPC surface | `mock/core.ts`, `mock/event.ts`, `mock/http.ts` | Browser-only invoke/event/fetch stubs for focused tests/dev harnesses, not the browser E2E lane |
 | Analytics surface | `<platform>/analytics.ts` | Same app analytics facade, platform-specific Aptabase backend/no-op |
 | Mock backend controller | `mock/backend.ts` | Idle startup defaults, command overrides, emitted events |
 | Boundary enforcement | `import-boundary.test.ts` | Architectural guardrail |
@@ -39,8 +39,9 @@
 ## Mock Platform Notes
 
 - `mock/backend.ts` owns startup defaults plus the browser-global controller exposed as `window.__IRONWING_MOCK_PLATFORM__`.
-- Playwright tests should configure mocked behavior at the `@platform/*` boundary, not by patching DOM internals.
-- The mock platform is for browser-only Playwright tests. It does not prove real Tauri or Rust integration.
+- The mock platform is not used by the browser Playwright E2E lane. Browser E2E uses `IRONWING_PLATFORM=web`, the Web/WASM adapter, and the MAVKit demo vehicle through normal UI controls.
+- If a focused unit or dev harness still uses the mock platform, configure behavior at the `@platform/*` boundary instead of patching DOM internals.
+- The mock platform does not prove real Tauri, Rust, Web/WASM, or SITL integration.
 
 ## Remote Platform Notes
 

@@ -99,7 +99,7 @@ Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavk
 - Mission home handling is a wire-boundary concern only: upload/download conversion happens in mavkit helpers, not in arbitrary frontend/backend code.
 - Active IPC and web<->Rust contracts have no repo-internal backward-compatibility burden unless explicitly required. Change Rust, Tauri/web/remote/mock layers, and TypeScript together instead of carrying serde aliases, wrapper commands, fallback command arrays, or old wire names just for compatibility.
 - Parameter edits stage locally first and apply in batches. Do not bypass staging for general settings flows.
-- Playwright covers mocked browser flows; the thin real Rust↔frontend desktop integration lane now lives in `e2e-native/` via WebDriverIO.
+- Playwright covers browser UI flows through the Web/WASM platform and MAVKit demo vehicle; the thin real Rust↔frontend↔SITL desktop integration lane lives in `e2e-native/` via WebDriverIO.
 
 ## Transport / Platform Notes
 
@@ -127,7 +127,7 @@ Svelte (TypeScript) ── invoke/listen ──> Tauri Shell (Rust) ──> mavk
 ## Tests
 
 - Prefer behavior/contract tests over implementation-detail tests.
-- Use Vitest for unit and focused jsdom component behavior; use Playwright for mocked browser flows and WebDriverIO for the thin native desktop smoke lane.
+- Use Vitest for unit and focused jsdom component behavior; use Playwright for browser UI flows through the Web/WASM demo vehicle and WebDriverIO for the thin native desktop SITL smoke lane.
 - Keep Vitest fast and unit-shaped. Prefer pure Node tests for domain helpers, stores, IPC/platform adapters, and wire-contract fixtures. Do not grow Vitest into a browser-flow acceptance suite.
 - Vitest component tests must stay focused on one leaf component or small panel with explicit props/context. They should not click through multi-step app workflows, switch workspaces, simulate routing, or assert broad shell behavior.
 - Do not import `src/routes/(app)/**` pages from Vitest tests unless the test is an explicit architectural guardrail. Route/page behavior, navigation, responsive shell flows, file-picker flows, map interactions, and cross-workspace handoffs belong in Playwright under `e2e/`.

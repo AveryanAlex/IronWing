@@ -1,6 +1,7 @@
 import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
 import type { FencePlan } from "./fence";
+import { fromMissionWireDownload, toMissionWirePlan } from "./lib/mavkit-types/wire";
 import type { MissionPlan } from "./lib/mavkit-types";
 import type { RallyPlan } from "./rally";
 import type { SessionEvent } from "./session";
@@ -82,17 +83,17 @@ export type DomainPlanMap = {
 export async function uploadMission(
   plan: import("./lib/mavkit-types").MissionPlan,
 ): Promise<void> {
-  await invoke("mission_upload", { plan });
+  await invoke("mission_upload", { plan: toMissionWirePlan(plan) });
 }
 
 export async function downloadMission(): Promise<MissionDownload> {
-  return invoke<MissionDownload>("mission_download");
+  return fromMissionWireDownload(await invoke<MissionDownload>("mission_download"));
 }
 
 export async function validateMission(
   plan: import("./lib/mavkit-types").MissionPlan,
 ): Promise<MissionIssue[]> {
-  return invoke<MissionIssue[]>("mission_validate", { plan });
+  return invoke<MissionIssue[]>("mission_validate", { plan: toMissionWirePlan(plan) });
 }
 
 export async function clearMission(): Promise<void> {

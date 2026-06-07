@@ -4,7 +4,7 @@
 
 `scripts/` contains thin Node entrypoints for package scripts plus the shared `scripts/workflow/` orchestration library. Keep target-specific command shape in the entrypoints and put reusable process, environment, port, SITL, Tauri, and WASM behavior in `workflow/` modules.
 
-SvelteKit's Vite CLI is now the web/WASM default: `pnpm exec vite` serves the pure web platform and `pnpm exec vite build` writes `dist/web`. Tauri, mock E2E, and remote UI flows must opt into their platform explicitly through env helpers.
+SvelteKit's Vite CLI is now the web/WASM default: `pnpm exec vite` serves the pure web platform and `pnpm exec vite build` writes `dist/web`. Tauri and remote UI flows must opt into their platform explicitly through env helpers; browser E2E also uses the web platform but writes its preview bundle to `dist/e2e`.
 
 ## Where To Look
 
@@ -50,8 +50,9 @@ SvelteKit's Vite CLI is now the web/WASM default: `pnpm exec vite` serves the pu
 - Keep `src/platform/web/generated/ironwing_wasm.d.ts` checked in and do not modify it unless intentionally regenerating bindings. Generated JS/WASM runtime files remain transient and ignored.
 - Tauri dev/build entrypoints must pass `tauriFrontendEnv()` so frontend aliases use `src/platform/tauri/*` and output goes to `dist/tauri`.
 - Remote UI must pass `IRONWING_PLATFORM=remote` through `remoteUiEnv()` and stay a local agent workflow, not an automated Playwright lane.
-- Browser E2E must use `IRONWING_PLATFORM=mock` and `dist/e2e`; broad UI coverage belongs there, while native real-stack coverage stays thin in `e2e-native.mjs`.
-- The demo vehicle is a normal connection type backed by MAVKit, not a separate mock build target.
+- Browser Playwright E2E is the Web/WASM + MAVKit demo-vehicle UI lane with no app-internal mocks; broad UI coverage belongs there.
+- Native E2E in `e2e-native.mjs` remains the thin real-stack integration lane: debug Tauri build, Docker SITL, TCP connection defaults, and WebDriverIO. Do not convert it to demo-only or expand it to mirror browser UI coverage.
+- The demo vehicle is a normal connection type backed by MAVKit, not a separate mock build target and not a replacement for native SITL/TCP coverage.
 
 ## Core Rules
 

@@ -6,7 +6,7 @@ const PLAYWRIGHT_BASE_URL = `http://${PLAYWRIGHT_HOST}:${PLAYWRIGHT_PORT}`;
 const PNPM_COMMAND = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 
 export default defineConfig({
-  testDir: "./e2e",
+  testDir: "./e2e/specs",
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -20,7 +20,7 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       ...process.env,
-      IRONWING_PLATFORM: "mock",
+      IRONWING_PLATFORM: "web",
       IRONWING_OUT_DIR: "dist/e2e",
     },
   },

@@ -2,7 +2,7 @@
 
 ## Overview
 
-`e2e-native/` is the thin real-stack desktop lane: WebDriverIO drives the native Tauri app, the Rust shell talks to a real ArduPilot SITL instance, and the frontend renders the live state. Keep this suite small and slow on purpose.
+`e2e-native/` is the thin real-stack desktop integration lane: WebDriverIO drives the native Tauri app, the Rust shell talks over TCP to a real ArduPilot SITL instance, and the frontend renders the live state. Keep this suite small and slow on purpose. Do not convert this lane to demo-only, mock-only, or a mirror of browser UI coverage.
 
 ## Where To Look
 
@@ -23,7 +23,8 @@
 ## Spec Conventions
 
 - Use stable `data-testid` selectors that already exist in the active Svelte frontend.
-- Cover high-value real-stack behavior that mocked browser E2E cannot prove: window loads, TCP defaults are injected, connect succeeds, live telemetry arrives, live settings invokes reach Rust, mission upload/readback works against SITL, and disconnect returns to Idle.
+- Cover high-value real-stack behavior that browser UI E2E cannot prove: window loads, TCP defaults are injected, connect succeeds, live telemetry arrives, live settings invokes reach Rust, mission upload/readback works against SITL, and disconnect returns to Idle.
+- Keep the native lane on the real SITL/TCP stack because it is the most integration-oriented E2E coverage in the repo. The MAVKit demo vehicle belongs to browser UI E2E coverage, not as a replacement for this native smoke lane.
 - Treat connection state as current app behavior: idle = `connection-connect-btn` visible/enabled with no cancel/disconnect controls, connecting = `connection-cancel-btn`, connected = `connection-disconnect-btn`. Do not use the removed `connection-status-text` selector.
 - Keep native assertions focused on real backend boundaries and stable app-visible outcomes. It is acceptable to include a small connected mission/settings flow here; keep broad layout, mocked edge cases, and exhaustive UI matrix coverage in browser E2E.
 - Keep selectors and assertions anchored to the shipped shell/runtime cards; do not resurrect removed legacy proof helpers.
@@ -33,4 +34,5 @@
 ## Scope Limits
 
 - This is not the place for broad mocked UI coverage; keep that in `../e2e/`.
+- Do not duplicate the browser Playwright UI matrix here; add only a few stable flows that prove native Tauri ↔ Rust ↔ SITL/TCP integration.
 - Avoid adding many long-running native tests until the lane proves stable in local development and CI.
