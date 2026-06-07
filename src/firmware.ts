@@ -1,5 +1,6 @@
 import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
+import type { SerialPortInfo } from "./serial-ports";
 
 // ── Session status (mirrors Rust FirmwareSessionStatus) ──
 
@@ -80,19 +81,7 @@ export type FirmwareProgress = {
 
 // ── Port / device inventory ──
 
-export type PortInfo = {
-  port_name: string;
-  vid: number | null;
-  pid: number | null;
-  serial_number: string | null;
-  manufacturer: string | null;
-  product: string | null;
-  location: string | null;
-};
-
-export type InventoryResult =
-  | { kind: "available"; ports: PortInfo[] }
-  | { kind: "unsupported" };
+export type PortInfo = SerialPortInfo;
 
 export type DfuDeviceInfo = {
   vid: number;
@@ -114,7 +103,6 @@ export type FirmwareInstallPreflightInfo = {
   param_count: number;
   has_params_to_backup: boolean;
   available_ports: PortInfo[];
-  detected_board_id: number | null;
   session_ready: boolean;
   session_status: FirmwareSessionStatus;
 };
@@ -145,24 +133,30 @@ export type FirmwareInstallReadiness =
   | { kind: "advisory" }
   | { kind: "blocked"; reason: FirmwareInstallReadinessBlockedReason };
 
-export type FirmwareInstallReadinessTargetHint = {
-  detected_board_id: number | null;
-};
-
-export type FirmwareInstallBootloaderTransition =
-  | { kind: "auto_reboot_supported" }
+export type FirmwareInstallBootloaderStatus =
   | { kind: "already_in_bootloader" }
-  | { kind: "auto_reboot_attemptable" }
-  | { kind: "manual_bootloader_entry_required" }
-  | { kind: "target_mismatch" };
+  | { kind: "not_in_bootloader"; can_reboot: true }
+  | { kind: "unknown" };
+
+export type FirmwareRebootToBootloaderResult =
+  | { result: "requested" }
+  | { result: "unsupported"; reason: string }
+  | { result: "failed"; error: string };
+
+export type FirmwareBootloaderBoardInfo = {
+  port: string;
+  board_id: number;
+  board_rev: number;
+  bootloader_rev: number;
+  flash_size: number;
+  extf_size: number | null;
+};
 
 export type FirmwareInstallReadinessResponse = {
   request_token: string;
   session_status: FirmwareSessionStatus;
   readiness: FirmwareInstallReadiness;
-  target_hint: FirmwareInstallReadinessTargetHint | null;
-  validation_pending: boolean;
-  bootloader_transition: FirmwareInstallBootloaderTransition;
+  bootloader_status: FirmwareInstallBootloaderStatus;
 };
 
 export type BootloaderInstallationSource =
@@ -216,31 +210,6 @@ export type CatalogTargetSummary = {
   latest_version: string | null;
 };
 
-export async function firmwareCatalogEntries(
-  boardId: number,
-  platform?: string,
-): Promise<CatalogEntry[]> {
-  return invoke<CatalogEntry[]>("firmware_catalog_entries", { boardId, platform: platform ?? null });
-}
-
-export async function firmwareCatalogTargets(): Promise<CatalogTargetSummary[]> {
-  return invoke<CatalogTargetSummary[]>("firmware_catalog_targets");
-}
-
-export async function firmwareBootloaderCatalogTargets(): Promise<CatalogTargetSummary[]> {
-  return invoke<CatalogTargetSummary[]>("firmware_bootloader_catalog_targets");
-}
-
-function isUnsupportedFirmwareCommandError(error: unknown, command: string): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  const normalized = message.toLowerCase();
-  return message.includes(command)
-    && (normalized.includes("unmocked command")
-      || normalized.includes("unknown command")
-      || normalized.includes("command not found")
-      || normalized.includes("not found"));
-}
-
 // ── Firmware install/update commands ──
 
 export async function firmwareInstallPreflight(): Promise<FirmwareInstallPreflightInfo> {
@@ -262,6 +231,14 @@ export async function firmwareInstallReadiness(
   request: FirmwareInstallReadinessRequest,
 ): Promise<FirmwareInstallReadinessResponse> {
   return invoke<FirmwareInstallReadinessResponse>("firmware_install_update_readiness", { request });
+}
+
+export async function firmwareRebootToBootloader(port: string): Promise<FirmwareRebootToBootloaderResult> {
+  return invoke<FirmwareRebootToBootloaderResult>("firmware_reboot_to_bootloader", { port });
+}
+
+export async function firmwareDetectBootloaderBoard(port: string): Promise<FirmwareBootloaderBoardInfo> {
+  return invoke<FirmwareBootloaderBoardInfo>("firmware_detect_bootloader_board", { port });
 }
 
 // ── Bootloader installation commands ──
@@ -287,23 +264,6 @@ export async function firmwareSessionCancel(): Promise<void> {
 
 export async function firmwareSessionClearCompleted(): Promise<void> {
   return invoke<void>("firmware_session_clear_completed");
-}
-
-// ── Port / device inventory commands ──
-
-export async function firmwareListPorts(): Promise<InventoryResult> {
-  return invoke<InventoryResult>("firmware_list_ports");
-}
-
-export async function firmwareRequestSerialPort(): Promise<PortInfo | null> {
-  try {
-    return await invoke<PortInfo | null>("firmware_request_serial_port");
-  } catch (error) {
-    if (isUnsupportedFirmwareCommandError(error, "firmware_request_serial_port")) {
-      return null;
-    }
-    throw error;
-  }
 }
 
 export async function firmwareListDfuDevices(): Promise<DfuScanResult> {

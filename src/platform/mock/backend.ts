@@ -48,15 +48,18 @@ import {
   defaultFirmwareCatalogTargets,
   mockBootloaderInstallationResult,
   mockDfuScanResult,
+  mockFirmwareBootloaderBoardInfo,
   mockFirmwareCatalogEntries,
   mockFirmwareInstallPreflightInfo,
   mockFirmwareInstallReadinessResponse,
   mockFirmwareInstallUpdateResult,
+  mockFirmwareRebootToBootloaderResult,
   mockInventoryResult,
   validateBootloaderInstallationArgs,
   validateFirmwareCatalogEntriesArgs,
   validateFirmwareInstallReadinessRequest,
   validateFirmwareInstallUpdateArgs,
+  validateFirmwarePortArg,
 } from "./backend/firmware";
 import {
   applyMockMissionState,
@@ -475,8 +478,11 @@ function mockRuntimeCapabilities() {
 
 async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unknown> {
   switch (cmd) {
-    case "list_serial_ports_cmd":
-      return ["/dev/ttyUSB0", "/dev/ttyACM0"];
+    case "list_serial_port_inventory": {
+      return mockInventoryResult();
+    }
+    case "request_web_serial_port":
+      return null;
     case "bt_request_permissions":
     case "bt_stop_scan_ble":
       return undefined;
@@ -629,12 +635,6 @@ async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unk
       return undefined;
     case "firmware_install_update_preflight":
       return mockFirmwareInstallPreflightInfo();
-    case "firmware_list_ports":
-      return mockInventoryResult();
-    case "firmware_request_serial_port": {
-      const inventory = mockInventoryResult();
-      return inventory.kind === "available" ? inventory.ports[0] ?? null : null;
-    }
     case "firmware_list_dfu_devices":
       return mockDfuScanResult();
     case "firmware_catalog_targets":
@@ -648,6 +648,14 @@ async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unk
     case "firmware_install_update_readiness": {
       const request = validateFirmwareInstallReadinessRequest(args);
       return mockFirmwareInstallReadinessResponse(request);
+    }
+    case "firmware_reboot_to_bootloader": {
+      const port = validateFirmwarePortArg(args, "firmware_reboot_to_bootloader");
+      return mockFirmwareRebootToBootloaderResult(port);
+    }
+    case "firmware_detect_bootloader_board": {
+      const port = validateFirmwarePortArg(args, "firmware_detect_bootloader_board");
+      return mockFirmwareBootloaderBoardInfo(port);
     }
     case "firmware_install_update": {
       ensureMockLiveWriteAllowed("firmware_install_update");

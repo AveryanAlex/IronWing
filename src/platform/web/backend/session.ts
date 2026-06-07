@@ -2,8 +2,9 @@ import { ensureWasmRuntime, wasmWebTransportDescriptors } from "../wasm";
 import { createWebBluetoothTransport, isWebBluetoothAvailable } from "../transports/web-bluetooth";
 import { createWebSerialTransport, isWebSerialAvailable } from "../transports/web-serial";
 import { createWebSocketTransport } from "../transports/websocket";
-import { isWebSerialFirmwareAvailable } from "../firmware/web-serial";
-import { resetActiveConnection, webBackendRuntime } from "./runtime";
+import { isWebSerialGrantAvailable } from "../serial/web-serial";
+import { FIRMWARE_INSTALL_UPDATE_WEB_UNSUPPORTED_GUIDANCE } from "../../../lib/firmware/platform-guidance";
+import { resetActiveConnection, webBackendRuntime, type WebActiveLinkTarget } from "./runtime";
 import { handled, WEB_COMMAND_UNHANDLED } from "./command-handler";
 import { observeRecordingInboundBridge, startAutoRecordingOnConnect, stopWebRecording } from "./recording";
 import { unsupported } from "./unsupported";
@@ -24,6 +25,15 @@ export type RuntimeCapabilities = {
   parameter_transfer: Capability;
 };
 
+type WebConnectTransportRequest = {
+  kind?: string;
+  url?: string;
+  baud?: number;
+  port_id?: string;
+  profile?: "nordic_uart";
+  vehicle_preset?: string;
+};
+
 export const maybe = (reason: string): Capability => ({ kind: "maybe", reason });
 export const unsupportedCapability = (reason: string): Capability => ({ kind: "unsupported", reason });
 
@@ -42,12 +52,12 @@ export function webTransportDescriptors(): Promise<TransportDescriptor[]> {
 }
 
 export async function webRuntimeCapabilities(): Promise<RuntimeCapabilities> {
-  const webSerialFirmwareAvailable = isWebSerialFirmwareAvailable();
+  const webSerialFirmwareAvailable = isWebSerialGrantAvailable();
   return {
     transports: await webTransportDescriptors(),
     firmware_install_update: webSerialFirmwareAvailable
       ? { kind: "supported" }
-      : unsupportedCapability("Firmware install/update requires WebSerial in pure web mode."),
+      : unsupportedCapability(FIRMWARE_INSTALL_UPDATE_WEB_UNSUPPORTED_GUIDANCE),
     log_library_filesystem: unsupportedCapability("Native log-library filesystem access is not available in pure web mode."),
     recording_filesystem: maybe("Browser recording uses File System Access when available, browser downloads for manual saves, and IndexedDB for completed recordings."),
     mission_transfer: maybe("Mission transfer depends on the connected MAVLink browser transport."),
@@ -61,8 +71,6 @@ export async function tryHandleSessionCommand(cmd: string, args?: WebCommandArgs
       return handled(await webTransportDescriptors());
     case "runtime_capabilities":
       return handled(await webRuntimeCapabilities());
-    case "list_serial_ports_cmd":
-      return handled([]);
     case "bt_request_permissions":
     case "bt_stop_scan_ble":
       return handled(undefined);
@@ -99,7 +107,7 @@ export async function tryHandleSessionCommand(cmd: string, args?: WebCommandArgs
 
 async function connectLink(cmd: string, args?: WebCommandArgs): Promise<void> {
   const request = args?.request as {
-    transport?: { kind?: string; url?: string; baud?: number; profile?: "nordic_uart"; vehicle_preset?: string };
+    transport?: WebConnectTransportRequest;
     auto_record_on_connect?: boolean;
   } | undefined;
   if (!request?.transport) {
@@ -120,6 +128,7 @@ async function connectLink(cmd: string, args?: WebCommandArgs): Promise<void> {
 
   if (request.transport.kind === "demo") {
     await runtime.connectDemo(String(request.transport.vehicle_preset ?? "quadcopter"));
+    webBackendRuntime.activeLinkTarget = { kind: "other" };
     return;
   }
 
@@ -135,7 +144,11 @@ async function connectLink(cmd: string, args?: WebCommandArgs): Promise<void> {
         );
       case "web_serial":
         return createWebSerialTransport(
-          { kind: "web_serial", baud: Number(request.transport.baud ?? 57600) },
+          {
+            kind: "web_serial",
+            baud: Number(request.transport.baud ?? 57600),
+            port_id: typeof request.transport.port_id === "string" ? request.transport.port_id : undefined,
+          },
           bridge,
           connectAbort.signal,
         );
@@ -155,12 +168,23 @@ async function connectLink(cmd: string, args?: WebCommandArgs): Promise<void> {
 
   try {
     await transport.start();
+    webBackendRuntime.activeLinkTarget = activeLinkTargetForTransportRequest(request.transport);
     await runtime.waitConnect();
     startAutoRecordingOnConnect(request.auto_record_on_connect === true);
   } catch (error) {
     await transport.close();
     webBackendRuntime.activeTransport = null;
     webBackendRuntime.connectAbort = null;
+    webBackendRuntime.activeLinkTarget = null;
     throw error;
   }
+}
+
+function activeLinkTargetForTransportRequest(request: WebConnectTransportRequest): WebActiveLinkTarget {
+  if (request.kind === "web_serial") {
+    const portId = typeof request.port_id === "string" ? request.port_id.trim() : "";
+    return portId ? { kind: "web_serial", port_id: portId } : { kind: "other" };
+  }
+
+  return { kind: "other" };
 }

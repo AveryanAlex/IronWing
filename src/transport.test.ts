@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildConnectRequest,
   type DemoTransportDescriptor,
+  type WebSerialTransportDescriptor,
   type WebSocketTransportDescriptor,
   validateTransportDescriptor,
 } from "./transport";
@@ -21,6 +22,14 @@ const websocketDescriptor: WebSocketTransportDescriptor = {
   validation: { url_required: true },
 };
 
+const webSerialDescriptor: WebSerialTransportDescriptor = {
+  kind: "web_serial",
+  label: "Web Serial",
+  available: true,
+  validation: { chooser_required: true, baud_required: true },
+  default_baud: 57600,
+};
+
 describe("validateTransportDescriptor", () => {
   it("accepts demo transport without address-like fields", () => {
     expect(
@@ -32,6 +41,10 @@ describe("validateTransportDescriptor", () => {
 
   it("requires a websocket url for the browser websocket transport", () => {
     expect(validateTransportDescriptor(websocketDescriptor, {})).toEqual(["websocket_url is required"]);
+  });
+
+  it("requires a granted WebSerial port id before connecting", () => {
+    expect(validateTransportDescriptor(webSerialDescriptor, { baud: 115200 })).toEqual(["port_id is required"]);
   });
 });
 
@@ -58,6 +71,21 @@ describe("buildConnectRequest", () => {
       transport: {
         kind: "websocket",
         url: "ws://127.0.0.1:14560",
+      },
+    });
+  });
+
+  it("passes the granted WebSerial port id into the connect request", () => {
+    expect(
+      buildConnectRequest(webSerialDescriptor, {
+        baud: 115200,
+        port_id: "webserial:1",
+      }),
+    ).toEqual({
+      transport: {
+        kind: "web_serial",
+        baud: 115200,
+        port_id: "webserial:1",
       },
     });
   });

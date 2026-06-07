@@ -1,10 +1,12 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
-import { fromStore, readable, type Readable } from "svelte/store";
+import { readable, type Readable } from "svelte/store";
 
 import type { ShellChromeState } from "../../../app/shell/chrome-state";
 import {
   getFirmwareWorkspaceContext,
+  getSerialPortInventoryContext,
+  getSessionStoreContext,
   getSessionViewStoreContext,
   getShellChromeStoreContext,
   type FirmwareWorkspaceContext,
@@ -12,10 +14,17 @@ import {
 import { createFirmwareFileIo, type FirmwareFileIo } from "../../../lib/firmware-file-io";
 import { createFirmwareService, type FirmwareService } from "../../../lib/platform/firmware";
 import { createFirmwareWorkspaceStore, type FirmwareWorkspaceStore } from "../../../lib/stores/firmware-workspace";
-import { Banner, SelectableCard, WorkspaceShell } from "../../../components/ui";
-import FirmwareOutcomePanel from "../../../features/firmware/components/FirmwareOutcomePanel.svelte";
+import {
+  createSerialPortInventoryStore,
+  type SerialPortInventoryStore,
+} from "../../../lib/stores/serial-port-inventory";
+import type { SessionStore } from "../../../lib/stores/session";
+import type { SessionEnvelope } from "../../../session";
+import { Banner, WorkspaceShell } from "../../../components/ui";
+import FirmwareOperationRail from "../../../features/firmware/components/FirmwareOperationRail.svelte";
 import FirmwareRecoveryPanel from "../../../features/firmware/components/FirmwareRecoveryPanel.svelte";
 import FirmwareSerialPanel from "../../../features/firmware/components/FirmwareSerialPanel.svelte";
+import FirmwareTaskChooser from "../../../features/firmware/components/FirmwareTaskChooser.svelte";
 import {
   firmwareWorkspaceFallbackChromeState,
   resolveFirmwareWorkspaceLayout,
@@ -26,10 +35,17 @@ import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from ".
 const internalService = createFirmwareService();
 const internalStore = createFirmwareWorkspaceStore(internalService);
 const internalFileIo = createFirmwareFileIo();
+const internalSerialInventory = createSerialPortInventoryStore();
 
 const defaultFirmwareWorkspace = resolveFirmwareWorkspaceContext();
 
 type WorkspaceMode = "install" | "recovery";
+type FirmwareRouteSessionView = {
+  activeSource: "live" | "playback" | null;
+  activeEnvelope: SessionEnvelope | null;
+  connected: boolean;
+  isConnecting: boolean;
+};
 
 function resolveFirmwareWorkspaceContext(): FirmwareWorkspaceContext {
   try {
@@ -51,11 +67,27 @@ function resolveChromeStore(): Readable<ShellChromeState> {
   }
 }
 
-function resolveSessionViewStore(): Readable<{ activeSource: "live" | "playback" | null }> {
+function resolveSessionStore(): SessionStore | null {
   try {
-    return getSessionViewStoreContext();
+    return getSessionStoreContext();
   } catch {
-    return readable({ activeSource: null });
+    return null;
+  }
+}
+
+function resolveSessionViewStore(): Readable<FirmwareRouteSessionView> {
+  try {
+    return getSessionViewStoreContext() as Readable<FirmwareRouteSessionView>;
+  } catch {
+    return readable({ activeSource: null, activeEnvelope: null, connected: false, isConnecting: false });
+  }
+}
+
+function resolveSerialPortInventory(): SerialPortInventoryStore {
+  try {
+    return getSerialPortInventoryContext();
+  } catch {
+    return internalSerialInventory;
   }
 }
 
@@ -64,6 +96,9 @@ type Props = {
   service?: FirmwareService;
   fileIo?: FirmwareFileIo;
   chromeStore?: Readable<ShellChromeState>;
+  serialInventory?: SerialPortInventoryStore;
+  sessionStore?: SessionStore | null;
+  sessionViewStore?: Readable<FirmwareRouteSessionView>;
 };
 
 let {
@@ -71,6 +106,9 @@ let {
   service = defaultFirmwareWorkspace.service,
   fileIo = defaultFirmwareWorkspace.fileIo,
   chromeStore = resolveChromeStore(),
+  serialInventory = resolveSerialPortInventory(),
+  sessionStore = resolveSessionStore(),
+  sessionViewStore = resolveSessionViewStore(),
 }: Props = $props();
 
 let selectedMode = $state<WorkspaceMode>("install");
@@ -78,9 +116,9 @@ let lastAutoReturnOutcomeKey = "";
 
 let workspaceState = $derived($store);
 let shellChrome = $derived($chromeStore);
-let sessionView = fromStore(resolveSessionViewStore());
+let sessionView = $derived($sessionViewStore);
 let layout = $derived(resolveFirmwareWorkspaceLayout(shellChrome));
-let replayReadonly = $derived(isReplayReadonly(sessionView.current.activeSource));
+let replayReadonly = $derived(isReplayReadonly(sessionView.activeSource));
 let serialBusy = $derived(
   workspaceState.activePath === "firmware_install_update" ||
     (workspaceState.sessionStatus.kind === "cancelling" &&
@@ -107,6 +145,10 @@ let showReturnGuidance = $derived(
     workspaceState.lastCompletedOutcome?.path === "bootloader_installation" &&
     workspaceState.lastCompletedOutcome.outcome.result === "verified",
 );
+let splitOperationRail = $derived(layout.panelColumns === "split");
+let workspaceBodyClass = $derived(
+  splitOperationRail ? "grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start" : "grid gap-4",
+);
 
 onMount(() => {
   void store.initialize();
@@ -115,6 +157,9 @@ onMount(() => {
 onDestroy(() => {
   if (store === internalStore) {
     store.reset();
+  }
+  if (serialInventory === internalSerialInventory) {
+    serialInventory.reset();
   }
 });
 
@@ -140,33 +185,11 @@ $effect(() => {
 </script>
 
 <WorkspaceShell mode="inset" testId={firmwareWorkspaceTestIds.root}>
-  <div class="rounded-lg border border-border bg-bg-secondary p-1">
-    <div class="grid gap-1 md:grid-cols-2">
-      <SelectableCard
-        density="compact"
-        selected={effectiveMode === "install"}
-        testId={firmwareWorkspaceTestIds.modeInstall}
-        disabled={recoveryBusy || serialBusy}
-        onSelect={() => (selectedMode = "install")}
-      >
-        <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Firmware install/update</span>
-        <span class="mt-1 block text-sm font-semibold text-text-primary">Normal firmware path</span>
-        <span class="mt-1 block text-sm text-text-secondary">Use the official APJ catalog first, with a clearly marked local APJ override for expert cases.</span>
-      </SelectableCard>
-
-      <SelectableCard
-        density="compact"
-        selected={effectiveMode === "recovery"}
-        testId={firmwareWorkspaceTestIds.modeRecovery}
-        disabled={recoveryBusy || serialBusy}
-        onSelect={() => (selectedMode = "recovery")}
-      >
-        <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Bootloader installation</span>
-        <span class="mt-1 block text-sm font-semibold text-text-primary">Native DFU bootloader path</span>
-        <span class="mt-1 block text-sm text-text-secondary">Install only the bootloader here, then return to firmware install/update for normal firmware.</span>
-      </SelectableCard>
-    </div>
-  </div>
+  <FirmwareTaskChooser
+    mode={effectiveMode}
+    disabled={recoveryBusy || serialBusy}
+    onModeChange={(mode) => (selectedMode = mode)}
+  />
 
   {#if !layout.actionsEnabled}
     <div data-testid={firmwareWorkspaceTestIds.blockedCopy}>
@@ -208,13 +231,15 @@ $effect(() => {
     <span data-testid={firmwareWorkspaceTestIds.layoutMode}>{layout.mode}</span>
   </div>
 
-  <div class="grid gap-4">
-    {#if effectiveMode === "install"}
-      <FirmwareSerialPanel {fileIo} layout={layout} {replayReadonly} {service} {store} />
-    {:else}
-      <FirmwareRecoveryPanel {fileIo} layout={layout} {replayReadonly} {service} {store} />
-    {/if}
+  <div class={workspaceBodyClass}>
+    <div class="grid min-w-0 gap-4">
+      {#if effectiveMode === "install"}
+        <FirmwareSerialPanel {fileIo} layout={layout} {replayReadonly} {serialInventory} {service} {sessionStore} {sessionView} {store} />
+      {:else}
+        <FirmwareRecoveryPanel {fileIo} layout={layout} {replayReadonly} {service} {store} />
+      {/if}
+    </div>
 
-    <FirmwareOutcomePanel state={workspaceState} {store} />
+    <FirmwareOperationRail state={workspaceState} {store} split={splitOperationRail} />
   </div>
 </WorkspaceShell>

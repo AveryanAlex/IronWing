@@ -1,14 +1,11 @@
 import {
-  firmwareBootloaderCatalogTargets,
-  firmwareCatalogEntries,
-  firmwareCatalogTargets,
   firmwareBootloaderInstallation,
+  firmwareDetectBootloaderBoard,
   firmwareInstallPreflight,
   firmwareInstallReadiness,
   firmwareInstallUpdate,
   firmwareListDfuDevices,
-  firmwareListPorts,
-  firmwareRequestSerialPort,
+  firmwareRebootToBootloader,
   firmwareSessionCancel,
   firmwareSessionClearCompleted,
   firmwareSessionStatus,
@@ -21,7 +18,8 @@ import {
   type CatalogTargetSummary,
   type DfuDeviceInfo,
   type DfuScanResult,
-  type FirmwareInstallBootloaderTransition,
+  type FirmwareBootloaderBoardInfo,
+  type FirmwareInstallBootloaderStatus,
   type FirmwareInstallOptions,
   type FirmwareInstallPreflightInfo,
   type FirmwareInstallReadiness,
@@ -34,12 +32,18 @@ import {
   type FirmwareInstallUpdatePhase,
   type FirmwareOutcome,
   type FirmwareProgress,
+  type FirmwareRebootToBootloaderResult,
   type FirmwareSessionStatus,
   type FirmwareSessionPath,
-  type InventoryResult,
   type PortInfo,
 } from "../../firmware";
 import { formatUnknownError } from "../error-format";
+import {
+  firmwareBootloaderCatalogTargetsFromRemote,
+  firmwareCatalogEntriesFromRemote,
+  firmwareCatalogTargetsFromRemote,
+} from "../firmware/catalog-client";
+import { bootloaderInstallationPlatformUnsupportedGuidance } from "../firmware/platform-guidance";
 
 const MALFORMED_SESSION_STATUS_MESSAGE = "Firmware session status returned an unexpected payload.";
 const MALFORMED_PROGRESS_MESSAGE = "Firmware progress update returned an unexpected payload.";
@@ -47,7 +51,9 @@ const MALFORMED_INSTALL_RESULT_MESSAGE = "Firmware install/update returned an un
 const MALFORMED_BOOTLOADER_RESULT_MESSAGE = "Bootloader installation returned an unexpected payload.";
 const MALFORMED_READINESS_MESSAGE = "Firmware install/update readiness returned an unexpected payload.";
 const MALFORMED_PREFLIGHT_MESSAGE = "Firmware install/update preflight returned an unexpected payload.";
-const MALFORMED_PORT_INVENTORY_MESSAGE = "Firmware port inventory returned an unexpected payload.";
+const MALFORMED_BOOTLOADER_STATUS_MESSAGE = "Firmware bootloader status returned an unexpected payload.";
+const MALFORMED_BOOTLOADER_DETECT_MESSAGE = "Firmware bootloader board detection returned an unexpected payload.";
+const MALFORMED_REBOOT_RESULT_MESSAGE = "Firmware reboot-to-bootloader returned an unexpected payload.";
 const MALFORMED_DFU_INVENTORY_MESSAGE = "Firmware DFU inventory returned an unexpected payload.";
 const MALFORMED_CATALOG_ENTRY_MESSAGE = "Firmware catalog entries returned an unexpected payload.";
 const MALFORMED_CATALOG_TARGET_MESSAGE = "Firmware catalog targets returned an unexpected payload.";
@@ -77,12 +83,16 @@ const FIRMWARE_INSTALL_READINESS_BLOCKED_REASONS = new Set<FirmwareInstallReadin
   "source_missing",
 ]);
 
-const FIRMWARE_INSTALL_BOOTLOADER_TRANSITIONS = new Set<FirmwareInstallBootloaderTransition["kind"]>([
-  "auto_reboot_supported",
+const FIRMWARE_INSTALL_BOOTLOADER_STATUSES = new Set<FirmwareInstallBootloaderStatus["kind"]>([
   "already_in_bootloader",
-  "auto_reboot_attemptable",
-  "manual_bootloader_entry_required",
-  "target_mismatch",
+  "not_in_bootloader",
+  "unknown",
+]);
+
+const FIRMWARE_REBOOT_RESULTS = new Set<FirmwareRebootToBootloaderResult["result"]>([
+  "requested",
+  "unsupported",
+  "failed",
 ]);
 
 const FIRMWARE_INSTALL_OUTCOME_RESULTS = new Set<FirmwareInstallUpdateOutcome["result"]>([
@@ -118,13 +128,13 @@ export type FirmwareService = {
   sessionCancel(): Promise<void>;
   sessionClearCompleted(): Promise<void>;
   installPreflight(): Promise<unknown>;
-  requestFirmwareInstallPort(): Promise<unknown>;
-  listPorts(): Promise<unknown>;
   listDfuDevices(): Promise<unknown>;
   catalogTargets(): Promise<unknown>;
   bootloaderCatalogTargets(): Promise<unknown>;
   catalogEntries(boardId: number, platform?: string): Promise<unknown>;
   installReadiness(request: FirmwareInstallReadinessRequest): Promise<unknown>;
+  rebootToBootloader(port: string): Promise<unknown>;
+  detectBootloaderBoard(port: string): Promise<unknown>;
   startFirmwareInstallUpdate(
     port: string,
     baud: number,
@@ -142,13 +152,13 @@ export function createFirmwareService(): FirmwareService {
     sessionCancel: firmwareSessionCancel,
     sessionClearCompleted: firmwareSessionClearCompleted,
     installPreflight: firmwareInstallPreflight,
-    requestFirmwareInstallPort: firmwareRequestSerialPort,
-    listPorts: firmwareListPorts,
     listDfuDevices: firmwareListDfuDevices,
-    catalogTargets: firmwareCatalogTargets,
-    bootloaderCatalogTargets: firmwareBootloaderCatalogTargets,
-    catalogEntries: firmwareCatalogEntries,
+    catalogTargets: firmwareCatalogTargetsFromRemote,
+    bootloaderCatalogTargets: firmwareBootloaderCatalogTargetsFromRemote,
+    catalogEntries: firmwareCatalogEntriesFromRemote,
     installReadiness: firmwareInstallReadiness,
+    rebootToBootloader: firmwareRebootToBootloader,
+    detectBootloaderBoard: firmwareDetectBootloaderBoard,
     startFirmwareInstallUpdate: firmwareInstallUpdate,
     startBootloaderInstallation: firmwareBootloaderInstallation,
     subscribeProgress: subscribeFirmwareProgress,
@@ -280,7 +290,7 @@ export function bootloaderInstallationResultToStatus(result: BootloaderInstallat
           path: "bootloader_installation",
           outcome: {
             result: "unsupported_bootloader_installation_path",
-            guidance: "Bootloader installation is not supported on this platform.",
+            guidance: bootloaderInstallationPlatformUnsupportedGuidance(result.reason),
           },
         },
       };
@@ -348,8 +358,9 @@ export function normalizeBootloaderInstallationResult(value: unknown): Bootloade
     case "verified":
     case "cancelled":
     case "reset_unconfirmed":
-    case "platform_unsupported":
       return { result };
+    case "platform_unsupported":
+      return typeof candidate.reason === "string" ? { result, reason: candidate.reason } : { result };
     case "failed":
       return {
         result,
@@ -373,9 +384,7 @@ export function normalizeFirmwareInstallReadinessResponse(value: unknown): Firmw
     request_token: requireString(candidate.request_token, MALFORMED_READINESS_MESSAGE),
     session_status: normalizeFirmwareSessionStatus(candidate.session_status),
     readiness: normalizeFirmwareInstallReadiness(candidate.readiness),
-    target_hint: normalizeFirmwareInstallTargetHint(candidate.target_hint),
-    validation_pending: requireBoolean(candidate.validation_pending, MALFORMED_READINESS_MESSAGE),
-    bootloader_transition: normalizeFirmwareInstallBootloaderTransition(candidate.bootloader_transition),
+    bootloader_status: normalizeFirmwareInstallBootloaderStatus(candidate.bootloader_status),
   };
 }
 
@@ -390,30 +399,48 @@ export function normalizeFirmwareInstallPreflightInfo(value: unknown): FirmwareI
     param_count: requireNonNegativeInteger(candidate.param_count, MALFORMED_PREFLIGHT_MESSAGE),
     has_params_to_backup: requireBoolean(candidate.has_params_to_backup, MALFORMED_PREFLIGHT_MESSAGE),
     available_ports: normalizePortInfoList(candidate.available_ports, MALFORMED_PREFLIGHT_MESSAGE),
-    detected_board_id: normalizeNullableInteger(candidate.detected_board_id, MALFORMED_PREFLIGHT_MESSAGE),
     session_ready: requireBoolean(candidate.session_ready, MALFORMED_PREFLIGHT_MESSAGE),
     session_status: normalizeFirmwareSessionStatus(candidate.session_status),
   };
 }
 
-export function normalizeInventoryResult(value: unknown): InventoryResult {
+export function normalizeFirmwareRebootToBootloaderResult(value: unknown): FirmwareRebootToBootloaderResult {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(MALFORMED_PORT_INVENTORY_MESSAGE);
+    throw new Error(MALFORMED_REBOOT_RESULT_MESSAGE);
   }
 
   const candidate = value as Record<string, unknown>;
-  if (candidate.kind === "unsupported") {
-    return { kind: "unsupported" };
+  const result = requireEnumValue(candidate.result, FIRMWARE_REBOOT_RESULTS, MALFORMED_REBOOT_RESULT_MESSAGE);
+  switch (result) {
+    case "requested":
+      return { result };
+    case "unsupported":
+      return {
+        result,
+        reason: requireString(candidate.reason, MALFORMED_REBOOT_RESULT_MESSAGE),
+      };
+    case "failed":
+      return {
+        result,
+        error: requireString(candidate.error, MALFORMED_REBOOT_RESULT_MESSAGE),
+      };
+  }
+}
+
+export function normalizeFirmwareBootloaderBoardInfo(value: unknown): FirmwareBootloaderBoardInfo {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(MALFORMED_BOOTLOADER_DETECT_MESSAGE);
   }
 
-  if (candidate.kind === "available") {
-    return {
-      kind: "available",
-      ports: normalizePortInfoList(candidate.ports, MALFORMED_PORT_INVENTORY_MESSAGE),
-    };
-  }
-
-  throw new Error(MALFORMED_PORT_INVENTORY_MESSAGE);
+  const candidate = value as Record<string, unknown>;
+  return {
+    port: requireString(candidate.port, MALFORMED_BOOTLOADER_DETECT_MESSAGE),
+    board_id: requireNonNegativeInteger(candidate.board_id, MALFORMED_BOOTLOADER_DETECT_MESSAGE),
+    board_rev: requireNonNegativeInteger(candidate.board_rev, MALFORMED_BOOTLOADER_DETECT_MESSAGE),
+    bootloader_rev: requireNonNegativeInteger(candidate.bootloader_rev, MALFORMED_BOOTLOADER_DETECT_MESSAGE),
+    flash_size: requireNonNegativeInteger(candidate.flash_size, MALFORMED_BOOTLOADER_DETECT_MESSAGE),
+    extf_size: normalizeNullableInteger(candidate.extf_size, MALFORMED_BOOTLOADER_DETECT_MESSAGE),
+  };
 }
 
 export function normalizeDfuScanResult(value: unknown): DfuScanResult {
@@ -423,7 +450,9 @@ export function normalizeDfuScanResult(value: unknown): DfuScanResult {
 
   const candidate = value as Record<string, unknown>;
   if (candidate.kind === "unsupported") {
-    return { kind: "unsupported" };
+    return typeof candidate.reason === "string"
+      ? { kind: "unsupported", reason: candidate.reason }
+      : { kind: "unsupported" };
   }
 
   if (candidate.kind === "available") {
@@ -572,30 +601,21 @@ function normalizeFirmwareInstallReadiness(value: unknown): FirmwareInstallReadi
   throw new Error(MALFORMED_READINESS_MESSAGE);
 }
 
-function normalizeFirmwareInstallTargetHint(value: unknown): FirmwareInstallReadinessResponse["target_hint"] {
-  if (value == null) {
-    return null;
-  }
-
+function normalizeFirmwareInstallBootloaderStatus(value: unknown): FirmwareInstallBootloaderStatus {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(MALFORMED_READINESS_MESSAGE);
+    throw new Error(MALFORMED_BOOTLOADER_STATUS_MESSAGE);
   }
 
   const candidate = value as Record<string, unknown>;
-  return {
-    detected_board_id: normalizeNullableInteger(candidate.detected_board_id, MALFORMED_READINESS_MESSAGE),
-  };
-}
-
-function normalizeFirmwareInstallBootloaderTransition(value: unknown): FirmwareInstallBootloaderTransition {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(MALFORMED_READINESS_MESSAGE);
+  const kind = requireEnumValue(candidate.kind, FIRMWARE_INSTALL_BOOTLOADER_STATUSES, MALFORMED_BOOTLOADER_STATUS_MESSAGE);
+  if (kind === "not_in_bootloader") {
+    if (requireBoolean(candidate.can_reboot, MALFORMED_BOOTLOADER_STATUS_MESSAGE) !== true) {
+      throw new Error(MALFORMED_BOOTLOADER_STATUS_MESSAGE);
+    }
+    return { kind, can_reboot: true };
   }
 
-  const candidate = value as Record<string, unknown>;
-  return {
-    kind: requireEnumValue(candidate.kind, FIRMWARE_INSTALL_BOOTLOADER_TRANSITIONS, MALFORMED_READINESS_MESSAGE),
-  };
+  return { kind };
 }
 
 function normalizePortInfoList(value: unknown, message: string): PortInfo[] {

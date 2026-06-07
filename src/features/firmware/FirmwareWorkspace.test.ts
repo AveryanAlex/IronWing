@@ -8,6 +8,7 @@ import type {
   CatalogEntry,
   CatalogTargetSummary,
   DfuDeviceInfo,
+  FirmwareInstallBootloaderStatus,
   FirmwareInstallReadinessBlockedReason,
   FirmwareInstallReadinessRequest,
   FirmwareInstallReadinessResponse,
@@ -17,12 +18,13 @@ import type {
 } from "../../firmware";
 import { createShellChromeState, type ShellChromeState } from "../../app/shell/chrome-state";
 import type { FirmwareFileIo } from "../../lib/firmware-file-io";
-import { missingDomainValue } from "../../lib/domain-status";
+import { availableDomainValue, missingDomainValue } from "../../lib/domain-status";
 import {
   computeFirmwareInstallReadinessToken,
   type FirmwareService,
 } from "../../lib/platform/firmware";
 import { createFirmwareWorkspaceStore } from "../../lib/stores/firmware-workspace";
+import { createSerialPortInventoryStore, type SerialPortInventoryStore } from "../../lib/stores/serial-port-inventory";
 import { withSessionContext } from "../../test/context-harnesses";
 import FirmwareWorkspace from "../../routes/(app)/firmware/+page.svelte";
 import { firmwareWorkspaceTestIds } from "./firmware-workspace-test-ids";
@@ -128,7 +130,7 @@ function resolveBlockedReason(request: FirmwareInstallReadinessRequest): Firmwar
 
 function defaultReadiness(
   request: FirmwareInstallReadinessRequest,
-  detectedBoardId: number | null,
+  bootloaderStatus: FirmwareInstallBootloaderStatus = { kind: "unknown" },
 ): FirmwareInstallReadinessResponse {
   const blockedReason = resolveBlockedReason(request);
 
@@ -136,11 +138,7 @@ function defaultReadiness(
     request_token: computeFirmwareInstallReadinessToken(request),
     session_status: { kind: "idle" },
     readiness: blockedReason ? { kind: "blocked", reason: blockedReason } : { kind: "advisory" },
-    target_hint: { detected_board_id: detectedBoardId },
-    validation_pending: blockedReason === null,
-    bootloader_transition: detectedBoardId === null
-      ? { kind: "manual_bootloader_entry_required" }
-      : { kind: "auto_reboot_attemptable" },
+    bootloader_status: bootloaderStatus,
   };
 }
 
@@ -175,6 +173,7 @@ function createService(
     targets?: CatalogTargetSummary[];
     recoveryTargets?: CatalogTargetSummary[];
     dfuDevices?: DfuDeviceInfo[];
+    bootloaderStatus?: FirmwareInstallBootloaderStatus;
   } = {},
 ): FirmwareService {
   const detectedBoardId = config.detectedBoardId ?? null;
@@ -182,6 +181,7 @@ function createService(
   const targets = config.targets ?? DEFAULT_TARGETS;
   const recoveryTargets = config.recoveryTargets ?? DEFAULT_RECOVERY_TARGETS;
   const dfuDevices = config.dfuDevices ?? DEFAULT_DFU_DEVICES;
+  const bootloaderStatus = config.bootloaderStatus ?? { kind: "unknown" };
 
   return {
     sessionStatus: vi.fn(async () => ({ kind: "idle" } satisfies FirmwareSessionStatus)),
@@ -192,17 +192,16 @@ function createService(
       param_count: 12,
       has_params_to_backup: true,
       available_ports: DEFAULT_PORTS,
-      detected_board_id: null,
       session_ready: true,
       session_status: { kind: "idle" },
     })),
-    listPorts: vi.fn(async () => ({ kind: "available", ports: DEFAULT_PORTS })),
-    requestFirmwareInstallPort: vi.fn(async () => null),
     listDfuDevices: vi.fn(async () => ({ kind: "available", devices: dfuDevices })),
     catalogTargets: vi.fn(async () => targets),
     bootloaderCatalogTargets: vi.fn(async () => recoveryTargets),
     catalogEntries: vi.fn(async (_boardId: number, platform?: string) => entries[platform ?? ""] ?? []),
-    installReadiness: vi.fn(async (request: FirmwareInstallReadinessRequest) => defaultReadiness(request, detectedBoardId)),
+    installReadiness: vi.fn(async (request: FirmwareInstallReadinessRequest) => defaultReadiness(request, bootloaderStatus)),
+    rebootToBootloader: vi.fn(async () => ({ result: "unsupported", reason: "not connected" })),
+    detectBootloaderBoard: vi.fn(async (port: string) => ({ port, board_id: detectedBoardId ?? 140, board_rev: 1, bootloader_rev: 5, flash_size: 2_097_152, extf_size: null })),
     startFirmwareInstallUpdate: vi.fn(async (_port: string, _baud: number, _source: FirmwareInstallSource) => ({
       result: "verified",
       board_id: 140,
@@ -221,54 +220,67 @@ async function renderWorkspace(options: {
   fileIo?: FirmwareFileIo;
   chromeStore?: Writable<ShellChromeState>;
   activeSource?: "live" | "playback";
+  serialInventory?: SerialPortInventoryStore;
+  expectedInitialSerialPort?: string;
 } = {}) {
   const service = options.service ?? createService();
   const fileIo = options.fileIo ?? createFileIo();
   const chromeStore = options.chromeStore ?? createResponsiveChromeStore(1440, 900, "wide");
   const store = createFirmwareWorkspaceStore(service, { sessionPollMs: 0 });
+  const serialInventory = options.serialInventory ?? createSerialPortInventoryStore({
+    listPorts: vi.fn(async () => ({ kind: "available", ports: DEFAULT_PORTS, can_request_web_serial: false })),
+    requestWebSerialPort: vi.fn(async () => null),
+    formatError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+  });
+  const sessionState = writable({
+    hydrated: true,
+    lastPhase: "ready",
+    lastError: null,
+    activeEnvelope: {
+      session_id: `${options.activeSource ?? "live"}-session`,
+      source_kind: options.activeSource ?? "live",
+      seek_epoch: 0,
+      reset_revision: 0,
+    },
+    activeSource: options.activeSource ?? "live",
+    sessionDomain: missingDomainValue("bootstrap"),
+    telemetryDomain: missingDomainValue("bootstrap"),
+    support: missingDomainValue("bootstrap"),
+    sensorHealth: missingDomainValue("bootstrap"),
+    calibration: missingDomainValue("bootstrap"),
+    guided: missingDomainValue("bootstrap"),
+    statusText: missingDomainValue("bootstrap"),
+    bootstrap: {
+      missionState: null,
+      paramStore: null,
+      paramProgress: null,
+      playbackCursorUsec: null,
+    },
+    connectionForm: {
+      mode: "udp",
+      udpBind: "0.0.0.0:14550",
+      tcpAddress: "127.0.0.1:5760",
+      websocketUrl: "ws://127.0.0.1:14560",
+      serialPort: "",
+      webSerialPortId: "",
+      webBluetoothDeviceId: "",
+      baud: 57600,
+      selectedBtDevice: "",
+      demoVehiclePreset: "quadcopter",
+      takeoffAlt: "10",
+      followVehicle: true,
+    },
+    transportDescriptors: [],
+    availableModes: [],
+    btDevices: [],
+    btScanning: false,
+    optimisticConnection: null,
+    connectionRequestPhase: "idle",
+  });
   const sessionStore = {
-    subscribe: writable({
-      hydrated: true,
-      lastPhase: "ready",
-      lastError: null,
-      activeEnvelope: {
-        session_id: `${options.activeSource ?? "live"}-session`,
-        source_kind: options.activeSource ?? "live",
-        seek_epoch: 0,
-        reset_revision: 0,
-      },
-      activeSource: options.activeSource ?? "live",
-      sessionDomain: missingDomainValue("bootstrap"),
-      telemetryDomain: missingDomainValue("bootstrap"),
-      support: missingDomainValue("bootstrap"),
-      sensorHealth: missingDomainValue("bootstrap"),
-      configurationFacts: missingDomainValue("bootstrap"),
-      calibration: missingDomainValue("bootstrap"),
-      guided: missingDomainValue("bootstrap"),
-      statusText: missingDomainValue("bootstrap"),
-      bootstrap: {
-        missionState: null,
-        paramStore: null,
-        paramProgress: null,
-        playbackCursorUsec: null,
-      },
-      connectionForm: {
-        mode: "udp",
-        udpBind: "0.0.0.0:14550",
-        tcpAddress: "127.0.0.1:5760",
-        serialPort: "",
-        baud: 57600,
-        selectedBtDevice: "",
-        takeoffAlt: "10",
-        followVehicle: true,
-      },
-      transportDescriptors: [],
-      serialPorts: [],
-      availableModes: [],
-      btDevices: [],
-      btScanning: false,
-      optimisticConnection: null,
-    }).subscribe,
+    subscribe: sessionState.subscribe,
+    updateConnectionForm: vi.fn(),
+    connect: vi.fn(async () => undefined),
   } as any;
 
   render(withSessionContext(sessionStore, FirmwareWorkspace), {
@@ -277,6 +289,7 @@ async function renderWorkspace(options: {
       service,
       fileIo,
       chromeStore,
+      serialInventory,
     },
   });
 
@@ -284,7 +297,11 @@ async function renderWorkspace(options: {
     expect(screen.getByTestId(firmwareWorkspaceTestIds.root)).toBeTruthy();
   });
 
-  return { service, fileIo, chromeStore, store };
+  await waitFor(() => {
+    expect((screen.getByTestId(firmwareWorkspaceTestIds.serialPort) as HTMLSelectElement).value).toBe(options.expectedInitialSerialPort ?? "/dev/ttyACM0");
+  });
+
+  return { service, fileIo, chromeStore, store, sessionState, sessionStore, serialInventory };
 }
 
 async function chooseManualTarget(name: string | RegExp) {
@@ -293,6 +310,24 @@ async function chooseManualTarget(name: string | RegExp) {
   });
 
   await fireEvent.click(screen.getByRole("button", { name }));
+}
+
+async function chooseCatalogRelease(vehicleType = "Copter", versionUrl = "https://example.com/cubeorange.apj") {
+  await waitFor(() => {
+    expect(screen.getByTestId(firmwareWorkspaceTestIds.catalogVehicleTypeSelect)).toBeTruthy();
+  });
+
+  await fireEvent.change(screen.getByTestId(firmwareWorkspaceTestIds.catalogVehicleTypeSelect), {
+    target: { value: vehicleType },
+  });
+
+  await waitFor(() => {
+    expect((screen.getByTestId(firmwareWorkspaceTestIds.catalogEntrySelect) as HTMLSelectElement).disabled).toBe(false);
+  });
+
+  await fireEvent.change(screen.getByTestId(firmwareWorkspaceTestIds.catalogEntrySelect), {
+    target: { value: versionUrl },
+  });
 }
 
 async function openRecoveryMode() {
@@ -312,7 +347,7 @@ describe("FirmwareWorkspace", () => {
     cleanup();
   });
 
-  it("keeps install catalog-first, requires an explicit manual target when proof is missing, and lets a local APJ replace the catalog source", async () => {
+  it("requires catalog board, vehicle type, and version choices, and lets a custom APJ override then return to the catalog source", async () => {
     const fileIo = createFileIo({
       pickApjFile: vi.fn(async () => ({
         status: "success" as const,
@@ -329,7 +364,10 @@ describe("FirmwareWorkspace", () => {
     await renderWorkspace({ fileIo });
 
     await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.manualTargetRequired).textContent).toContain("No board hint is available");
+      expect(screen.getByText(/not sure whether the selected serial port is already a bootloader/i)).toBeTruthy();
+      expect(screen.getByText(/Two safe paths/i)).toBeTruthy();
+      expect(screen.getByRole("button", { name: /Connect MAVLink to this port/i })).toBeTruthy();
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.manualTargetRequired).textContent).toContain("Autodetect board");
       expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(true);
     });
 
@@ -339,8 +377,16 @@ describe("FirmwareWorkspace", () => {
     await chooseManualTarget(/Cube Orange/i);
 
     await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.catalogEntrySelect)).toBeTruthy();
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedTargetState).textContent).toContain("manual");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedTargetState).textContent).toContain("selected");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.catalogVehicleTypeSelect)).toBeTruthy();
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedSourceState).textContent).toContain("choose a vehicle type");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.sourceBrowse).textContent).toContain("Use custom file");
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    await chooseCatalogRelease();
+
+    await waitFor(() => {
       expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedSourceState).textContent).toContain("catalog_url");
       expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(false);
     });
@@ -350,8 +396,288 @@ describe("FirmwareWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedSourceState).textContent).toContain("local_apj_bytes");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedSourceState).textContent).toContain("cube-custom.apj");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.sourceBrowse).textContent).toContain("Change custom file");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.sourceRemove)).toBeTruthy();
       expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(false);
     });
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.sourceRemove));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedSourceState).textContent).toContain("catalog_url");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.sourceBrowse).textContent).toContain("Use custom file");
+      expect(screen.queryByTestId(firmwareWorkspaceTestIds.sourceRemove)).toBeNull();
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(false);
+    });
+  });
+
+  it("autodetects bootloader board id and filters the catalog target chooser", async () => {
+    const service = createService({}, { detectedBoardId: 201 });
+    await renderWorkspace({ service });
+
+    await fireEvent.click(screen.getByRole("button", { name: /autodetect board/i }));
+
+    await waitFor(() => {
+      expect(service.detectBootloaderBoard).toHaveBeenCalledWith("/dev/ttyACM0");
+      expect(screen.getByText(/Filtering by Board ID 201/i)).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /Matek H743/i })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: /Cube Orange/i })).toBeNull();
+    });
+  });
+
+  it("prompts to reboot into bootloader when autodetect sees bootloader sync mismatch", async () => {
+    const syncMismatch = "no ArduPilot bootloader responded on /dev/ttyACM1: bootloader sync mismatch: got 0x1F";
+    const service = createService({
+      detectBootloaderBoard: vi.fn(async () => {
+        throw new Error(syncMismatch);
+      }),
+    });
+    await renderWorkspace({ service });
+
+    await fireEvent.click(screen.getByRole("button", { name: /autodetect board/i }));
+
+    await waitFor(() => {
+      expect(service.detectBootloaderBoard).toHaveBeenCalledWith("/dev/ttyACM0");
+      expect(screen.getAllByText(/Reboot the controller into bootloader mode/i).length).toBeGreaterThan(0);
+      expect(screen.getAllByText(/select\/grant the bootloader serial port/i).length).toBeGreaterThan(0);
+    });
+  });
+
+  it("offers quick MAVLink connection to the selected serial port from unknown bootloader status", async () => {
+    const { sessionStore } = await renderWorkspace();
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.serialQuickMavlinkConnect));
+
+    await waitFor(() => {
+      expect(sessionStore.updateConnectionForm).toHaveBeenCalledWith({
+        mode: "serial",
+        serialPort: "/dev/ttyACM0",
+        webSerialPortId: "",
+        baud: 115200,
+      });
+      expect(sessionStore.connect).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("refreshes bootloader status when the live MAVLink session connects or disconnects", async () => {
+    let readinessCall = 0;
+    const statuses: FirmwareInstallBootloaderStatus[] = [
+      { kind: "unknown" },
+      { kind: "unknown" },
+      { kind: "not_in_bootloader", can_reboot: true },
+      { kind: "unknown" },
+    ];
+    const service = createService({
+      installReadiness: vi.fn(async (request: FirmwareInstallReadinessRequest) => {
+        const status = statuses[Math.min(readinessCall, statuses.length - 1)];
+        readinessCall += 1;
+        return defaultReadiness(request, status);
+      }),
+    });
+    const { sessionState } = await renderWorkspace({ service });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.serialBootloaderTransition).textContent).toContain("unknown");
+    });
+
+    sessionState.update((state: any) => ({
+      ...state,
+      activeEnvelope: {
+        session_id: "live-connected-session",
+        source_kind: "live",
+        seek_epoch: 0,
+        reset_revision: 0,
+      },
+      activeSource: "live",
+      sessionDomain: availableDomainValue({
+        status: "active",
+        connection: { kind: "connected" },
+        vehicle_state: null,
+        home_position: null,
+      }, "stream"),
+    }));
+
+    await waitFor(() => {
+      expect(service.installReadiness).toHaveBeenCalledTimes(3);
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.serialBootloaderTransition).textContent).toContain("not_in_bootloader");
+    });
+
+    sessionState.update((state: any) => ({
+      ...state,
+      activeEnvelope: {
+        session_id: "live-disconnected-session",
+        source_kind: "live",
+        seek_epoch: 0,
+        reset_revision: 0,
+      },
+      activeSource: "live",
+      sessionDomain: availableDomainValue({
+        status: "active",
+        connection: { kind: "disconnected" },
+        vehicle_state: null,
+        home_position: null,
+      }, "stream"),
+    }));
+
+    await waitFor(() => {
+      expect(service.installReadiness).toHaveBeenCalledTimes(4);
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.serialBootloaderTransition).textContent).toContain("unknown");
+    });
+  });
+
+  it("refreshes bootloader status when selected port metadata changes in the serial inventory", async () => {
+    const bootloaderPort: PortInfo = {
+      ...DEFAULT_PORTS[0]!,
+      product: "MatekF405-TE-BL",
+      manufacturer: "ArduPilot",
+      serial_number: "36001D001647333",
+    };
+    const applicationPort: PortInfo = {
+      ...bootloaderPort,
+      product: "MatekF405-TE-bdshot",
+    };
+    let inventoryPorts = [bootloaderPort];
+    let bootloaderStatus: FirmwareInstallBootloaderStatus = { kind: "already_in_bootloader" };
+    const serialInventory = createSerialPortInventoryStore({
+      listPorts: vi.fn(async () => ({ kind: "available", ports: inventoryPorts, can_request_web_serial: false })),
+      requestWebSerialPort: vi.fn(async () => null),
+      formatError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    });
+    const service = createService({
+      installReadiness: vi.fn(async (request: FirmwareInstallReadinessRequest) => defaultReadiness(request, bootloaderStatus)),
+    });
+    await renderWorkspace({ service, serialInventory });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.serialBootloaderTransition).textContent).toContain("already_in_bootloader");
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.serialPort) as HTMLSelectElement).selectedOptions[0]?.textContent).toContain("MatekF405-TE-BL");
+    });
+
+    inventoryPorts = [applicationPort];
+    bootloaderStatus = { kind: "unknown" };
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.serialPortRefresh));
+
+    await waitFor(() => {
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.serialPort) as HTMLSelectElement).selectedOptions[0]?.textContent).toContain("MatekF405-TE-bdshot");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.serialBootloaderTransition).textContent).toContain("unknown");
+    });
+  });
+
+  it("requires explicit reboot before starting when the selected serial port is the active live link", async () => {
+    const service = createService({}, {
+      bootloaderStatus: { kind: "not_in_bootloader", can_reboot: true },
+    });
+    await renderWorkspace({ service });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.serialBootloaderTransition).textContent).toContain("not_in_bootloader");
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByText(/Autodetect is disabled because this port is currently the active MAVLink link/i)).toBeTruthy();
+    });
+
+    const autodetectButton = screen.getByRole("button", { name: /autodetect board/i }) as HTMLButtonElement;
+    expect(autodetectButton.disabled).toBe(true);
+    await fireEvent.click(autodetectButton);
+    expect(service.detectBootloaderBoard).not.toHaveBeenCalled();
+
+    await fireEvent.click(screen.getByRole("button", { name: /reboot to bootloader/i }));
+
+    await waitFor(() => {
+      expect(service.rebootToBootloader).toHaveBeenCalledWith("/dev/ttyACM0");
+      expect(screen.getByText(/not connected/i)).toBeTruthy();
+    });
+  });
+
+  it("prompts to grant and select the bootloader WebSerial port after reboot is requested", async () => {
+    const applicationPort: PortInfo = {
+      port_name: "webserial:1",
+      vid: 0x2dae,
+      pid: 0x1058,
+      serial_number: "APP1",
+      manufacturer: "Hex",
+      product: "CubeOrange",
+      location: "webserial:1",
+    };
+    const bootloaderPort: PortInfo = {
+      port_name: "webserial:2",
+      vid: 0x2dae,
+      pid: 0x1059,
+      serial_number: "BL1",
+      manufacturer: "Hex",
+      product: "CubeOrange Bootloader",
+      location: "webserial:2",
+    };
+    let inventoryPorts = [applicationPort];
+    const requestWebSerialPort = vi.fn(async () => bootloaderPort);
+    const serialInventory = createSerialPortInventoryStore({
+      listPorts: vi.fn(async () => ({ kind: "available", ports: inventoryPorts, can_request_web_serial: true })),
+      requestWebSerialPort,
+      formatError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    });
+    const service = createService({
+      rebootToBootloader: vi.fn(async () => ({ result: "requested" })),
+    }, {
+      bootloaderStatus: { kind: "not_in_bootloader", can_reboot: true },
+    });
+    await renderWorkspace({ service, serialInventory, expectedInitialSerialPort: "webserial:1" });
+
+    await fireEvent.click(screen.getByRole("button", { name: /reboot to bootloader/i }));
+
+    await waitFor(() => {
+      expect(service.rebootToBootloader).toHaveBeenCalledWith("webserial:1");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.serialBootloaderGrant)).toBeTruthy();
+      expect(screen.getByText(/reappears as a new WebSerial device/i)).toBeTruthy();
+    });
+
+    inventoryPorts = [bootloaderPort];
+    await fireEvent.click(screen.getByRole("button", { name: /grant\/select bootloader port/i }));
+
+    await waitFor(() => {
+      expect(requestWebSerialPort).toHaveBeenCalledTimes(1);
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.serialPort) as HTMLSelectElement).value).toBe("webserial:2");
+      expect(screen.queryByTestId(firmwareWorkspaceTestIds.serialBootloaderGrant)).toBeNull();
+    });
+  });
+
+  it("sorts catalog firmware versions by descending semver", async () => {
+    const cubeEntry = DEFAULT_ENTRIES.CubeOrange[0];
+    const entries: Record<string, CatalogEntry[]> = {
+      ...DEFAULT_ENTRIES,
+      CubeOrange: [
+        { ...cubeEntry, version: "4.7.0", version_type: "beta", url: "https://example.com/cubeorange-4.7.0.apj", latest: false },
+        { ...cubeEntry, version: "4.10.0", version_type: "stable", url: "https://example.com/cubeorange-4.10.0.apj", latest: false },
+        { ...cubeEntry, version: "4.6.3", version_type: "official", url: "https://example.com/cubeorange-4.6.3.apj", latest: false },
+        { ...cubeEntry, version: "4.8.0-rc.1", version_type: "beta", url: "https://example.com/cubeorange-4.8.0-rc.1.apj", latest: false },
+        { ...cubeEntry, version: "4.9.0", version_type: "stable", url: "https://example.com/cubeorange-4.9.0.apj", latest: false },
+      ],
+    };
+
+    await renderWorkspace({ service: createService({}, { entries }) });
+    await chooseManualTarget(/Cube Orange/i);
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.catalogVehicleTypeSelect)).toBeTruthy();
+    });
+
+    await fireEvent.change(screen.getByTestId(firmwareWorkspaceTestIds.catalogVehicleTypeSelect), {
+      target: { value: "Copter" },
+    });
+
+    const versionSelect = screen.getByTestId(firmwareWorkspaceTestIds.catalogEntrySelect) as HTMLSelectElement;
+    const optionLabels = Array.from(versionSelect.options)
+      .filter((option) => option.value.length > 0)
+      .map((option) => option.textContent?.trim());
+
+    expect(optionLabels).toEqual([
+      "4.10.0 · stable",
+      "4.9.0 · stable",
+      "4.8.0-rc.1 · beta",
+      "4.7.0 · beta",
+      "4.6.3 · official",
+    ]);
   });
 
   it("replay-readonly disables firmware start surfaces and shows the read-only banner", async () => {
@@ -376,6 +702,7 @@ describe("FirmwareWorkspace", () => {
 
     await renderWorkspace({ service });
     await chooseManualTarget(/Cube Orange/i);
+    await chooseCatalogRelease();
 
     await waitFor(() => {
       expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(false);
@@ -388,6 +715,32 @@ describe("FirmwareWorkspace", () => {
       expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeSummary).textContent).toContain("serial bootloader handshake failed");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedTargetState).textContent).toContain("Cube Orange");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedSourceState).textContent).toContain("catalog_url");
+    });
+  });
+
+  it("prompts to reboot into bootloader when flash board detection sees bootloader sync mismatch", async () => {
+    const syncMismatch = "no ArduPilot bootloader responded on /dev/ttyACM1: bootloader sync mismatch: got 0x1F";
+    const service = createService({
+      startFirmwareInstallUpdate: vi.fn(async () => ({
+        result: "board_detection_failed" as const,
+        reason: syncMismatch,
+      })),
+    });
+
+    await renderWorkspace({ service });
+    await chooseManualTarget(/Cube Orange/i);
+    await chooseCatalogRelease();
+
+    await waitFor(() => {
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.startSerial));
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeResult).textContent).toContain("Board detection failed");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeSummary).textContent).toContain("Reboot the controller into bootloader mode");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeSummary).textContent).toContain("select/grant the bootloader serial port");
     });
   });
 

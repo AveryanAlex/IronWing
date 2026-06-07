@@ -1,34 +1,32 @@
 import type { WasmByteBridge } from "../types";
+import {
+  isWebSerialGrantAvailable,
+  resolveGrantedWebSerialPort,
+  type WebSerialPortLike,
+} from "../serial/web-serial";
 import type { BrowserMavlinkTransport } from "./types";
 
 export type WebSerialTransportRequest = {
   kind: "web_serial";
   baud: number;
-};
-
-type SerialPortLike = {
-  readable: ReadableStream<Uint8Array> | null;
-  writable: WritableStream<Uint8Array> | null;
-  open(options: { baudRate: number }): Promise<void>;
-  close(): Promise<void>;
+  port_id?: string;
 };
 
 type SerialNavigator = Navigator & {
   serial?: {
-    requestPort(): Promise<SerialPortLike>;
+    getPorts(): Promise<WebSerialPortLike[]>;
   };
 };
 
 export function isWebSerialAvailable(): boolean {
-  return typeof navigator !== "undefined"
-    && typeof (navigator as SerialNavigator).serial?.requestPort === "function";
+  return isWebSerialGrantAvailable();
 }
 
 class WebSerialTransport implements BrowserMavlinkTransport {
   readonly kind = "web_serial" as const;
 
   #closed = false;
-  #port: SerialPortLike | null = null;
+  #port: WebSerialPortLike | null = null;
   #reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   #writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
 
@@ -40,7 +38,7 @@ class WebSerialTransport implements BrowserMavlinkTransport {
 
   async start(): Promise<void> {
     const serial = (navigator as SerialNavigator).serial;
-    if (typeof serial?.requestPort !== "function") {
+    if (typeof serial?.getPorts !== "function") {
       throw new Error("Web Serial is not available in this browser");
     }
 
@@ -48,7 +46,7 @@ class WebSerialTransport implements BrowserMavlinkTransport {
       throw new Error("web serial baud is required");
     }
 
-    const port = await serial.requestPort();
+    const port = await this.resolvePort(serial);
     this.#port = port;
     this.signal.addEventListener("abort", () => {
       void this.close();
@@ -57,6 +55,20 @@ class WebSerialTransport implements BrowserMavlinkTransport {
     await port.open({ baudRate: this.request.baud });
     void this.readInbound();
     void this.drainOutbound();
+  }
+
+  private async resolvePort(serial: NonNullable<SerialNavigator["serial"]>): Promise<WebSerialPortLike> {
+    const portId = this.request.port_id?.trim();
+    if (portId) {
+      const grantedPort = await resolveGrantedWebSerialPort(portId);
+      if (!grantedPort) {
+        throw new Error("WebSerial port is not granted. Use Grant WebSerial port first.");
+      }
+
+      return grantedPort;
+    }
+
+    throw new Error("WebSerial port is required. Use Grant WebSerial port first, then select the granted port.");
   }
 
   async close(): Promise<void> {

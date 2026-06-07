@@ -271,7 +271,6 @@ pub struct SerialPreflightInfo {
     pub param_count: u32,
     pub has_params_to_backup: bool,
     pub available_ports: Vec<PortInfo>,
-    pub detected_board_id: Option<u32>,
     pub session_ready: bool,
     pub session_status: FirmwareSessionStatus,
 }
@@ -311,19 +310,15 @@ pub struct SerialReadinessResponse {
     pub request_token: String,
     pub session_status: FirmwareSessionStatus,
     pub readiness: SerialReadiness,
-    pub target_hint: Option<SerialReadinessTargetHint>,
-    pub validation_pending: bool,
-    pub bootloader_transition: SerialBootloaderTransition,
+    pub bootloader_status: FirmwareInstallBootloaderStatus,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
-pub enum SerialBootloaderTransition {
-    AutoRebootSupported,
+pub enum FirmwareInstallBootloaderStatus {
     AlreadyInBootloader,
-    AutoRebootAttemptable,
-    ManualBootloaderEntryRequired,
-    TargetMismatch,
+    NotInBootloader { can_reboot: bool },
+    Unknown,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -336,8 +331,21 @@ pub enum SerialReadinessBlockedReason {
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct SerialReadinessTargetHint {
-    pub detected_board_id: Option<u32>,
+pub struct FirmwareBootloaderBoardInfo {
+    pub port: String,
+    pub board_id: u32,
+    pub board_rev: u32,
+    pub bootloader_rev: u8,
+    pub flash_size: u32,
+    pub extf_size: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "result", rename_all = "snake_case")]
+pub enum FirmwareRebootToBootloaderResult {
+    Requested,
+    Unsupported { reason: String },
+    Failed { error: String },
 }
 
 // ── DFU recovery source (command-level: what the frontend sends) ──
@@ -576,7 +584,7 @@ impl std::fmt::Display for FirmwareError {
     }
 }
 
-#[cfg(feature = "dfu-core-error")]
+#[cfg(feature = "dfu-core")]
 impl From<dfu_core::Error> for FirmwareError {
     fn from(e: dfu_core::Error) -> Self {
         Self::ProtocolError {
@@ -616,7 +624,7 @@ impl FirmwareSessionHandle {
     }
 
     /// Attempt to start a firmware install/update session.
-    /// Accepts connected state (the command handles reboot-then-disconnect).
+    /// Accepts connected state; command-level readiness/reboot controls decide whether start is safe.
     /// Fails only if another firmware session is already active.
     pub fn try_start_firmware_install_update(&self) -> Result<(), FirmwareError> {
         let mut guard = self.state.lock().unwrap_or_else(|e| e.into_inner());

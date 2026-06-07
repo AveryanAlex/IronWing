@@ -17,7 +17,6 @@ import {
   connectSetupSession,
   createFullExpertSetupParamStore,
   createSetupCalibrationDomain,
-  createSetupConfigurationFactsDomain,
   createSetupStatusTextDomain,
   createSetupSupportDomain,
   createSetupTelemetryDomain,
@@ -84,12 +83,6 @@ async function runAssembledJourney(
       can_calibrate_radio: true,
       can_request_prearm_checks: true,
     }),
-    configurationFacts: createSetupConfigurationFactsDomain({
-      frame: { configured: true },
-      gps: { configured: true },
-      battery_monitor: { configured: true },
-      motors_esc: { configured: true },
-    }),
     calibration: createSetupCalibrationDomain({
       accel: { lifecycle: "complete", progress: null, report: null },
       compass: { lifecycle: "complete", progress: null, report: null },
@@ -107,37 +100,16 @@ async function runAssembledJourney(
 
   await openConnectedSetupWorkspace(page);
 
-  // Reach the beginner wizard through the tier-appropriate nav surface.
-  // Phone hides the inline rail behind a drawer toggle introduced in
-  // S06-T01; desktop/radiomaster keep the rail inline.
-  await selectSetupSectionForTier(page, "beginner_wizard", preset);
-  await expect(page.getByTestId(setupWorkspaceTestIds.beginnerWizardSection)).toBeVisible();
+  // Reach a representative setup editor through the tier-appropriate nav
+  // surface. Phone hides the inline rail behind a drawer toggle; desktop and
+  // Radiomaster keep the rail inline.
+  await selectSetupSectionForTier(page, "frame_orientation", preset);
+  await expect(page.getByTestId(setupWorkspaceTestIds.frameSection)).toBeVisible();
 
-  // Wizard auto-start (S06-T02) drives the shell into its active phase on
-  // first entry without any manual start click. The step frame only renders
-  // while the wizard store is in `active`.
-  await expect(page.getByTestId(setupWorkspaceTestIds.wizardStepFrame)).toBeVisible();
-
-  // Navigate back to overview. On phone this means re-opening the drawer;
-  // on desktop/radiomaster the inline rail is already visible.
+  // Navigate back to overview. On phone this means re-opening the drawer; on
+  // desktop/radiomaster the inline rail is already visible.
   await selectSetupSectionForTier(page, "overview", preset);
   await expect(page.getByTestId(setupWorkspaceTestIds.overviewSection)).toBeVisible();
-
-  // The wizard pauses into `paused_detour` on nav-away. The nav now represents
-  // section status iconographically, so keep the assertion tied to the stable
-  // status mount point rather than old status copy.
-  if (preset === "phone") {
-    await openSetupSectionDrawer(page);
-  }
-  await expect(
-    page.getByTestId(`${setupWorkspaceTestIds.sectionStatusPrefix}-beginner_wizard`),
-  ).toBeVisible();
-  if (preset === "phone") {
-    await page
-      .getByTestId(setupWorkspaceTestIds.sectionDrawerClose)
-      .click();
-    await expect(page.getByTestId(setupWorkspaceTestIds.sectionDrawer)).toHaveCount(0);
-  }
 
   // Cross-workspace navigation: the firmware tab lives in the app shell
   // header, which stays reachable at every tier.

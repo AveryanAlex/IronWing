@@ -788,6 +788,19 @@ pub async fn async_probe_with_cancel(
     .await
 }
 
+pub async fn async_probe_for_detection_with_cancel(
+    io: &mut dyn AsyncSerialIo,
+    is_cancelled: &dyn Fn() -> bool,
+) -> Result<BootloaderInfo, FirmwareError> {
+    async_probe_with_timeout_budgets(
+        io,
+        is_cancelled,
+        DETECTION_SYNC_RESPONSE_TIMEOUT_BUDGET,
+        DETECTION_DEVICE_INFO_TIMEOUT_BUDGET,
+    )
+    .await
+}
+
 async fn async_probe_with_timeout_budgets(
     io: &mut dyn AsyncSerialIo,
     is_cancelled: &dyn Fn() -> bool,

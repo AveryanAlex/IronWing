@@ -4,14 +4,16 @@ import type {
   CatalogTargetSummary,
   DfuDeviceInfo,
   DfuScanResult,
+  FirmwareBootloaderBoardInfo,
   FirmwareInstallPreflightInfo,
   FirmwareInstallReadinessBlockedReason,
   FirmwareInstallReadinessRequest,
   FirmwareInstallReadinessResponse,
   FirmwareInstallResult,
-  InventoryResult,
+  FirmwareRebootToBootloaderResult,
   PortInfo,
 } from "../../../firmware";
+import type { SerialPortInventoryResult } from "../../../serial-ports";
 import { mockState } from "./runtime";
 import type { CommandArgs } from "./types";
 
@@ -189,14 +191,17 @@ export function mockFirmwareInstallPreflightInfo(): FirmwareInstallPreflightInfo
     param_count: paramCount,
     has_params_to_backup: paramCount > 0,
     available_ports: availablePorts,
-    detected_board_id: null,
     session_ready: true,
     session_status: { kind: "idle" },
   };
 }
 
-export function mockInventoryResult(): InventoryResult {
-  return { kind: "available", ports: defaultFirmwarePorts() };
+export function validateFirmwarePortArg(args: CommandArgs, command: string): string {
+  return requireNonEmptyString(args?.port, `${command}.port`);
+}
+
+export function mockInventoryResult(): SerialPortInventoryResult {
+  return { kind: "available", ports: defaultFirmwarePorts(), can_request_web_serial: false };
 }
 
 export function mockDfuScanResult(): DfuScanResult {
@@ -395,9 +400,25 @@ export function mockFirmwareInstallReadinessResponse(request: FirmwareInstallRea
     request_token: mockFirmwareInstallReadinessRequestToken(request),
     session_status: { kind: "idle" },
     readiness: blockedReason === null ? { kind: "advisory" } : { kind: "blocked", reason: blockedReason },
-    target_hint: null,
-    validation_pending: blockedReason === null,
-    bootloader_transition: { kind: "manual_bootloader_entry_required" },
+    bootloader_status: { kind: "unknown" },
+  };
+}
+
+export function mockFirmwareRebootToBootloaderResult(_port: string): FirmwareRebootToBootloaderResult {
+  return {
+    result: "unsupported",
+    reason: "Mock firmware backend has no live serial link to reboot.",
+  };
+}
+
+export function mockFirmwareBootloaderBoardInfo(port: string): FirmwareBootloaderBoardInfo {
+  return {
+    port,
+    board_id: 140,
+    board_rev: 1,
+    bootloader_rev: 5,
+    flash_size: 2_097_152,
+    extf_size: null,
   };
 }
 

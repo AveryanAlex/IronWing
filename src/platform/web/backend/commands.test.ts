@@ -58,36 +58,11 @@ const wasmContractMock = vi.hoisted(() => ({
     onProgress("programming", 4, 4);
     return { result: "verified", board_id: 140, bootloader_rev: 5, port: "webserial:1" };
   }),
-  firmwareCatalogEntriesFromManifest: vi.fn(async () => [{
-    board_id: 140,
-    platform: "CubeOrange",
-    vehicle_type: "Copter",
-    version: "4.5.0",
-    version_type: "OFFICIAL",
-    format: "apj",
-    url: "https://firmware.example/CubeOrange.apj",
-    image_size: 10,
-    latest: true,
-    git_sha: "abc",
-    brand_name: "Cube Orange",
-    manufacturer: "Hex",
-  }]),
-  firmwareCatalogTargetsFromManifest: vi.fn(async () => [{
-    board_id: 140,
-    platform: "CubeOrange",
-    brand_name: "Cube Orange",
-    manufacturer: "Hex",
-    vehicle_types: ["Copter"],
-    latest_version: "4.5.0",
-  }]),
-  firmwareBootloaderCatalogTargetsFromManifest: vi.fn(async () => [{
-    board_id: 140,
-    platform: "CubeOrange",
-    brand_name: "Cube Orange",
-    manufacturer: "Hex",
-    vehicle_types: ["Copter"],
-    latest_version: "4.5.0",
-  }]),
+  webSerialDetectBootloaderBoard: vi.fn(async () => ({ port: "webserial:1", board_id: 140, board_rev: 1, bootloader_rev: 5, flash_size: 2_097_152, extf_size: null })),
+  webUsbBootloaderInstallation: vi.fn(async ({ onProgress }: { onProgress: (phase: string, written: number, total: number) => void }) => {
+    onProgress("downloading", 4, 4);
+    return { result: "verified" };
+  }),
   paramDownloadAll: vi.fn(async () => undefined),
   paramCancel: vi.fn(async () => undefined),
   paramWrite: vi.fn(async (name: string, value: number) => ({
@@ -177,6 +152,7 @@ const wasmContractMock = vi.hoisted(() => ({
   calibrateCompassAccept: vi.fn(async () => undefined),
   calibrateCompassCancel: vi.fn(async () => undefined),
   rebootVehicle: vi.fn(async () => undefined),
+  rebootToBootloader: vi.fn(async () => undefined),
   motorTest: vi.fn(async () => undefined),
   setServo: vi.fn(async () => undefined),
   rcOverride: vi.fn(async () => undefined),
@@ -222,9 +198,6 @@ vi.mock("../wasm", () => ({
   wasmFenceClear: wasmContractMock.fenceClear,
   wasmFenceDownload: wasmContractMock.fenceDownload,
   wasmFenceUpload: wasmContractMock.fenceUpload,
-  wasmFirmwareBootloaderCatalogTargetsFromManifest: wasmContractMock.firmwareBootloaderCatalogTargetsFromManifest,
-  wasmFirmwareCatalogEntriesFromManifest: wasmContractMock.firmwareCatalogEntriesFromManifest,
-  wasmFirmwareCatalogTargetsFromManifest: wasmContractMock.firmwareCatalogTargetsFromManifest,
   wasmMissionCancel: wasmContractMock.missionCancel,
   wasmMissionClear: wasmContractMock.missionClear,
   wasmMissionDownload: wasmContractMock.missionDownload,
@@ -247,6 +220,8 @@ vi.mock("../wasm", () => ({
   wasmRallyClear: wasmContractMock.rallyClear,
   wasmRallyDownload: wasmContractMock.rallyDownload,
   wasmRallyUpload: wasmContractMock.rallyUpload,
+  wasmDisconnectLink: wasmRuntimeMock.disconnectLink,
+  wasmRebootToBootloader: wasmContractMock.rebootToBootloader,
   wasmRebootVehicle: wasmContractMock.rebootVehicle,
   wasmRequestPrearmChecks: wasmContractMock.requestPrearmChecks,
   wasmSetServo: wasmContractMock.setServo,
@@ -254,6 +229,8 @@ vi.mock("../wasm", () => ({
   wasmStopGuidedSession: wasmContractMock.stopGuidedSession,
   wasmUpdateGuidedSession: wasmContractMock.updateGuidedSession,
   wasmWebSerialFirmwareInstallUpdate: wasmContractMock.webSerialFirmwareInstallUpdate,
+  wasmWebSerialDetectBootloaderBoard: wasmContractMock.webSerialDetectBootloaderBoard,
+  wasmWebUsbBootloaderInstallation: wasmContractMock.webUsbBootloaderInstallation,
   wasmWebTransportDescriptors: wasmContractMock.webTransportDescriptors,
   wasmLogParseSummary: wasmContractMock.logParseSummary,
   wasmLogQueryMessages: wasmContractMock.logQueryMessages,
@@ -266,10 +243,10 @@ vi.mock("../wasm", () => ({
   wasmLogExportCsvBytes: wasmContractMock.logExportCsvBytes,
 }));
 
-const webSerialFirmwareMock = vi.hoisted(() => ({
-  isWebSerialFirmwareAvailable: vi.fn(() => false),
-  listGrantedWebSerialFirmwarePorts: vi.fn(async (): Promise<unknown[]> => []),
-  requestWebSerialFirmwarePort: vi.fn(async () => ({
+const webSerialMock = vi.hoisted(() => ({
+  isWebSerialGrantAvailable: vi.fn(() => false),
+  listGrantedWebSerialPorts: vi.fn(async (): Promise<unknown[]> => []),
+  requestWebSerialPort: vi.fn(async () => ({
     port_name: "webserial:1",
     vid: 1155,
     pid: 22336,
@@ -278,12 +255,12 @@ const webSerialFirmwareMock = vi.hoisted(() => ({
     product: "WebSerial device",
     location: "webserial:1",
   })),
-  openWebSerialFirmwarePort: vi.fn(async () => ({
+  openWebSerialPort: vi.fn(async () => ({
     close: vi.fn(async () => undefined),
   })),
 }));
 
-vi.mock("../firmware/web-serial", () => webSerialFirmwareMock);
+vi.mock("../serial/web-serial", () => webSerialMock);
 
 vi.mock("../transports/websocket", () => ({
   createWebSocketTransport: vi.fn(() => ({
@@ -316,9 +293,11 @@ import { createWebSerialTransport, isWebSerialAvailable } from "../transports/we
 import { createWebSocketTransport } from "../transports/websocket";
 import { invokeWebCommand } from "./commands";
 import { resetWebFirmwareCatalogCacheForTests } from "./firmware";
+import { WEB_SERIAL_FLASH_UNSUPPORTED_REASON } from "../../../lib/firmware/platform-guidance";
 import { getBrowserPersistentStorage } from "./browser-storage";
 import { registerWebLogTestBytes } from "./logs";
 import { resetWebRecordingStateForTests } from "./recording";
+import { IDLE_WEB_FIRMWARE_STATUS, webBackendRuntime } from "./runtime";
 
 describe("web backend commands", () => {
   beforeEach(() => {
@@ -333,8 +312,13 @@ describe("web backend commands", () => {
     );
     vi.mocked(isWebSerialAvailable).mockReturnValue(false);
     vi.mocked(isWebBluetoothAvailable).mockReturnValue(false);
-    webSerialFirmwareMock.isWebSerialFirmwareAvailable.mockReturnValue(false);
-    webSerialFirmwareMock.listGrantedWebSerialFirmwarePorts.mockResolvedValue([]);
+    webSerialMock.isWebSerialGrantAvailable.mockReturnValue(false);
+    webSerialMock.listGrantedWebSerialPorts.mockResolvedValue([]);
+    webBackendRuntime.activeTransport = null;
+    webBackendRuntime.activeLinkTarget = null;
+    webBackendRuntime.connectAbort = null;
+    webBackendRuntime.firmwareSessionStatus = IDLE_WEB_FIRMWARE_STATUS;
+    webBackendRuntime.firmwareInstallAbort = null;
     resetWebFirmwareCatalogCacheForTests();
     resetWebRecordingStateForTests();
     vi.stubGlobal("URL", {
@@ -379,7 +363,7 @@ describe("web backend commands", () => {
   });
 
   it("advertises firmware install/update when WebSerial firmware support is available", async () => {
-    webSerialFirmwareMock.isWebSerialFirmwareAvailable.mockReturnValue(true);
+    webSerialMock.isWebSerialGrantAvailable.mockReturnValue(true);
 
     const capabilities = await invokeWebCommand<Record<string, unknown>>("runtime_capabilities");
 
@@ -395,9 +379,9 @@ describe("web backend commands", () => {
   });
 
   it("starts Web Serial and Web Bluetooth transports from connect requests", async () => {
-    await invokeWebCommand("connect_link", { request: { transport: { kind: "web_serial", baud: 115200 } } });
+    await invokeWebCommand("connect_link", { request: { transport: { kind: "web_serial", baud: 115200, port_id: "webserial:1" } } });
     expect(createWebSerialTransport).toHaveBeenCalledWith(
-      { kind: "web_serial", baud: 115200 },
+      { kind: "web_serial", baud: 115200, port_id: "webserial:1" },
       expect.anything(),
       expect.any(AbortSignal),
     );
@@ -590,7 +574,7 @@ describe("web backend commands", () => {
     }));
     await expect(invokeWebCommand("firmware_install_update")).resolves.toEqual({
       result: "failed",
-      reason: "Firmware install/update requires WebSerial in the browser-only web runtime.",
+      reason: WEB_SERIAL_FLASH_UNSUPPORTED_REASON,
     });
     await expect(invokeWebCommand("firmware_bootloader_installation")).resolves.toEqual(expect.objectContaining({ result: "platform_unsupported" }));
   });
@@ -674,14 +658,54 @@ describe("web backend commands", () => {
     expect(wasmRuntimeMock.waitConnect).toHaveBeenCalled();
   });
 
-  it("lists granted WebSerial firmware ports and installs through the wasm firmware bridge", async () => {
-    webSerialFirmwareMock.isWebSerialFirmwareAvailable.mockReturnValue(true);
-    webSerialFirmwareMock.listGrantedWebSerialFirmwarePorts.mockResolvedValue([{ port_name: "webserial:1", vid: 1155, pid: 22336, serial_number: null, manufacturer: null, product: "WebSerial device", location: "webserial:1" }]);
+  it("reports the active WebSerial MAVLink port as not in bootloader", async () => {
+    webSerialMock.isWebSerialGrantAvailable.mockReturnValue(true);
+    webSerialMock.listGrantedWebSerialPorts.mockResolvedValue([{ port_name: "webserial:1", vid: 1155, pid: 22336, serial_number: null, manufacturer: null, product: "WebSerial device", location: "webserial:1" }]);
 
-    await expect(invokeWebCommand("firmware_request_serial_port")).resolves.toEqual(expect.objectContaining({ port_name: "webserial:1" }));
-    await expect(invokeWebCommand("firmware_list_ports")).resolves.toEqual({
+    await invokeWebCommand("connect_link", {
+      request: { transport: { kind: "web_serial", baud: 115200, port_id: "webserial:1" } },
+    });
+
+    await expect(invokeWebCommand("firmware_install_update_readiness", {
+      request: {
+        port: "webserial:1",
+        source: { kind: "local_apj_bytes", data: [1, 2, 3] },
+        options: { full_chip_erase: false },
+      },
+    })).resolves.toEqual(expect.objectContaining({
+      readiness: { kind: "advisory" },
+      bootloader_status: { kind: "not_in_bootloader", can_reboot: true },
+    }));
+
+    await expect(invokeWebCommand("firmware_detect_bootloader_board", { port: "webserial:1" }))
+      .rejects.toThrow("active MAVLink connection");
+    await expect(invokeWebCommand("firmware_install_update", {
+      request: {
+        port: "webserial:1",
+        baud: 115200,
+        source: { kind: "local_apj_bytes", data: [1, 2, 3] },
+        options: { full_chip_erase: false },
+      },
+    })).rejects.toThrow("active MAVLink connection");
+
+    await expect(invokeWebCommand("firmware_reboot_to_bootloader", {
+      port: "webserial:1",
+    })).resolves.toEqual({ result: "requested" });
+    expect(wasmContractMock.rebootToBootloader).toHaveBeenCalledTimes(1);
+    expect(wasmRuntimeMock.disconnectLink).toHaveBeenCalledTimes(1);
+    expect(webBackendRuntime.activeTransport).toBeNull();
+    expect(webBackendRuntime.activeLinkTarget).toBeNull();
+  });
+
+  it("lists granted WebSerial ports and installs through the wasm firmware bridge", async () => {
+    webSerialMock.isWebSerialGrantAvailable.mockReturnValue(true);
+    webSerialMock.listGrantedWebSerialPorts.mockResolvedValue([{ port_name: "webserial:1", vid: 1155, pid: 22336, serial_number: null, manufacturer: null, product: "WebSerial device", location: "webserial:1" }]);
+
+    await expect(invokeWebCommand("request_web_serial_port")).resolves.toEqual(expect.objectContaining({ port_name: "webserial:1" }));
+    await expect(invokeWebCommand("list_serial_port_inventory")).resolves.toEqual({
       kind: "available",
       ports: [expect.objectContaining({ port_name: "webserial:1" })],
+      can_request_web_serial: true,
     });
     await expect(invokeWebCommand("firmware_install_update_preflight")).resolves.toEqual(expect.objectContaining({
       session_ready: true,
@@ -695,7 +719,25 @@ describe("web backend commands", () => {
       },
     })).resolves.toEqual(expect.objectContaining({
       readiness: { kind: "advisory" },
-      validation_pending: true,
+      bootloader_status: { kind: "unknown" },
+    }));
+
+    await expect(invokeWebCommand("firmware_reboot_to_bootloader", {
+      port: "webserial:1",
+    })).resolves.toEqual(expect.objectContaining({ result: "unsupported" }));
+
+    await expect(invokeWebCommand("firmware_detect_bootloader_board", {
+      port: "webserial:1",
+    })).resolves.toEqual({
+      port: "webserial:1",
+      board_id: 140,
+      board_rev: 1,
+      bootloader_rev: 5,
+      flash_size: 2_097_152,
+      extf_size: null,
+    });
+    expect(wasmContractMock.webSerialDetectBootloaderBoard).toHaveBeenCalledWith(expect.objectContaining({
+      portName: "webserial:1",
     }));
 
     await expect(invokeWebCommand("firmware_install_update", {
@@ -706,7 +748,7 @@ describe("web backend commands", () => {
         options: { full_chip_erase: false },
       },
     })).resolves.toEqual({ result: "verified", board_id: 140, bootloader_rev: 5, port: "webserial:1" });
-    expect(webSerialFirmwareMock.openWebSerialFirmwarePort).toHaveBeenCalledWith("webserial:1", 115200, expect.any(AbortSignal));
+    expect(webSerialMock.openWebSerialPort).toHaveBeenCalledWith("webserial:1", 115200, expect.any(AbortSignal));
     expect(wasmContractMock.webSerialFirmwareInstallUpdate).toHaveBeenCalledWith(expect.objectContaining({
       portName: "webserial:1",
       source: { kind: "local_apj_bytes", data: [1, 2, 3] },
@@ -720,8 +762,25 @@ describe("web backend commands", () => {
     });
   });
 
-  it("fetches firmware catalog data with browser fetch and delegates catalog shaping to wasm", async () => {
-    const manifestBytes = new Uint8Array([31, 139, 8, 0]);
+  it("fetches firmware catalog data with browser fetch and shapes catalog data in TypeScript", async () => {
+    const manifestBytes = await gzipText(JSON.stringify({
+      firmware: [
+        {
+          board_id: 140,
+          platform: "CubeOrange",
+          "mav-type": "Copter",
+          "mav-firmware-version": "4.5.0",
+          "mav-firmware-version-type": "OFFICIAL",
+          format: "apj",
+          url: "https://firmware.ardupilot.org/CubeOrange.apj",
+          image_size: 10,
+          latest: 1,
+          "git-sha": "abc",
+          brand_name: "Cube Orange",
+          manufacturer: "Hex",
+        },
+      ],
+    }));
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith("/manifest.json.gz")) {
@@ -743,12 +802,6 @@ describe("web backend commands", () => {
       expect.objectContaining({ board_id: 140, platform: "CubeOrange" }),
     ]);
 
-    expect(wasmContractMock.firmwareCatalogTargetsFromManifest).toHaveBeenCalledWith(manifestBytes);
-    expect(wasmContractMock.firmwareCatalogEntriesFromManifest).toHaveBeenCalledWith(manifestBytes, 140, "CubeOrange");
-    expect(wasmContractMock.firmwareBootloaderCatalogTargetsFromManifest).toHaveBeenCalledWith(
-      manifestBytes,
-      '<a href="CubeOrange_bl.bin">CubeOrange_bl.bin</a>',
-    );
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
   });
 
@@ -763,8 +816,8 @@ describe("web backend commands", () => {
   });
 
   it("downloads catalog URL firmware sources before invoking the wasm serial uploader", async () => {
-    webSerialFirmwareMock.isWebSerialFirmwareAvailable.mockReturnValue(true);
-    webSerialFirmwareMock.listGrantedWebSerialFirmwarePorts.mockResolvedValue([{ port_name: "webserial:1", vid: 1155, pid: 22336, serial_number: null, manufacturer: null, product: "WebSerial device", location: "webserial:1" }]);
+    webSerialMock.isWebSerialGrantAvailable.mockReturnValue(true);
+    webSerialMock.listGrantedWebSerialPorts.mockResolvedValue([{ port_name: "webserial:1", vid: 1155, pid: 22336, serial_number: null, manufacturer: null, product: "WebSerial device", location: "webserial:1" }]);
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       if (String(input) === "https://firmware.example/CubeOrange.apj") {
         return responseBytes(new Uint8Array([7, 8, 9]));
@@ -787,7 +840,7 @@ describe("web backend commands", () => {
     await invokeWebCommand("firmware_session_clear_completed");
   });
 
-  it("keeps pure-web DFU and bootloader installation explicitly unsupported", async () => {
+  it("keeps pure-web DFU and bootloader installation unsupported without WebUSB", async () => {
     await expect(invokeWebCommand("firmware_list_dfu_devices")).resolves.toEqual(expect.objectContaining({
       kind: "unsupported",
       reason: expect.stringContaining("WebUSB/DFU"),
@@ -798,8 +851,95 @@ describe("web backend commands", () => {
     }));
   });
 
+  it("lists WebUSB DFU devices and installs bootloader through wasm", async () => {
+    const usbDevice = {
+      vendorId: 0x0483,
+      productId: 0xdf11,
+      serialNumber: "STM32_BL",
+      manufacturerName: "STMicroelectronics",
+      productName: "STM32 BOOTLOADER",
+    };
+    vi.stubGlobal("navigator", {
+      usb: {
+        getDevices: vi.fn(async () => [usbDevice]),
+        requestDevice: vi.fn(async () => usbDevice),
+      },
+    });
+
+    const scan = await invokeWebCommand("firmware_list_dfu_devices");
+    expect(scan).toEqual({
+      kind: "available",
+      devices: [{
+        vid: 0x0483,
+        pid: 0xdf11,
+        unique_id: "webusb:0483:df11:STM32_BL",
+        serial_number: "STM32_BL",
+        manufacturer: "STMicroelectronics",
+        product: "STM32 BOOTLOADER",
+      }],
+    });
+
+    const device = (scan as { devices: Array<{ unique_id: string }> }).devices[0];
+    await expect(invokeWebCommand("firmware_bootloader_installation", {
+      request: {
+        device,
+        source: { kind: "local_bin_bytes", data: [1, 2, 3, 4] },
+      },
+    })).resolves.toEqual({ result: "verified" });
+
+    expect(wasmContractMock.webUsbBootloaderInstallation).toHaveBeenCalledWith(expect.objectContaining({
+      usbDevice,
+      deviceInfo: expect.objectContaining({ unique_id: "webusb:0483:df11:STM32_BL" }),
+      source: { kind: "local_bin_bytes", data: [1, 2, 3, 4] },
+    }));
+    await expect(invokeWebCommand("firmware_session_status")).resolves.toEqual({
+      kind: "completed",
+      outcome: {
+        path: "bootloader_installation",
+        outcome: { result: "verified" },
+      },
+    });
+    await invokeWebCommand("firmware_session_clear_completed");
+  });
+
+  it("resolves official bootloader sources before WebUSB DFU installation", async () => {
+    const usbDevice = {
+      vendorId: 0x0483,
+      productId: 0xdf11,
+      serialNumber: "STM32_BL",
+      manufacturerName: "STMicroelectronics",
+      productName: "STM32 BOOTLOADER",
+    };
+    vi.stubGlobal("navigator", {
+      usb: {
+        getDevices: vi.fn(async () => [usbDevice]),
+        requestDevice: vi.fn(async () => usbDevice),
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input).endsWith("/Tools/Bootloaders/CubeOrange_bl.bin")) {
+        return responseBytes(new Uint8Array([9, 8, 7]));
+      }
+      return responseText("missing", 404);
+    }));
+
+    const scan = await invokeWebCommand("firmware_list_dfu_devices");
+    const device = (scan as { devices: Array<{ unique_id: string }> }).devices[0];
+    await expect(invokeWebCommand("firmware_bootloader_installation", {
+      request: {
+        device,
+        source: { kind: "official_bootloader", board_target: "CubeOrange" },
+      },
+    })).resolves.toEqual({ result: "verified" });
+
+    expect(wasmContractMock.webUsbBootloaderInstallation).toHaveBeenCalledWith(expect.objectContaining({
+      source: { kind: "local_bin_bytes", data: [9, 8, 7] },
+    }));
+    await invokeWebCommand("firmware_session_clear_completed");
+  });
+
   it("returns benign empty results for browser transport probes", async () => {
-    await expect(invokeWebCommand("list_serial_ports_cmd")).resolves.toEqual([]);
+    await expect(invokeWebCommand("list_serial_port_inventory")).resolves.toEqual({ kind: "unsupported", can_request_web_serial: false });
     await expect(invokeWebCommand("bt_scan_ble")).resolves.toEqual([]);
     await expect(invokeWebCommand("bt_get_bonded_devices")).resolves.toEqual([]);
     await expect(invokeWebCommand("bt_request_permissions")).resolves.toBeUndefined();
@@ -821,6 +961,11 @@ function responseBytes(bytes: Uint8Array, status = 200): Response {
     arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
     text: async () => new TextDecoder().decode(bytes),
   } as Response;
+}
+
+async function gzipText(text: string): Promise<Uint8Array> {
+  const stream = new Blob([text]).stream().pipeThrough(new CompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
 }
 
 function responseText(text: string, status = 200): Response {

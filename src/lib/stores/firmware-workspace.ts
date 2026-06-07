@@ -2,11 +2,16 @@ import { get, writable } from "svelte/store";
 
 import { trackAnalytics } from "../analytics/client";
 import { durationBucket } from "../analytics/properties";
+import {
+  bootloaderInstallationPlatformUnsupportedGuidance,
+  firmwareInstallUpdateErrorGuidance,
+} from "../firmware/platform-guidance";
 import type {
   CatalogTargetSummary,
   DfuDeviceInfo,
   BootloaderInstallationResult,
   BootloaderInstallationSource,
+  FirmwareBootloaderBoardInfo,
   FirmwareInstallResult,
   FirmwareInstallPreflightInfo,
   FirmwareInstallReadinessRequest,
@@ -15,8 +20,8 @@ import type {
   FirmwareInstallSource,
   FirmwareOutcome,
   FirmwareProgress,
+  FirmwareRebootToBootloaderResult,
   FirmwareSessionStatus,
-  PortInfo,
 } from "../../firmware";
 import {
   bootloaderInstallationResultToStatus,
@@ -30,10 +35,12 @@ import {
   isFirmwareSessionActive,
   normalizeBootloaderInstallationResult,
   normalizeDfuScanResult,
+  normalizeFirmwareBootloaderBoardInfo,
   normalizeFirmwareInstallPreflightInfo,
   normalizeFirmwareInstallReadinessResponse,
   normalizeFirmwareInstallResult,
   normalizeFirmwareProgress,
+  normalizeFirmwareRebootToBootloaderResult,
   normalizeFirmwareSessionStatus,
   type FirmwareService,
 } from "../platform/firmware";
@@ -45,9 +52,23 @@ const MISSING_INSTALL_PORT_MESSAGE = "Choose a serial port before starting firmw
 const MISSING_INSTALL_SOURCE_MESSAGE = "Choose a firmware source before starting firmware install/update.";
 const MISSING_BOOTLOADER_DEVICE_MESSAGE = "Choose a DFU device before starting bootloader installation.";
 const MISSING_BOOTLOADER_SOURCE_MESSAGE = "Choose a bootloader source before starting bootloader installation.";
+const BOOTLOADER_SYNC_REBOOT_PROMPT = "Reboot the controller into bootloader mode, then refresh and select/grant the bootloader serial port before retrying.";
 
 export type FirmwareWorkspaceAsyncPhase = "idle" | "loading" | "ready" | "failed";
 export type FirmwareWorkspaceReadinessPhase = "idle" | "checking" | "ready" | "blocked" | "failed";
+export type FirmwareWorkspaceBootloaderRebootPhase = "idle" | "requesting" | "requested" | "unsupported" | "failed";
+export type FirmwareWorkspaceBoardDetectionPhase = "idle" | "detecting" | "detected" | "failed";
+
+export type FirmwareWorkspaceBootloaderRebootState = {
+  phase: FirmwareWorkspaceBootloaderRebootPhase;
+  message: string | null;
+};
+
+export type FirmwareWorkspaceBoardDetectionState = {
+  phase: FirmwareWorkspaceBoardDetectionPhase;
+  info: FirmwareBootloaderBoardInfo | null;
+  error: string | null;
+};
 
 export type FirmwareSourceMetadata =
   | {
@@ -92,11 +113,12 @@ export type FirmwareWorkspaceSerialState = {
   source: FirmwareInstallSource;
   sourceMetadata: FirmwareSourceMetadata | null;
   sourceError: string | null;
-  availablePorts: PortInfo[];
   preflightPhase: FirmwareWorkspaceAsyncPhase;
   preflight: FirmwareInstallPreflightInfo | null;
   preflightError: string | null;
   readiness: FirmwareWorkspaceReadinessState;
+  bootloaderReboot: FirmwareWorkspaceBootloaderRebootState;
+  boardDetection: FirmwareWorkspaceBoardDetectionState;
 };
 
 export type FirmwareWorkspaceRecoveryState = {
@@ -156,7 +178,6 @@ function createInitialState(): FirmwareWorkspaceState {
       source: DEFAULT_SERIAL_SOURCE,
       sourceMetadata: null,
       sourceError: null,
-      availablePorts: [],
       preflightPhase: "idle",
       preflight: null,
       preflightError: null,
@@ -167,6 +188,15 @@ function createInitialState(): FirmwareWorkspaceState {
         response: null,
         error: null,
         staleResponseCount: 0,
+      },
+      bootloaderReboot: {
+        phase: "idle",
+        message: null,
+      },
+      boardDetection: {
+        phase: "idle",
+        info: null,
+        error: null,
       },
     },
     recovery: {
@@ -196,6 +226,33 @@ export function createFirmwareWorkspaceStore(
 
   function updateState(recipe: (state: FirmwareWorkspaceState) => FirmwareWorkspaceState) {
     store.update((state) => withDerivedState(recipe(state)));
+  }
+
+  function shouldPromptBootloaderReboot(message: string): boolean {
+    const normalized = message.toLowerCase();
+    return normalized.includes("bootloader sync mismatch") || normalized.includes("no ardupilot bootloader responded");
+  }
+
+  function promptBootloaderRebootOnSyncMismatch(message: string): string {
+    if (!shouldPromptBootloaderReboot(message) || message.includes(BOOTLOADER_SYNC_REBOOT_PROMPT)) {
+      return message;
+    }
+
+    return `${message} ${BOOTLOADER_SYNC_REBOOT_PROMPT}`;
+  }
+
+  function promptBootloaderRebootForInstallResult(result: FirmwareInstallResult): FirmwareInstallResult {
+    switch (result.result) {
+      case "failed":
+      case "board_detection_failed":
+      case "extf_capacity_insufficient":
+        return {
+          ...result,
+          reason: promptBootloaderRebootOnSyncMismatch(result.reason),
+        };
+      default:
+        return result;
+    }
   }
 
   function deriveEffectiveSessionStatus(
@@ -326,50 +383,21 @@ export function createFirmwareWorkspaceStore(
       applyObservedSessionStatus(preflight.session_status);
 
       const previous = get(store);
-      const nextPort = resolvePreferredPort(previous.serial.port, preflight.available_ports);
 
       updateState((state) => ({
         ...state,
         serial: {
           ...state.serial,
-          port: nextPort,
-          availablePorts: [...preflight.available_ports],
           preflightPhase: "ready",
           preflight,
           preflightError: null,
         },
       }));
 
-      if (nextPort !== previous.serial.port || previous.serial.readiness.phase === "idle") {
+      if (previous.serial.readiness.phase === "idle") {
         await requestFirmwareInstallReadiness();
       }
 
-      return preflight;
-    } catch (error) {
-      const message = service.formatError(error);
-      updateState((state) => ({
-        ...state,
-        lastError: message,
-        serial: {
-          ...state.serial,
-          preflightPhase: "failed",
-          preflightError: message,
-        },
-      }));
-      return null;
-    }
-  }
-
-  async function requestFirmwareInstallPort() {
-    try {
-      const requested = await service.requestFirmwareInstallPort();
-      const preflight = await refreshFirmwareInstallPreflight();
-      if (requested && typeof requested === "object" && !Array.isArray(requested)) {
-        const portName = (requested as Record<string, unknown>).port_name;
-        if (typeof portName === "string" && portName.trim().length > 0) {
-          await setFirmwareInstallPort(portName);
-        }
-      }
       return preflight;
     } catch (error) {
       const message = service.formatError(error);
@@ -409,7 +437,7 @@ export function createFirmwareWorkspaceStore(
           device: selectedDevice,
           devices,
           scanPhase: "ready",
-          scanError: scan.kind === "unsupported" ? "Bootloader installation is unsupported on this platform." : null,
+          scanError: scan.kind === "unsupported" ? bootloaderInstallationPlatformUnsupportedGuidance(scan.reason) : null,
         },
       }));
 
@@ -529,6 +557,137 @@ export function createFirmwareWorkspaceStore(
     }
   }
 
+  async function rebootFirmwareInstallToBootloader(): Promise<FirmwareRebootToBootloaderResult | null> {
+    const port = get(store).serial.port;
+    if (port.trim().length === 0) {
+      updateState((state) => ({
+        ...state,
+        lastError: MISSING_INSTALL_PORT_MESSAGE,
+        serial: {
+          ...state.serial,
+          bootloaderReboot: {
+            phase: "failed",
+            message: MISSING_INSTALL_PORT_MESSAGE,
+          },
+        },
+      }));
+      return null;
+    }
+
+    updateState((state) => ({
+      ...state,
+      serial: {
+        ...state.serial,
+        bootloaderReboot: {
+          phase: "requesting",
+          message: null,
+        },
+      },
+    }));
+
+    try {
+      const result = normalizeFirmwareRebootToBootloaderResult(await service.rebootToBootloader(port));
+      const message = result.result === "requested"
+        ? "Bootloader reboot requested. If the device re-enumerates, refresh and select/grant the bootloader port, then autodetect or start install."
+        : result.result === "unsupported"
+          ? result.reason
+          : result.error;
+      updateState((state) => ({
+        ...state,
+        lastError: result.result === "failed" ? result.error : state.lastError,
+        serial: {
+          ...state.serial,
+          bootloaderReboot: {
+            phase: result.result,
+            message,
+          },
+        },
+      }));
+
+      if (result.result === "requested") {
+        await refreshFirmwareInstallPreflight();
+      }
+
+      return result;
+    } catch (error) {
+      const message = service.formatError(error);
+      updateState((state) => ({
+        ...state,
+        lastError: message,
+        serial: {
+          ...state.serial,
+          bootloaderReboot: {
+            phase: "failed",
+            message,
+          },
+        },
+      }));
+      return null;
+    }
+  }
+
+  async function detectFirmwareInstallBootloaderBoard(): Promise<FirmwareBootloaderBoardInfo | null> {
+    const port = get(store).serial.port;
+    if (port.trim().length === 0) {
+      updateState((state) => ({
+        ...state,
+        lastError: MISSING_INSTALL_PORT_MESSAGE,
+        serial: {
+          ...state.serial,
+          boardDetection: {
+            phase: "failed",
+            info: null,
+            error: MISSING_INSTALL_PORT_MESSAGE,
+          },
+        },
+      }));
+      return null;
+    }
+
+    updateState((state) => ({
+      ...state,
+      serial: {
+        ...state.serial,
+        boardDetection: {
+          ...state.serial.boardDetection,
+          phase: "detecting",
+          error: null,
+        },
+      },
+    }));
+
+    try {
+      const info = normalizeFirmwareBootloaderBoardInfo(await service.detectBootloaderBoard(port));
+      updateState((state) => ({
+        ...state,
+        serial: {
+          ...state.serial,
+          boardDetection: {
+            phase: "detected",
+            info,
+            error: null,
+          },
+        },
+      }));
+      return info;
+    } catch (error) {
+      const message = promptBootloaderRebootOnSyncMismatch(firmwareInstallUpdateErrorGuidance(service.formatError(error)));
+      updateState((state) => ({
+        ...state,
+        lastError: message,
+        serial: {
+          ...state.serial,
+          boardDetection: {
+            phase: "failed",
+            info: null,
+            error: message,
+          },
+        },
+      }));
+      return null;
+    }
+  }
+
   async function setFirmwareInstallPort(port: string) {
     const normalizedPort = typeof port === "string" ? port : "";
     const current = get(store).serial.port;
@@ -541,6 +700,15 @@ export function createFirmwareWorkspaceStore(
       serial: {
         ...state.serial,
         port: normalizedPort,
+        bootloaderReboot: {
+          phase: "idle",
+          message: null,
+        },
+        boardDetection: {
+          phase: "idle",
+          info: null,
+          error: null,
+        },
       },
     }));
 
@@ -687,12 +855,14 @@ export function createFirmwareWorkspaceStore(
     }));
 
     try {
-      const result = normalizeFirmwareInstallResult(
-        await service.startFirmwareInstallUpdate(
-          state.serial.port,
-          state.serial.baud,
-          source,
-          serialOptionsFromState(state.serial),
+      const result = promptBootloaderRebootForInstallResult(
+        normalizeFirmwareInstallResult(
+          await service.startFirmwareInstallUpdate(
+            state.serial.port,
+            state.serial.baud,
+            source,
+            serialOptionsFromState(state.serial),
+          ),
         ),
       );
       pendingStartPath = null;
@@ -710,7 +880,7 @@ export function createFirmwareWorkspaceStore(
       return result;
     } catch (error) {
       pendingStartPath = null;
-      const message = service.formatError(error);
+      const message = promptBootloaderRebootOnSyncMismatch(firmwareInstallUpdateErrorGuidance(service.formatError(error)));
       applyObservedSessionStatus(buildFirmwareInstallFailureStatus(message));
       updateState((current) => ({
         ...current,
@@ -859,6 +1029,14 @@ export function createFirmwareWorkspaceStore(
           ...state.serial.readiness,
           error: null,
         },
+        bootloaderReboot: {
+          ...state.serial.bootloaderReboot,
+          message: null,
+        },
+        boardDetection: {
+          ...state.serial.boardDetection,
+          error: null,
+        },
       },
       recovery: {
         ...state.recovery,
@@ -901,9 +1079,10 @@ export function createFirmwareWorkspaceStore(
     initialize,
     refreshSessionStatus,
     refreshFirmwareInstallPreflight,
-    requestFirmwareInstallPort,
     refreshRecoveryDevices,
     requestFirmwareInstallReadiness,
+    rebootFirmwareInstallToBootloader,
+    detectFirmwareInstallBootloaderBoard,
     setFirmwareInstallPort,
     setFirmwareInstallTarget,
     setFirmwareInstallSource,
@@ -976,14 +1155,6 @@ function serialOptionsFromState(serial: Pick<FirmwareWorkspaceSerialState, "full
   return {
     full_chip_erase: serial.fullChipErase,
   };
-}
-
-function resolvePreferredPort(currentPort: string, ports: PortInfo[]): string {
-  if (currentPort && ports.some((port) => port.port_name === currentPort)) {
-    return currentPort;
-  }
-
-  return ports[0]?.port_name ?? currentPort;
 }
 
 function resolvePreferredDfuDevice(currentDevice: DfuDeviceInfo | null, devices: DfuDeviceInfo[]): DfuDeviceInfo | null {

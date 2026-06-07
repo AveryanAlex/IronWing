@@ -77,6 +77,7 @@ export type ConnectFormValue = {
   bind_addr?: string;
   address?: string;
   port?: string;
+  port_id?: string;
   websocket_url?: string;
   baud?: number | null;
   demo_vehicle_preset?: DemoVehiclePreset;
@@ -89,7 +90,7 @@ export type ConnectTransport =
   | { kind: "bluetooth_ble"; address: string }
   | { kind: "bluetooth_spp"; address: string }
   | { kind: "websocket"; url: string }
-  | { kind: "web_serial"; baud: number; port_id?: string }
+  | { kind: "web_serial"; baud: number; port_id: string }
   | { kind: "web_bluetooth"; device_id?: string; profile: "nordic_uart" }
   | { kind: "demo"; vehicle_preset: DemoVehiclePreset };
 
@@ -137,6 +138,7 @@ export function validateTransportDescriptor(
       if (!value.websocket_url) errors.push("websocket_url is required");
       break;
     case "web_serial":
+      if (!value.port_id) errors.push("port_id is required");
       if (value.baud == null) errors.push("baud is required");
       break;
     case "web_bluetooth":
@@ -172,10 +174,12 @@ export function buildConnectRequest(
     case "websocket":
       return { transport: { kind: "websocket", url: value.websocket_url ?? "" } };
     case "web_serial":
+      const portId = value.port_id?.trim();
       return {
         transport: {
           kind: "web_serial",
           baud: value.baud ?? descriptor.default_baud,
+          port_id: portId ?? "",
         },
       };
     case "web_bluetooth":

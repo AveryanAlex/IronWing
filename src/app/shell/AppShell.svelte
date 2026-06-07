@@ -9,6 +9,7 @@ import { createMissionPlannerStore, createMissionPlannerViewStore } from "../../
 import { createOperatorWorkspaceViewStore } from "../../lib/stores/operator-workspace-view";
 import { createParameterWorkspaceViewStore, params } from "../../lib/stores/params";
 import { runtime } from "../../lib/stores/runtime";
+import { createSerialPortInventoryStore } from "../../lib/stores/serial-port-inventory";
 import { createSessionViewStore, session } from "../../lib/stores/session";
 import { createFirmwareWorkspaceStore } from "../../lib/stores/firmware-workspace";
 import { createSetupWorkspaceStore, createSetupWorkspaceViewStore } from "../../lib/stores/setup-workspace";
@@ -24,6 +25,7 @@ import {
   setParamsStoreContext,
   setParameterWorkspaceViewStoreContext,
   setRuntimeStoreContext,
+  setSerialPortInventoryContext,
   setSessionStoreContext,
   setSessionViewStoreContext,
   setSetupWorkspaceStoreContext,
@@ -44,6 +46,7 @@ const liveSettings = createLiveSettingsStore(session);
 const missionPlanner = createMissionPlannerStore(session);
 const missionPlannerView = createMissionPlannerViewStore(missionPlanner);
 const sessionView = createSessionViewStore(session);
+const serialPortInventory = createSerialPortInventoryStore();
 const operatorWorkspaceView = createOperatorWorkspaceViewStore(session);
 const parameterWorkspaceView = createParameterWorkspaceViewStore(params);
 const setupWorkspace = createSetupWorkspaceStore(session, params);
@@ -54,6 +57,7 @@ const firmwareWorkspace = createFirmwareWorkspaceStore(firmwareService);
 
 setSessionStoreContext(session);
 setSessionViewStoreContext(sessionView);
+setSerialPortInventoryContext(serialPortInventory);
 setOperatorWorkspaceViewStoreContext(operatorWorkspaceView);
 setParamsStoreContext(params);
 setParameterWorkspaceViewStoreContext(parameterWorkspaceView);

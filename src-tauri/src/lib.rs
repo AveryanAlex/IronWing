@@ -4,22 +4,21 @@ use commands::{
     ack_session_snapshot, arm_vehicle, available_transports, calibrate_accel,
     calibrate_compass_accept, calibrate_compass_cancel, calibrate_compass_start, calibrate_gyro,
     disarm_vehicle, fence_clear, fence_download, fence_upload, get_available_message_rates,
-    get_available_modes, list_serial_ports_cmd, mission_cancel, mission_clear, mission_download,
-    mission_set_current, mission_upload, mission_validate, motor_test, open_session_snapshot,
-    param_cancel, param_download_all, param_format_file, param_parse_file, param_write,
-    param_write_batch, rally_clear, rally_download, rally_upload, rc_override, reboot_vehicle,
-    request_prearm_checks, runtime_capabilities, set_flight_mode, set_message_rate, set_servo,
-    set_telemetry_rate, start_guided_session, stop_guided_session, update_guided_session,
-    vehicle_takeoff,
+    get_available_modes, mission_cancel, mission_clear, mission_download, mission_set_current,
+    mission_upload, mission_validate, motor_test, open_session_snapshot, param_cancel,
+    param_download_all, param_format_file, param_parse_file, param_write, param_write_batch,
+    rally_clear, rally_download, rally_upload, rc_override, reboot_vehicle, request_prearm_checks,
+    runtime_capabilities, set_flight_mode, set_message_rate, set_servo, set_telemetry_rate,
+    start_guided_session, stop_guided_session, update_guided_session, vehicle_takeoff,
 };
 use connection::{ActiveLinkTarget, connect_link, disconnect_link};
 use firmware::commands::{
-    firmware_bootloader_catalog_targets, firmware_bootloader_installation,
-    firmware_catalog_entries, firmware_catalog_targets, firmware_install_update,
-    firmware_install_update_preflight, firmware_install_update_readiness, firmware_session_cancel,
-    firmware_session_clear_completed, firmware_session_status,
+    firmware_bootloader_installation, firmware_detect_bootloader_board, firmware_install_update,
+    firmware_install_update_preflight, firmware_install_update_readiness,
+    firmware_reboot_to_bootloader, firmware_session_cancel, firmware_session_clear_completed,
+    firmware_session_status,
 };
-use firmware::discovery::{firmware_list_dfu_devices, firmware_list_ports};
+use firmware::discovery::firmware_list_dfu_devices;
 use firmware::types::FirmwareSessionHandle;
 use ipc::GuidedRuntime;
 use ironwing_core::live_runtime::{LiveVehicleRuntime, SharedLiveRuntime};
@@ -33,6 +32,7 @@ use recording::{
     recording_status, recording_stop,
 };
 use remote_ui::RemoteUiEvent;
+use serial_ports::list_serial_port_inventory;
 use tauri::Manager;
 use tauri_event_sink::TauriEventSink;
 mod analytics;
@@ -51,6 +51,7 @@ mod log_library;
 mod logs;
 mod recording;
 mod remote_ui;
+mod serial_ports;
 mod session_runtime;
 mod tauri_event_sink;
 
@@ -139,7 +140,7 @@ pub fn run() {
         disconnect_link,
         analytics_status,
         analytics_track_event,
-        list_serial_ports_cmd,
+        list_serial_port_inventory,
         available_transports,
         runtime_capabilities,
         bt_request_permissions,
@@ -215,7 +216,6 @@ pub fn run() {
         recording_settings_write,
         open_session_snapshot,
         ack_session_snapshot,
-        firmware_list_ports,
         firmware_list_dfu_devices,
         firmware_install_update,
         firmware_session_status,
@@ -223,9 +223,8 @@ pub fn run() {
         firmware_session_clear_completed,
         firmware_install_update_readiness,
         firmware_install_update_preflight,
-        firmware_catalog_entries,
-        firmware_catalog_targets,
-        firmware_bootloader_catalog_targets,
+        firmware_reboot_to_bootloader,
+        firmware_detect_bootloader_board,
         firmware_bootloader_installation
     ]);
 

@@ -4,6 +4,7 @@ import {
     test,
 } from "./fixtures/mock-platform";
 import {
+    chooseCatalogRelease,
     chooseLocalRecoveryFile,
     chooseLocalSerialApj,
     expectFirmwareWorkspace,
@@ -75,6 +76,7 @@ test.describe("firmware workspace mocked-browser proof", () => {
 
         await mockPlatform.clearCommandBehavior("firmware_catalog_entries");
         await firmwareLocator(page, "catalogEntryRetry").click();
+        await chooseCatalogRelease(page);
         await expect(firmwareLocator(page, "catalogEntrySelect")).toBeVisible();
         await waitForSerialStartEnabled(page);
 
@@ -110,6 +112,7 @@ test.describe("firmware workspace mocked-browser proof", () => {
 
         await openFirmwareWorkspace(page);
         await selectManualTarget(page, { searchText: "cube", targetName: /Cube Orange/i });
+        await chooseCatalogRelease(page);
         await waitForSerialStartEnabled(page);
 
         await mockPlatform.setCommandBehavior("firmware_install_update", { type: "defer" });
@@ -153,8 +156,6 @@ test.describe("firmware workspace mocked-browser proof", () => {
         await mockPlatform.waitForRuntimeSurface();
 
         await openFirmwareWorkspace(page);
-        await selectManualTarget(page, { searchText: "cube", targetName: /Cube Orange/i });
-        await waitForSerialStartEnabled(page);
 
         await expect(queueFirmwareBinarySelection(mockPlatform, {
             kind: "apj",
@@ -309,6 +310,7 @@ test.describe("firmware workspace mocked-browser proof", () => {
 
         await openFirmwareWorkspace(page);
         await selectManualTarget(page, { searchText: "cube", targetName: /Cube Orange/i });
+        await chooseCatalogRelease(page);
         await waitForSerialStartEnabled(page);
 
         await mockPlatform.setCommandBehavior("firmware_install_update", { type: "defer" });

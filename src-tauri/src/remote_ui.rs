@@ -263,7 +263,7 @@ async fn dispatch_invoke(
 
     match request.cmd.as_str() {
         "available_transports" => ok(commands::available_transports()),
-        "list_serial_ports_cmd" => ok(commands::list_serial_ports_cmd()?),
+        "list_serial_port_inventory" => ok(crate::serial_ports::list_serial_port_inventory()),
         "connect_link" => {
             connection::connect_link(state, app.clone(), arg(&args, "request")?).await?;
             ok(())
@@ -513,18 +513,6 @@ async fn dispatch_invoke(
             optional_arg(&args, "endUsec")?,
         )
         .await?),
-        "firmware_catalog_entries" => ok(firmware::commands::firmware_catalog_entries(
-            app.clone(),
-            arg(&args, "boardId")?,
-            optional_arg(&args, "platform")?,
-        )
-        .await?),
-        "firmware_catalog_targets" => {
-            ok(firmware::commands::firmware_catalog_targets(app.clone()).await?)
-        }
-        "firmware_bootloader_catalog_targets" => {
-            ok(firmware::commands::firmware_bootloader_catalog_targets(app.clone()).await?)
-        }
         "firmware_install_update_preflight" => {
             ok(firmware::commands::firmware_install_update_preflight(state).await?)
         }
@@ -555,7 +543,6 @@ async fn dispatch_invoke(
             firmware::commands::firmware_session_clear_completed(state);
             ok(())
         }
-        "firmware_list_ports" => ok(firmware::discovery::firmware_list_ports()),
         "firmware_list_dfu_devices" => ok(firmware::discovery::firmware_list_dfu_devices()),
         other => Err(format!("unsupported remote UI command: {other}")),
     }

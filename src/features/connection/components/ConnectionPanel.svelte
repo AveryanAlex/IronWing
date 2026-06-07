@@ -1,9 +1,10 @@
 <script lang="ts">
 import { Radio } from "lucide-svelte";
 import { onMount } from "svelte";
+import { get } from "svelte/store";
 import { toast } from "svelte-sonner";
 
-import { getSessionStoreContext, getSessionViewStoreContext } from "../../../app/shell/runtime-context";
+import { getSerialPortInventoryContext, getSessionStoreContext, getSessionViewStoreContext } from "../../../app/shell/runtime-context";
 import type { SessionConnectionFormState } from "../../../lib/platform/session";
 import {
   firstConnectionFieldError,
@@ -18,10 +19,11 @@ import ConnectionTransportFields from "./ConnectionTransportFields.svelte";
 
 const store = getSessionStoreContext();
 const view = getSessionViewStoreContext();
+const serialInventory = getSerialPortInventoryContext();
 
 onMount(() => {
-  if ($store.connectionForm.mode === "serial") {
-    void store.refreshSerialPorts();
+  if ($store.connectionForm.mode === "serial" || $store.connectionForm.mode === "web_serial") {
+    void refreshSerialInventoryAndSelectDefault();
   }
 });
 
@@ -70,6 +72,7 @@ function updateField<
     | "tcpAddress"
     | "websocketUrl"
     | "serialPort"
+    | "webSerialPortId"
     | "baud"
     | "selectedBtDevice"
     | "demoVehiclePreset"
@@ -78,8 +81,38 @@ function updateField<
   const patch = { [field]: value } as Partial<SessionConnectionFormState>;
   store.updateConnectionForm(patch);
 
-  if (field === "mode" && value === "serial") {
-    void store.refreshSerialPorts();
+  if (field === "mode" && (value === "serial" || value === "web_serial")) {
+    void refreshSerialInventoryAndSelectDefault();
+  }
+}
+
+async function refreshSerialInventoryAndSelectDefault() {
+  await serialInventory.refresh();
+  selectDefaultPortForCurrentMode();
+}
+
+async function grantWebSerialPort() {
+  const port = await serialInventory.grantWebSerialPort();
+  if (port) {
+    store.updateConnectionForm({ mode: "web_serial", webSerialPortId: port.portName });
+  }
+}
+
+function selectDefaultPortForCurrentMode() {
+  const inventoryState = get(serialInventory);
+  const form = get(store).connectionForm;
+  if (form.mode === "serial" && form.serialPort.trim().length === 0) {
+    const nativePort = inventoryState.ports.find((port) => port.source === "native");
+    if (nativePort) {
+      store.updateConnectionForm({ serialPort: nativePort.portName });
+    }
+  }
+
+  if (form.mode === "web_serial" && form.webSerialPortId.trim().length === 0) {
+    const webSerialPort = inventoryState.ports.find((port) => port.source === "web_serial");
+    if (webSerialPort) {
+      store.updateConnectionForm({ webSerialPortId: webSerialPort.portName });
+    }
   }
 }
 
@@ -119,9 +152,10 @@ async function onSubmit(event: SubmitEvent) {
       onCancelConnect={() => void store.cancelConnect()}
       onDisconnect={() => void store.disconnect()}
       onRefreshBondedDevices={() => void store.refreshBondedDevices()}
-      onRefreshSerialPorts={() => void store.refreshSerialPorts()}
+      onGrantWebSerialPort={() => void grantWebSerialPort()}
+      onRefreshSerialPorts={() => void refreshSerialInventoryAndSelectDefault()}
       onScanBleDevices={() => void store.scanBleDevices()}
-      serialPorts={$store.serialPorts}
+      serialInventory={$serialInventory}
       transportDescriptors={$store.transportDescriptors}
     />
 

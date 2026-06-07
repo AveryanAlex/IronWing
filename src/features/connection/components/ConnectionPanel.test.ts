@@ -9,6 +9,7 @@ import type {
   SessionServiceEventHandlers,
 } from "../../../lib/platform/session";
 import { createSessionStore } from "../../../lib/stores/session";
+import { createSerialPortInventoryStore } from "../../../lib/stores/serial-port-inventory";
 
 import ConnectionPanel from "./ConnectionPanel.svelte";
 import type { OpenSessionSnapshot } from "../../../session";
@@ -67,12 +68,6 @@ function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessi
       value: null,
     },
     sensor_health: {
-      available: false,
-      complete: false,
-      provenance: "bootstrap",
-      value: null,
-    },
-    configuration_facts: {
       available: false,
       complete: false,
       provenance: "bootstrap",
@@ -194,7 +189,6 @@ function createMockService(overrides: Partial<SessionService> = {}) {
     }),
     connectSession: vi.fn(async () => undefined),
     disconnectSession: vi.fn(async () => undefined),
-    listSerialPorts: vi.fn(async () => ["/dev/ttyUSB0"]),
     btRequestPermissions: vi.fn(async () => undefined),
     btScanBle: vi.fn(async () => []),
     btGetBondedDevices: vi.fn(async () => []),
@@ -436,18 +430,36 @@ describe("ConnectionPanel", () => {
         followVehicle: true,
       });
 
-    const listSerialPorts = vi.fn(async () => ["/dev/ttyUSB0"]);
+    const listPorts = vi.fn(async () => ({
+      kind: "available",
+      ports: [
+        {
+          port_name: "/dev/ttyUSB0",
+          vid: null,
+          pid: null,
+          serial_number: null,
+          manufacturer: null,
+          product: null,
+          location: null,
+        },
+      ],
+      can_request_web_serial: false,
+    }));
+    const serialInventory = createSerialPortInventoryStore({
+      listPorts,
+      requestWebSerialPort: vi.fn(async () => null),
+      formatError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    });
     const { service } = createMockService({
       loadConnectionForm,
-      listSerialPorts,
     });
     const store = createSessionStore(service);
 
     await store.initialize();
-    render(withSessionContext(store, ConnectionPanel));
+    render(withSessionContext(store, ConnectionPanel, { serialInventory }));
 
     await waitFor(() => {
-      expect(listSerialPorts).toHaveBeenCalledTimes(1);
+      expect(listPorts).toHaveBeenCalledTimes(1);
     });
 
     store.updateConnectionForm({ mode: "udp" });
@@ -459,7 +471,7 @@ describe("ConnectionPanel", () => {
     await fireEvent.change(screen.getByTestId("connection-transport-select"), { target: { value: "serial" } });
 
     await waitFor(() => {
-      expect(listSerialPorts).toHaveBeenCalledTimes(2);
+      expect(listPorts).toHaveBeenCalledTimes(2);
     });
   });
 });

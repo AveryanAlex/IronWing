@@ -8,7 +8,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 ironwing-core = { path = "../ironwing-core" }
-ironwing-firmware = { path = "../ironwing-firmware" }
+ironwing-firmware = { path = "../ironwing-firmware", features = ["dfu-core"] }
 mavkit = { git = "https://github.com/AveryanAlex/mavkit.git", branch = "main", default-features = false, features = ["wasm", "ardupilot", "sim"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -20,3 +20,15 @@ console_error_panic_hook = "0.1"
 futures = { version = "0.3", default-features = false, features = ["alloc"] }
 gloo-timers = { version = "0.3", features = ["futures"] }
 web-time = "1"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+dfu-webusb = { git = "https://github.com/AveryanAlex/dfu-webusb.git", branch = "main" }
+web-sys = { version = "0.3", features = [
+    "Event",
+    "EventTarget",
+    "Navigator",
+    "Usb",
+    "UsbConnectionEvent",
+    "UsbDevice",
+    "Window",
+] }

@@ -14,6 +14,7 @@ import type {
   ParameterWorkspaceViewStore,
 } from "../../lib/stores/params";
 import type { RuntimeState } from "../../lib/stores/runtime";
+import type { SerialPortInventoryStore } from "../../lib/stores/serial-port-inventory";
 import type { SessionStore, SessionViewStore } from "../../lib/stores/session";
 import type {
   SetupWorkspaceStore,
@@ -44,6 +45,7 @@ export type LogsWorkspaceRouteContext = {
 
 export const [getSessionStoreContext, setSessionStoreContext] = createContext<SessionStore>();
 export const [getSessionViewStoreContext, setSessionViewStoreContext] = createContext<SessionViewStore>();
+export const [getSerialPortInventoryContext, setSerialPortInventoryContext] = createContext<SerialPortInventoryStore>();
 export const [getOperatorWorkspaceViewStoreContext, setOperatorWorkspaceViewStoreContext] = createContext<OperatorWorkspaceViewStore>();
 export const [getParamsStoreContext, setParamsStoreContext] = createContext<ParamsStore>();
 export const [getParameterWorkspaceViewStoreContext, setParameterWorkspaceViewStoreContext] = createContext<ParameterWorkspaceViewStore>();

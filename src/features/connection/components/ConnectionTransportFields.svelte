@@ -2,6 +2,7 @@
 import { Info, PlugZap, RefreshCw, Unplug } from "lucide-svelte";
 import type { ConnectionFieldErrors } from "../../../lib/connection/connection-form";
 import type { SessionConnectionFormState } from "../../../lib/platform/session";
+import type { SerialPortInventoryState } from "../../../lib/stores/serial-port-inventory";
 import { Button, Eyebrow, Field, IconButton, Input, NativeSelect, Tooltip } from "../../../components/ui";
 
 import type { BluetoothDevice } from "../../../telemetry";
@@ -14,6 +15,7 @@ type ConnectionField = keyof Pick<
   | "tcpAddress"
   | "websocketUrl"
   | "serialPort"
+  | "webSerialPortId"
   | "baud"
   | "selectedBtDevice"
   | "demoVehiclePreset"
@@ -55,7 +57,7 @@ const transportHelpCopy: Record<TransportType, { title: string; description: str
   },
   web_serial: {
     title: "Web Serial connection",
-    description: "The browser asks you to choose the serial port when you connect. Set baud first if the default does not match your device.",
+    description: "Grant a browser serial port first, then choose it from the granted-port list. Set baud first if the default does not match your device.",
   },
   web_bluetooth: {
     title: "Web Bluetooth connection",
@@ -72,7 +74,7 @@ let {
   formLocked,
   errors,
   transportDescriptors,
-  serialPorts,
+  serialInventory,
   btDevices,
   btScanning,
   connectDisabled,
@@ -82,6 +84,7 @@ let {
   onCancelConnect,
   onDisconnect,
   onRefreshSerialPorts,
+  onGrantWebSerialPort,
   onScanBleDevices,
   onRefreshBondedDevices,
 }: {
@@ -89,7 +92,7 @@ let {
   formLocked: boolean;
   errors: ConnectionFieldErrors;
   transportDescriptors: TransportDescriptor[];
-  serialPorts: string[];
+  serialInventory: SerialPortInventoryState;
   btDevices: BluetoothDevice[];
   btScanning: boolean;
   connectDisabled: boolean;
@@ -99,6 +102,7 @@ let {
   onCancelConnect: () => void;
   onDisconnect: () => void;
   onRefreshSerialPorts: () => void;
+  onGrantWebSerialPort: () => void;
   onScanBleDevices: () => void;
   onRefreshBondedDevices: () => void;
 } = $props();
@@ -107,6 +111,10 @@ let bluetoothDevices = $derived(
   btDevices.filter((device) => (form.mode === "bluetooth_ble" ? device.device_type === "ble" : device.device_type === "classic")),
 );
 let activeTransportHelp = $derived(transportHelpCopy[form.mode]);
+let nativeSerialPorts = $derived(serialInventory.ports.filter((port) => port.source === "native"));
+let webSerialPorts = $derived(serialInventory.ports.filter((port) => port.source === "web_serial"));
+let serialInventoryRefreshing = $derived(serialInventory.phase === "refreshing");
+let webSerialGranting = $derived(serialInventory.phase === "granting");
 let transportOptions = $derived(
   transportDescriptors.length === 0
     ? [{ value: "udp", label: "Loading transports…" }]
@@ -117,8 +125,12 @@ let transportOptions = $derived(
       })),
 );
 let serialPortOptions = $derived([
-  { value: "", label: serialPorts.length === 0 ? "No ports detected" : "Select a port" },
-  ...serialPorts.map((port) => ({ value: port, label: port })),
+  { value: "", label: nativeSerialPorts.length === 0 ? "No ports detected" : "Select a port" },
+  ...nativeSerialPorts.map((port) => ({ value: port.portName, label: port.label })),
+]);
+let webSerialPortOptions = $derived([
+  { value: "", label: webSerialPorts.length === 0 ? "No granted WebSerial ports" : "Select a granted port" },
+  ...webSerialPorts.map((port) => ({ value: port.portName, label: port.label })),
 ]);
 let bluetoothDeviceOptions = $derived([
   { value: "", label: btDevices.length === 0 ? "No devices available" : "Select a device" },
@@ -336,7 +348,7 @@ function parseBaud(value: string) {
         <IconButton
           ariaLabel="Refresh serial ports"
           testId="connection-serial-refresh-btn"
-          disabled={formLocked}
+          disabled={formLocked || serialInventoryRefreshing}
           onclick={onRefreshSerialPorts}
           title=""
           type="button"
@@ -371,13 +383,40 @@ function parseBaud(value: string) {
 {/if}
 
 {#if form.mode === "web_serial"}
-  <Field.Root invalid={Boolean(errors.baud)}>
-    <div class={connectionActionRowClass} data-connection-action-row>
-      <div class="min-w-0 space-y-1.5">
-        <Eyebrow as="span">Web Serial</Eyebrow>
-      </div>
+  <Field.Root invalid={Boolean(errors.webSerialPortId)}>
+    <div class={connectionActionRowWithExtraClass} data-connection-action-row>
+      <Field.Root class="min-w-0" invalid={Boolean(errors.webSerialPortId)}>
+        <Field.Label variant="eyebrow" for="connection-web-serial-port">Web Serial port</Field.Label>
+        <NativeSelect
+          disabled={formLocked}
+          id="connection-web-serial-port"
+          invalid={Boolean(errors.webSerialPortId)}
+          name="webSerialPortId"
+          onchange={(event) => onFieldChange("webSerialPortId", (event.currentTarget as HTMLSelectElement).value)}
+          options={webSerialPortOptions}
+          testId="connection-web-serial-port"
+          value={form.webSerialPortId}
+        />
+      </Field.Root>
       {@render primaryActionButton()}
+
+      <Tooltip label={webSerialGranting ? "Granting WebSerial port" : "Grant WebSerial port"}>
+        <IconButton
+          ariaLabel={webSerialGranting ? "Granting WebSerial port" : "Grant WebSerial port"}
+          testId="connection-web-serial-grant-btn"
+          disabled={formLocked || webSerialGranting || !serialInventory.canGrantWebSerial}
+          onclick={onGrantWebSerialPort}
+          title=""
+          type="button"
+        >
+          <PlugZap aria-hidden="true" size={16} />
+        </IconButton>
+      </Tooltip>
     </div>
+    <Field.Error message={errors.webSerialPortId} />
+    {#if serialInventory.error}
+      <p class="mt-1 text-xs text-status-danger">{serialInventory.error}</p>
+    {/if}
     <Field.Root invalid={Boolean(errors.baud)}>
       <Field.Label variant="eyebrow" for="connection-web-serial-baud">Baud</Field.Label>
       <Input

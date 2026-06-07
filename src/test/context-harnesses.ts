@@ -11,6 +11,7 @@ import {
   createFirmwareWorkspaceStore,
   type FirmwareWorkspaceStore,
 } from "../lib/stores/firmware-workspace";
+import { createSerialPortInventoryStore, type SerialPortInventoryStore } from "../lib/stores/serial-port-inventory";
 import { createOperatorWorkspaceViewStore } from "../lib/stores/operator-workspace-view";
 import {
   createParameterWorkspaceViewStore,
@@ -54,6 +55,7 @@ import {
   setParamsStoreContext,
   setParameterWorkspaceViewStoreContext,
   setRuntimeStoreContext,
+  setSerialPortInventoryContext,
   setSessionStoreContext,
   setSessionViewStoreContext,
   setSetupWorkspaceStoreContext,
@@ -137,25 +139,9 @@ function createHarnessFirmwareService(): FirmwareService {
           location: null,
         },
       ],
-      detected_board_id: null,
       session_ready: true,
       session_status: { kind: "idle" },
     }),
-    listPorts: async () => ({
-      kind: "available",
-      ports: [
-        {
-          port_name: "/dev/ttyACM0",
-          vid: null,
-          pid: null,
-          serial_number: null,
-          manufacturer: "Hex",
-          product: "CubeOrange Bootloader",
-          location: null,
-        },
-      ],
-    }),
-    requestFirmwareInstallPort: async () => null,
     listDfuDevices: async () => ({
       kind: "available",
       devices: [
@@ -213,15 +199,37 @@ function createHarnessFirmwareService(): FirmwareService {
         : request.port.trim().length === 0
           ? { kind: "blocked", reason: "port_unselected" }
           : { kind: "advisory" },
-      target_hint: { detected_board_id: null },
-      validation_pending: false,
-      bootloader_transition: { kind: "manual_bootloader_entry_required" },
+      bootloader_status: { kind: "unknown" },
     }),
+    rebootToBootloader: async () => ({ result: "unsupported", reason: "not connected" }),
+    detectBootloaderBoard: async (port: string) => ({ port, board_id: 140, board_rev: 1, bootloader_rev: 5, flash_size: 2_097_152, extf_size: null }),
     startFirmwareInstallUpdate: async () => ({ result: "verified", board_id: 140, bootloader_rev: 5, port: "/dev/ttyACM0" }),
     startBootloaderInstallation: async () => ({ result: "verified" }),
     subscribeProgress: async () => () => undefined,
     formatError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
   } satisfies FirmwareService;
+}
+
+function createHarnessSerialPortInventoryStore(): SerialPortInventoryStore {
+  return createSerialPortInventoryStore({
+    listPorts: async () => ({
+      kind: "available",
+      ports: [
+        {
+          port_name: "/dev/ttyACM0",
+          vid: null,
+          pid: null,
+          serial_number: null,
+          manufacturer: "Hex",
+          product: "CubeOrange Bootloader",
+          location: null,
+        },
+      ],
+      can_request_web_serial: false,
+    }),
+    requestWebSerialPort: async () => null,
+    formatError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+  });
 }
 
 function createHarnessFirmwareFileIo(): FirmwareFileIo {
@@ -271,14 +279,20 @@ export function createStaticShellChromeStore(tier: ShellTier): ShellChromeStore 
   }
 }
 
-export function withSessionContext(store: SessionStore, component: unknown) {
+export function withSessionContext(
+  store: SessionStore,
+  component: unknown,
+  options: { serialInventory?: SerialPortInventoryStore } = {},
+) {
   const renderable = asRenderable(component);
 
   return function SessionHarness(...args: any[]) {
     const sessionView = createSessionViewStore(store);
+    const serialInventory = options.serialInventory ?? createHarnessSerialPortInventoryStore();
 
     setSessionStoreContext(store);
     setSessionViewStoreContext(sessionView);
+    setSerialPortInventoryContext(serialInventory);
 
     return renderable(...args);
   };
@@ -319,9 +333,11 @@ export function withShellContexts(
     const missionPlannerStore = createHarnessMissionPlannerStore(store);
     const missionPlannerViewStore = createMissionPlannerViewStore(missionPlannerStore);
     const firmwareWorkspaceContext = createHarnessFirmwareWorkspaceContext();
+    const serialInventory = createHarnessSerialPortInventoryStore();
 
     setSessionStoreContext(store);
     setSessionViewStoreContext(sessionView);
+    setSerialPortInventoryContext(serialInventory);
     setOperatorWorkspaceViewStoreContext(operatorWorkspaceView);
     setParamsStoreContext(parameterStore);
     setParameterWorkspaceViewStoreContext(parameterWorkspaceView);

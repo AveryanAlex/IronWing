@@ -1,13 +1,13 @@
-import type { PortInfo } from "../../../firmware";
+import type { SerialPortInfo } from "../../../serial-ports";
 
-export type WebSerialFirmwareAdapter = {
+export type WebSerialAdapter = {
   write(bytes: Uint8Array): Promise<void>;
   read(maxLength: number, timeoutMs: number): Promise<Uint8Array | null>;
   flushInput(): Promise<void>;
   close(): Promise<void>;
 };
 
-type SerialPortLike = {
+export type WebSerialPortLike = {
   readable: ReadableStream<Uint8Array> | null;
   writable: WritableStream<Uint8Array> | null;
   open(options: { baudRate: number }): Promise<void>;
@@ -17,67 +17,83 @@ type SerialPortLike = {
 
 type SerialNavigator = Navigator & {
   serial?: {
-    getPorts?(): Promise<SerialPortLike[]>;
-    requestPort?(): Promise<SerialPortLike>;
+    getPorts?(): Promise<WebSerialPortLike[]>;
+    requestPort?(): Promise<WebSerialPortLike>;
   };
 };
 
 const PORT_PREFIX = "webserial";
 
-const portIds = new WeakMap<SerialPortLike, string>();
-const knownPorts: SerialPortLike[] = [];
+const portIds = new WeakMap<WebSerialPortLike, string>();
+const knownPorts: WebSerialPortLike[] = [];
 
-export function isWebSerialFirmwareAvailable(): boolean {
+export function isWebSerialGrantAvailable(): boolean {
   const serial = typeof navigator === "undefined" ? undefined : (navigator as SerialNavigator).serial;
   return typeof serial?.requestPort === "function" && typeof serial?.getPorts === "function";
 }
 
-export async function requestWebSerialFirmwarePort(): Promise<PortInfo> {
+export async function requestWebSerialPort(): Promise<SerialPortInfo> {
   const serial = (navigator as SerialNavigator).serial;
   if (typeof serial?.requestPort !== "function") {
     throw new Error("Web Serial is not available in this browser");
   }
 
   const port = await serial.requestPort();
-  registerPort(port);
-  return portInfo(port);
+  return registerWebSerialPort(port);
 }
 
-export async function listGrantedWebSerialFirmwarePorts(): Promise<PortInfo[]> {
+export async function listGrantedWebSerialPorts(): Promise<SerialPortInfo[]> {
   const serial = typeof navigator === "undefined" ? undefined : (navigator as SerialNavigator).serial;
   if (typeof serial?.getPorts !== "function") {
     return [];
   }
 
   for (const port of await serial.getPorts()) {
-    registerPort(port);
+    registerWebSerialPort(port);
   }
 
   return knownPorts.map(portInfo);
 }
 
-export async function openWebSerialFirmwarePort(portName: string, baud: number, signal: AbortSignal): Promise<WebSerialFirmwareAdapter> {
-  const port = knownPorts.find((candidate) => portInfo(candidate).port_name === portName);
+export async function openWebSerialPort(portName: string, baud: number, signal: AbortSignal): Promise<WebSerialAdapter> {
+  const port = await resolveGrantedWebSerialPort(portName);
   if (!port) {
-    throw new Error("WebSerial firmware port is not granted. Use the browser port picker first.");
+    throw new Error("WebSerial port is not granted. Use Grant WebSerial port first.");
   }
   if (!Number.isFinite(baud) || baud <= 0) {
-    throw new Error("web serial firmware baud is required");
+    throw new Error("web serial baud is required");
   }
 
-  const adapter = new WebSerialFirmwarePortAdapter(port, baud, signal);
+  const adapter = new WebSerialPortAdapter(port, baud, signal);
   await adapter.open();
   return adapter;
 }
 
-function registerPort(port: SerialPortLike): void {
+export function registerWebSerialPort(port: WebSerialPortLike): SerialPortInfo {
   if (!portIds.has(port)) {
     portIds.set(port, `${PORT_PREFIX}:${knownPorts.length + 1}`);
     knownPorts.push(port);
   }
+
+  return portInfo(port);
 }
 
-function portInfo(port: SerialPortLike): PortInfo {
+export async function resolveGrantedWebSerialPort(portName: string): Promise<WebSerialPortLike | null> {
+  const serial = typeof navigator === "undefined" ? undefined : (navigator as SerialNavigator).serial;
+  if (typeof serial?.getPorts === "function") {
+    for (const port of await serial.getPorts()) {
+      registerWebSerialPort(port);
+    }
+  }
+
+  return knownPorts.find((candidate) => portInfo(candidate).port_name === portName) ?? null;
+}
+
+export function resetGrantedWebSerialPortsForTests(): void {
+  knownPorts.splice(0);
+}
+
+function portInfo(port: WebSerialPortLike): SerialPortInfo {
   const info = port.getInfo?.() ?? {};
   const id = portIds.get(port) ?? `${PORT_PREFIX}:unknown`;
   return {
@@ -91,7 +107,7 @@ function portInfo(port: SerialPortLike): PortInfo {
   };
 }
 
-class WebSerialFirmwarePortAdapter implements WebSerialFirmwareAdapter {
+class WebSerialPortAdapter implements WebSerialAdapter {
   #closed = false;
   #reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
   #writer: WritableStreamDefaultWriter<Uint8Array> | null = null;
@@ -99,7 +115,7 @@ class WebSerialFirmwarePortAdapter implements WebSerialFirmwareAdapter {
   #waiters: Array<() => void> = [];
 
   constructor(
-    private readonly port: SerialPortLike,
+    private readonly port: WebSerialPortLike,
     private readonly baud: number,
     private readonly signal: AbortSignal,
   ) {}
@@ -116,10 +132,10 @@ class WebSerialFirmwarePortAdapter implements WebSerialFirmwareAdapter {
 
   async write(bytes: Uint8Array): Promise<void> {
     if (this.#closed) {
-      throw new Error("WebSerial firmware port is closed");
+      throw new Error("WebSerial port is closed");
     }
     if (!this.#writer) {
-      throw new Error("WebSerial firmware port is not writable");
+      throw new Error("WebSerial port is not writable");
     }
     await this.#writer.write(bytes);
   }

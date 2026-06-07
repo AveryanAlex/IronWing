@@ -15,10 +15,16 @@ import {
 import { sanitizeCatalogTargetSummaries } from "../firmware-target-filter";
 import type { FirmwareWorkspaceLayout } from "../firmware-workspace-layout";
 import { firmwareWorkspaceTestIds } from "../firmware-workspace-test-ids";
-import { Banner, Button, ButtonGroup, Checkbox, EmptyState, Eyebrow, HelperText, InfoBlock, NativeSelect, Panel, Progress, SectionHeader, StatusPill } from "../../../components/ui";
+import FirmwareChecklist from "./FirmwareChecklist.svelte";
+import {
+  buildFirmwareRecoveryReviewChecklist,
+  resolveFirmwareRecoveryStepStates,
+} from "../firmware-recovery-flow";
+import { Banner, Button, ButtonGroup, Checkbox, EmptyState, Eyebrow, HelperText, InfoBlock, NativeSelect, Panel, Progress, SelectableCard, StatusPill } from "../../../components/ui";
 
 type CatalogLoadPhase = "idle" | "loading" | "ready" | "failed";
 type ManualRecoveryKind = "local_apj_bytes" | "local_bin_bytes";
+type RecoverySourceMode = "official" | "manual";
 
 type Props = {
   store: FirmwareWorkspaceStore;
@@ -50,7 +56,7 @@ let recoveryTargets = $state<CatalogTargetSummary[]>([]);
 let targetPhase = $state<CatalogLoadPhase>("idle");
 let targetError = $state<string | null>(null);
 let targetRequest = 0;
-let advancedRequestedOpen = $state(false);
+let selectedRecoverySourceMode = $state<RecoverySourceMode>("official");
 let manualKind = $state<ManualRecoveryKind>("local_apj_bytes");
 let dfuConfirmed = $state(false);
 let manualConfirmed = $state(false);
@@ -118,6 +124,25 @@ function createOfficialMetadata(target: CatalogTargetSummary) {
   return createOfficialBootloaderSourceMetadata(target.platform, detail.length > 0 ? detail : null);
 }
 
+async function handleUseOfficialSource() {
+  selectedRecoverySourceMode = "official";
+  manualConfirmed = false;
+
+  const target = workspaceState.recovery.target
+    ?? (recoveryTargets.length === 1 ? recoveryTargets[0] : null);
+  await selectOfficialTarget(target);
+}
+
+function handleUseManualSource() {
+  selectedRecoverySourceMode = "manual";
+  manualConfirmed = false;
+  store.setBootloaderSourceError(null);
+
+  if (workspaceState.recovery.source?.kind === "official_bootloader") {
+    store.setBootloaderSource(null, null);
+  }
+}
+
 async function selectOfficialTarget(target: CatalogTargetSummary | null) {
   store.setBootloaderTarget(target);
 
@@ -164,7 +189,7 @@ async function loadRecoveryTargets() {
       return;
     }
 
-    if (recoveryTargets.length === 1 && !usingManualSource) {
+    if (recoveryTargets.length === 1 && selectedRecoverySourceMode !== "manual" && !usingManualSource) {
       await selectOfficialTarget(recoveryTargets[0]);
       return;
     }
@@ -187,6 +212,8 @@ async function loadRecoveryTargets() {
 }
 
 async function handleManualBrowse() {
+  selectedRecoverySourceMode = "manual";
+
   try {
     const result = manualKind === "local_apj_bytes"
       ? await fileIo.pickApjFile()
@@ -212,6 +239,7 @@ async function handleManualBrowse() {
 }
 
 function setManualKind(nextKind: ManualRecoveryKind) {
+  selectedRecoverySourceMode = "manual";
   manualKind = nextKind;
   manualConfirmed = false;
   store.setBootloaderSourceError(null);
@@ -223,31 +251,19 @@ function setManualKind(nextKind: ManualRecoveryKind) {
   }
 }
 
-function recoveryStateLabel() {
-  if (isRecoveryCancelling) {
-    return "cancelling";
-  }
-
-  if (isRecoveryActive) {
-    return `active:${workspaceState.sessionPhase ?? "running"}`;
-  }
-
-  if (usingOfficialSource) {
-    return "official-ready";
-  }
-
-  if (usingManualSource) {
-    return "manual-armed";
-  }
-
-  return workspaceState.recovery.scanPhase;
-}
-
 let selectedTargetKey = $derived(workspaceState.recovery.target ? targetKey(workspaceState.recovery.target) : "");
-let manualPanelOpen = $derived(advancedRequestedOpen || usingManualSource || Boolean(workspaceState.recovery.sourceError));
+let effectiveRecoverySourceMode = $derived(usingManualSource ? "manual" : selectedRecoverySourceMode);
 let recoverySourceState = $derived.by(() => {
   const metadata = workspaceState.recovery.sourceMetadata;
   if (!metadata) {
+    if (effectiveRecoverySourceMode === "manual") {
+      return manualKind === "local_apj_bytes" ? "manual-apj · no file loaded" : "manual-bin · no file loaded";
+    }
+
+    if (workspaceState.recovery.target === null) {
+      return "official bootloader · choose target";
+    }
+
     return "No bootloader installation source armed";
   }
 
@@ -275,14 +291,16 @@ let recoveryBlockedReason = $derived.by(() => {
       return "More than one DFU device is visible. Choose the exact device explicitly before installing the bootloader.";
   }
 
-  if (usingOfficialSource && workspaceState.recovery.target === null) {
+  if (effectiveRecoverySourceMode === "official" && workspaceState.recovery.target === null) {
     return recoveryTargets.length === 0
-      ? "No official bootloader target is available right now. Retry the target list or use a validated manual bootloader image."
+      ? "No primary recovery target is available right now. Retry the target list or choose a validated manual APJ/BIN bootloader image."
       : "Choose the exact official bootloader target before installation.";
   }
 
   if (workspaceState.recovery.source === null) {
-    return "Choose an official bootloader target or supply a validated manual APJ/BIN image before installation.";
+    return effectiveRecoverySourceMode === "manual"
+      ? "Choose a validated manual APJ/BIN bootloader image before installation."
+      : "Choose the primary recovery target before installation.";
   }
 
   if (workspaceState.recovery.sourceError) {
@@ -309,6 +327,28 @@ let canStartRecovery = $derived(
   && (!usingManualSource || manualConfirmed)
   && dfuConfirmed,
 );
+let recoveryReviewChecklist = $derived(buildFirmwareRecoveryReviewChecklist({
+  actionsEnabled: layout.actionsEnabled,
+  layoutBlockedDetail: layout.blockedDetail,
+  replayReadonly,
+  deviceSelected: workspaceState.recovery.device !== null,
+  devicesVisible: workspaceState.recovery.devices.length > 0,
+  scanLoading: workspaceState.recovery.scanPhase === "loading",
+  sourceMode: effectiveRecoverySourceMode,
+  officialTargetSelected: workspaceState.recovery.target !== null,
+  sourceSelected: workspaceState.recovery.source !== null,
+  manualConfirmed,
+  dfuConfirmed,
+  blockedReason: recoveryBlockedReason,
+}));
+let recoveryStepStates = $derived(resolveFirmwareRecoveryStepStates({
+  deviceSelected: workspaceState.recovery.device !== null,
+  sourceMode: effectiveRecoverySourceMode,
+  officialTargetSelected: workspaceState.recovery.target !== null,
+  sourceSelected: workspaceState.recovery.source !== null,
+  manualConfirmed,
+  dfuConfirmed,
+}));
 
 const fieldLabelClass = "text-xs font-semibold uppercase tracking-wide text-text-muted";
 const subtitleClass = "m-0 mt-1 text-sm font-semibold text-text-primary";
@@ -333,37 +373,34 @@ $effect(() => {
   manualConfirmed = false;
 
   if (workspaceState.recovery.source?.kind === "local_apj_bytes" || workspaceState.recovery.source?.kind === "local_bin_bytes") {
+    selectedRecoverySourceMode = "manual";
     manualKind = workspaceState.recovery.source.kind;
+  } else if (workspaceState.recovery.source?.kind === "official_bootloader") {
+    selectedRecoverySourceMode = "official";
   }
 });
 </script>
 
 <Panel padded testId={firmwareWorkspaceTestIds.recoveryPanel}>
-  <SectionHeader
-    eyebrow="Bootloader installation"
-    title="Install bootloader"
-  >
-    {#snippet actions()}
-      <div data-testid={firmwareWorkspaceTestIds.recoveryState}>
-        <StatusPill tone="warning">{recoveryStateLabel()}</StatusPill>
+  <div class="grid gap-3">
+    <Panel padded tone={recoveryStepStates.device === "complete" ? "success" : "info"}>
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Eyebrow>Step 1</Eyebrow>
+          <h4 class={subtitleClass}>Connect board in DFU mode</h4>
+          <HelperText class="mt-1 max-w-[60ch]">Hold the board's boot/DFU control as needed, connect USB, then rescan until the STM32 DFU device appears.</HelperText>
+        </div>
+        <StatusPill tone={recoveryStepStates.device === "complete" ? "success" : "info"}>{recoveryStepStates.device}</StatusPill>
       </div>
-    {/snippet}
-  </SectionHeader>
 
-  <HelperText class="mt-3 max-w-[60ch]" testId={firmwareWorkspaceTestIds.recoveryGuidance}>
-    This is a separate native DFU path for boards that need bootloader installation. Install the bootloader here, then return to firmware install/update and flash normal ArduPilot firmware over serial.
-  </HelperText>
-
-  <div class="mt-3 grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
-    <Panel padded>
-      <div class="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+      <div class="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
         <label class="flex flex-col">
           <span class={fieldLabelClass}>DFU device</span>
           <NativeSelect
             class="mt-2"
             testId={firmwareWorkspaceTestIds.recoveryDeviceSelect}
             disabled={isRecoveryActive}
-              onchange={(event) => store.setBootloaderDevice(
+            onchange={(event) => store.setBootloaderDevice(
               workspaceState.recovery.devices.find((device) => device.unique_id === (event.currentTarget as HTMLSelectElement).value) ?? null,
             )}
             value={workspaceState.recovery.device?.unique_id ?? ""}
@@ -375,11 +412,7 @@ $effect(() => {
           </NativeSelect>
         </label>
 
-        <Button
-          testId={firmwareWorkspaceTestIds.recoveryDeviceRefresh}
-          disabled={isRecoveryActive}
-          onclick={() => void store.refreshRecoveryDevices()}
-        >
+        <Button testId={firmwareWorkspaceTestIds.recoveryDeviceRefresh} disabled={isRecoveryActive} onclick={() => void store.refreshRecoveryDevices()}>
           Rescan DFU
         </Button>
       </div>
@@ -393,29 +426,53 @@ $effect(() => {
           <Banner severity="danger" title={workspaceState.recovery.scanError} />
         </div>
       {/if}
+    </Panel>
 
-      <div class="mt-3">
-        <Panel padded tone="success">
-          <div class="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <Eyebrow>Official bootloader</Eyebrow>
-              <h4 class={subtitleClass}>Primary recovery source</h4>
-            </div>
-            {#if !usingOfficialSource && workspaceState.recovery.target}
-                <Button
-                  size="sm"
-                  variant="outline"
-                testId={firmwareWorkspaceTestIds.recoveryOfficialAction}
-                onclick={() => void selectOfficialTarget(workspaceState.recovery.target)}
-              >
-                Use official bootloader
-              </Button>
-            {/if}
+    <Panel padded tone={recoveryStepStates.image === "complete" ? "success" : "info"}>
+      <div class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Eyebrow>Step 2</Eyebrow>
+          <h4 class={subtitleClass}>Choose bootloader image</h4>
+          <HelperText class="mt-1 max-w-[60ch]">Official bootloaders are the default. Manual APJ/BIN images are for custom boards or unsupported cases and require confirmation.</HelperText>
+        </div>
+        <StatusPill tone={recoveryStepStates.image === "complete" ? "success" : recoveryStepStates.image === "pending" ? "neutral" : "info"}>{recoveryStepStates.image}</StatusPill>
+      </div>
+
+      <div class="mt-3 grid gap-3">
+        <div class="rounded-lg border border-border bg-bg-secondary p-1">
+          <div class="grid gap-1 md:grid-cols-2">
+            <SelectableCard density="compact" selected={effectiveRecoverySourceMode === "official"} testId={firmwareWorkspaceTestIds.recoveryOfficialAction} disabled={isRecoveryActive} onSelect={() => void handleUseOfficialSource()}>
+              <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Recommended</span>
+              <span class="mt-1 block text-sm font-semibold text-text-primary">Official bootloader</span>
+              <span class="mt-1 block text-sm text-text-secondary">Install the known bootloader image for the selected official target.</span>
+            </SelectableCard>
+
+            <SelectableCard density="compact" selected={effectiveRecoverySourceMode === "manual"} testId={firmwareWorkspaceTestIds.recoveryAdvancedToggle} disabled={isRecoveryActive} onSelect={handleUseManualSource}>
+              <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Advanced manual image</span>
+              <span class="mt-1 block text-sm font-semibold text-text-primary">Manual APJ / BIN</span>
+              <span class="mt-1 block text-sm text-text-secondary">Use only when deliberately bypassing the official bootloader catalog.</span>
+            </SelectableCard>
+          </div>
+        </div>
+
+        <InfoBlock testId={firmwareWorkspaceTestIds.recoverySourceState} title="Selected bootloader image">
+          <p class="m-0 mt-1">{recoverySourceState}</p>
+        </InfoBlock>
+
+        {#if workspaceState.recovery.sourceError}
+          <div data-testid={firmwareWorkspaceTestIds.recoverySourceError}>
+            <Banner severity="danger" title={workspaceState.recovery.sourceError} />
+          </div>
+        {/if}
+
+        {#if effectiveRecoverySourceMode === "official"}
+          <Panel padded tone="success">
+          <div>
+            <Eyebrow>Official bootloader</Eyebrow>
+            <h4 class={subtitleClass}>Choose official target</h4>
           </div>
 
-          <HelperText class="mt-3 max-w-[60ch]">
-            Official bootloader installation stays primary. It writes the known bootloader image for the selected target, then hands you back to firmware install/update for normal firmware.
-          </HelperText>
+          <HelperText class="mt-3 max-w-[60ch]">Official bootloader setup writes the known bootloader image for the selected target, then hands you back to firmware install/update for normal firmware.</HelperText>
 
           <label class="mt-3 block">
             <span class={fieldLabelClass}>Official target</span>
@@ -439,119 +496,68 @@ $effect(() => {
 
           {#if targetError}
             <div class="mt-3" data-testid={firmwareWorkspaceTestIds.recoveryTargetError}>
-              <Banner
-                severity="danger"
-                title={targetError}
-                actionLabel="Retry targets"
-                onAction={() => void loadRecoveryTargets()}
-                actionTestId={firmwareWorkspaceTestIds.recoveryTargetRetry}
-              />
+              <Banner severity="danger" title={targetError} actionLabel="Retry targets" onAction={() => void loadRecoveryTargets()} actionTestId={firmwareWorkspaceTestIds.recoveryTargetRetry} />
             </div>
           {/if}
 
           {#if targetPhase === "ready" && recoveryTargets.length === 0}
-            <EmptyState
-              class="mt-3"
-              description="Retry the target list or supply a validated manual bootloader APJ/BIN image."
-              title="No official bootloader targets are available right now."
-              testId={firmwareWorkspaceTestIds.recoveryTargetEmpty}
-            />
+            <EmptyState class="mt-3" description="Retry the target list or switch to a validated manual bootloader APJ/BIN image." title="No official bootloader targets are available right now." testId={firmwareWorkspaceTestIds.recoveryTargetEmpty} />
           {/if}
 
           <InfoBlock class="mt-3" testId={firmwareWorkspaceTestIds.recoveryTargetState} title="Active official target">
             <p class="m-0 mt-1">{targetLabel(workspaceState.recovery.target)} · {targetDetail(workspaceState.recovery.target)}</p>
           </InfoBlock>
-        </Panel>
-      </div>
-    </Panel>
-
-    <Panel padded tone="warning">
-      <div class="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Eyebrow>Advanced recovery</Eyebrow>
-          <h4 class={subtitleClass}>Manual APJ / BIN source</h4>
-        </div>
-          <Button
-            size="sm"
-            variant="outline"
-          testId={firmwareWorkspaceTestIds.recoveryAdvancedToggle}
-          onclick={() => (advancedRequestedOpen = !advancedRequestedOpen)}
-        >
-          {manualPanelOpen ? "Hide advanced" : "Show advanced"}
-        </Button>
-      </div>
-
-      <HelperText class="mt-3 max-w-[60ch]">
-        Use manual bootloader images only when you deliberately need to bypass the official bootloader catalog.
-      </HelperText>
-
-      <InfoBlock class="mt-3" testId={firmwareWorkspaceTestIds.recoverySourceState} title="Active recovery source">
-        <p class="m-0 mt-1">{recoverySourceState}</p>
-      </InfoBlock>
-
-      {#if manualPanelOpen}
-        <div class="mt-3 flex flex-col gap-3" data-testid={firmwareWorkspaceTestIds.recoveryManualPanel}>
-          <div data-testid={firmwareWorkspaceTestIds.recoveryManualWarning}>
-            <Banner
-              severity="warning"
-               title="Manual local files may replace bootloader contents or leave the board non-bootable if the wrong image is used. Keep this path for expert bootloader installation only."
-            />
+          </Panel>
+        {:else}
+          <Panel padded tone="warning" testId={firmwareWorkspaceTestIds.recoveryManualPanel}>
+          <div>
+            <Eyebrow>Advanced manual image</Eyebrow>
+            <h4 class={subtitleClass}>Choose manual bootloader file</h4>
           </div>
 
-          <ButtonGroup class="rounded-lg border border-border bg-bg-secondary p-1">
-            <Button
-              variant={manualKind === "local_apj_bytes" ? "outline" : "secondary"}
-              testId={firmwareWorkspaceTestIds.recoveryManualApj}
-              onclick={() => setManualKind("local_apj_bytes")}
-            >
-              Use manual APJ
+          <HelperText class="mt-3 max-w-[60ch]">Use manual bootloader images only when you deliberately need to bypass the official bootloader catalog.</HelperText>
+
+          <div class="mt-3" data-testid={firmwareWorkspaceTestIds.recoveryManualWarning}>
+            <Banner severity="warning" title="Manual local files may replace bootloader contents or leave the board non-bootable if the wrong image is used. Keep this path for expert bootloader installation only." />
+          </div>
+
+          <div class="mt-3 flex flex-col gap-3">
+            <ButtonGroup class="rounded-lg border border-border bg-bg-secondary p-1">
+              <Button variant={manualKind === "local_apj_bytes" ? "outline" : "secondary"} testId={firmwareWorkspaceTestIds.recoveryManualApj} onclick={() => setManualKind("local_apj_bytes")}>Use manual APJ</Button>
+              <Button variant={manualKind === "local_bin_bytes" ? "outline" : "secondary"} testId={firmwareWorkspaceTestIds.recoveryManualBin} onclick={() => setManualKind("local_bin_bytes")}>Use manual BIN</Button>
+            </ButtonGroup>
+
+            <Button variant="outline" testId={firmwareWorkspaceTestIds.recoveryBrowse} disabled={isRecoveryActive} onclick={() => void handleManualBrowse()}>
+              {manualKind === "local_apj_bytes" ? "Choose manual APJ" : "Choose manual BIN"}
             </Button>
-            <Button
-              variant={manualKind === "local_bin_bytes" ? "outline" : "secondary"}
-              testId={firmwareWorkspaceTestIds.recoveryManualBin}
-              onclick={() => setManualKind("local_bin_bytes")}
-            >
-              Use manual BIN
-            </Button>
-          </ButtonGroup>
 
-          <Button
-            variant="outline"
-            testId={firmwareWorkspaceTestIds.recoveryBrowse}
-            disabled={isRecoveryActive}
-            onclick={() => void handleManualBrowse()}
-          >
-            {manualKind === "local_apj_bytes" ? "Choose manual APJ" : "Choose manual BIN"}
-          </Button>
-
-          {#if workspaceState.recovery.sourceError}
-            <div data-testid={firmwareWorkspaceTestIds.recoverySourceError}>
-              <Banner severity="danger" title={workspaceState.recovery.sourceError} />
-            </div>
-          {/if}
-
-          {#if usingManualSource}
-            <div class={checkboxClass}>
-              <Checkbox
-                checked={manualConfirmed}
-                description="I confirm I am manually supplying the exact bootloader image for this board and understand that the wrong APJ/BIN can leave it non-bootable."
-                label="Manual file confirmation"
-                onCheckedChange={(checked) => (manualConfirmed = checked)}
-                testId={firmwareWorkspaceTestIds.recoveryManualConfirm}
-              />
-            </div>
-          {/if}
-        </div>
-      {/if}
+            {#if usingManualSource}
+              <div class={checkboxClass}>
+                <Checkbox checked={manualConfirmed} description="I confirm I am manually supplying the exact bootloader image for this board and understand that the wrong APJ/BIN can leave it non-bootable." label="Manual file confirmation" onCheckedChange={(checked) => (manualConfirmed = checked)} testId={firmwareWorkspaceTestIds.recoveryManualConfirm} />
+              </div>
+            {/if}
+          </div>
+          </Panel>
+        {/if}
+      </div>
     </Panel>
-  </div>
 
   <Panel padded>
-    <div class={`${checkboxClass} border-warning/35 bg-warning/10`}>
+    <div>
+      <Eyebrow>Step 3</Eyebrow>
+      <h4 class={subtitleClass}>Review bootloader setup</h4>
+      <HelperText class="mt-1 max-w-[60ch]">This installs only the ArduPilot bootloader. After verification, reconnect the board and install flight firmware over serial.</HelperText>
+    </div>
+
+    <div class="mt-3">
+      <FirmwareChecklist items={recoveryReviewChecklist} />
+    </div>
+
+    <div class={`${checkboxClass} mt-3 border-warning/35 bg-warning/10`}>
       <Checkbox
         checked={dfuConfirmed}
-        description="I understand that DFU bootloader installation bypasses the normal serial safety flow and should only be used for explicit bootloader work."
-        label="DFU safety acknowledgment"
+        description="I understand that DFU bootloader setup installs the bootloader only; normal flight firmware still needs to be installed afterward over serial."
+        label="DFU setup acknowledgment"
         onCheckedChange={(checked) => (dfuConfirmed = checked)}
         testId={firmwareWorkspaceTestIds.recoverySafetyConfirm}
       />
@@ -563,36 +569,24 @@ $effect(() => {
 
     {#if isRecoveryActive}
       <div class="mt-3 rounded-md border border-warning/35 bg-warning/10 p-3 text-sm text-text-primary">
-        <p class="m-0 font-semibold">Bootloader installation in progress</p>
+        <p class="m-0 font-semibold">Bootloader setup in progress</p>
         <p class="m-0 mt-1">{workspaceState.progress?.phase_label ?? workspaceState.sessionPhase ?? "working"}</p>
         {#if workspaceState.progress}
           <Progress class="mt-3" value={workspaceState.progress.pct} variant="warning" testId={firmwareWorkspaceTestIds.recoveryProgress} />
-          <p class="m-0 mt-2 text-xs text-text-secondary">
-            {workspaceState.progress.bytes_written} / {workspaceState.progress.bytes_total} bytes · {Math.round(workspaceState.progress.pct)}%
-          </p>
+          <p class="m-0 mt-2 text-xs text-text-secondary">{workspaceState.progress.bytes_written} / {workspaceState.progress.bytes_total} bytes · {Math.round(workspaceState.progress.pct)}%</p>
         {/if}
       </div>
     {/if}
 
     <div class="mt-4 flex flex-wrap gap-3">
       {#if isRecoveryActive && !isRecoveryCancelling}
-        <Button
-          variant="outline"
-          testId={firmwareWorkspaceTestIds.cancelRecovery}
-          onclick={() => void store.cancel()}
-        >
-          Cancel bootloader installation
-        </Button>
+        <Button variant="outline" testId={firmwareWorkspaceTestIds.cancelRecovery} onclick={() => void store.cancel()}>Cancel bootloader setup</Button>
       {/if}
 
-      <Button
-        variant="outline"
-        testId={firmwareWorkspaceTestIds.startRecovery}
-        disabled={!canStartRecovery || isRecoveryActive || isRecoveryCancelling || replayReadonly}
-        onclick={() => void store.startBootloaderInstallation()}
-      >
+      <Button variant="default" testId={firmwareWorkspaceTestIds.startRecovery} disabled={!canStartRecovery || isRecoveryActive || isRecoveryCancelling || replayReadonly} onclick={() => void store.startBootloaderInstallation()}>
         Install bootloader
       </Button>
     </div>
   </Panel>
+  </div>
 </Panel>

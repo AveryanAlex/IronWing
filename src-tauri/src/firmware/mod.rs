@@ -1,5 +1,4 @@
 pub(crate) mod artifact;
-pub(crate) mod cache;
 pub(crate) mod catalog;
 pub(crate) mod commands;
 pub(crate) mod dfu_recovery;
@@ -405,11 +404,7 @@ mod tests {
             request_token: request_token.clone(),
             session_status: FirmwareSessionStatus::Idle,
             readiness: SerialReadiness::Advisory,
-            target_hint: Some(SerialReadinessTargetHint {
-                detected_board_id: Some(140),
-            }),
-            validation_pending: false,
-            bootloader_transition: SerialBootloaderTransition::AutoRebootSupported,
+            bootloader_status: FirmwareInstallBootloaderStatus::AlreadyInBootloader,
         };
 
         assert_serializes_to(
@@ -435,12 +430,8 @@ mod tests {
                 "readiness": {
                     "kind": "advisory"
                 },
-                "target_hint": {
-                    "detected_board_id": 140
-                },
-                "validation_pending": false,
-                "bootloader_transition": {
-                    "kind": "auto_reboot_supported"
+                "bootloader_status": {
+                    "kind": "already_in_bootloader"
                 }
             }),
         );
@@ -464,11 +455,7 @@ mod tests {
             readiness: SerialReadiness::Blocked {
                 reason: SerialReadinessBlockedReason::SessionBusy,
             },
-            target_hint: Some(SerialReadinessTargetHint {
-                detected_board_id: None,
-            }),
-            validation_pending: false,
-            bootloader_transition: SerialBootloaderTransition::TargetMismatch,
+            bootloader_status: FirmwareInstallBootloaderStatus::Unknown,
         };
 
         assert_serializes_to(
@@ -483,38 +470,26 @@ mod tests {
                     "kind": "blocked",
                     "reason": "session_busy"
                 },
-                "target_hint": {
-                    "detected_board_id": null
-                },
-                "validation_pending": false,
-                "bootloader_transition": {
-                    "kind": "target_mismatch"
+                "bootloader_status": {
+                    "kind": "unknown"
                 }
             }),
         );
     }
 
     #[test]
-    fn session_contracts_serial_bootloader_transition_variants_serialize() {
+    fn session_contracts_serial_bootloader_status_variants_serialize() {
         assert_serializes_to(
-            &SerialBootloaderTransition::AutoRebootSupported,
-            json!({ "kind": "auto_reboot_supported" }),
-        );
-        assert_serializes_to(
-            &SerialBootloaderTransition::AlreadyInBootloader,
+            &FirmwareInstallBootloaderStatus::AlreadyInBootloader,
             json!({ "kind": "already_in_bootloader" }),
         );
         assert_serializes_to(
-            &SerialBootloaderTransition::AutoRebootAttemptable,
-            json!({ "kind": "auto_reboot_attemptable" }),
+            &FirmwareInstallBootloaderStatus::NotInBootloader { can_reboot: true },
+            json!({ "kind": "not_in_bootloader", "can_reboot": true }),
         );
         assert_serializes_to(
-            &SerialBootloaderTransition::ManualBootloaderEntryRequired,
-            json!({ "kind": "manual_bootloader_entry_required" }),
-        );
-        assert_serializes_to(
-            &SerialBootloaderTransition::TargetMismatch,
-            json!({ "kind": "target_mismatch" }),
+            &FirmwareInstallBootloaderStatus::Unknown,
+            json!({ "kind": "unknown" }),
         );
     }
 
@@ -2602,531 +2577,6 @@ mod tests {
         assert_eq!(detect_board_id_from_ports(&ports), Some(140));
     }
 
-    // ── Catalog tests ──
-
-    use super::cache::ManifestCache;
-    use super::catalog::*;
-
-    fn make_manifest_json(entries: &[serde_json::Value]) -> Vec<u8> {
-        serde_json::to_vec(&serde_json::json!({ "firmware": entries })).unwrap()
-    }
-
-    fn make_manifest_gz(entries: &[serde_json::Value]) -> Vec<u8> {
-        use flate2::Compression;
-        use flate2::write::GzEncoder;
-        use std::io::Write;
-
-        let json = make_manifest_json(entries);
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(&json).unwrap();
-        encoder.finish().unwrap()
-    }
-
-    fn sample_entry(
-        board_id: u32,
-        format: &str,
-        version: &str,
-        platform: &str,
-    ) -> serde_json::Value {
-        serde_json::json!({
-            "board_id": board_id,
-            "mav-type": "Copter",
-            "mav-firmware-version": version,
-            "mav-firmware-version-type": "OFFICIAL",
-            "format": format,
-            "platform": platform,
-            "url": format!("https://firmware.ardupilot.org/{platform}/{version}/firmware.apj"),
-            "image_size": 1_500_000,
-            "latest": 1,
-            "git-sha": "abc123",
-            "brand_name": "TestBoard"
-        })
-    }
-
-    #[test]
-    fn catalog_parse_manifest_entries() {
-        let entries = vec![
-            sample_entry(140, "apj", "4.5.0", "fmuv3"),
-            sample_entry(140, "apj", "4.4.0", "fmuv3"),
-            sample_entry(9, "apj", "4.5.0", "fmuv2"),
-        ];
-        let gz = make_manifest_gz(&entries);
-        let parsed = parse_manifest_gz(&gz).unwrap();
-        assert_eq!(parsed.len(), 3);
-        assert_eq!(parsed[0].board_id, 140);
-        assert_eq!(parsed[0].version, "4.5.0");
-        assert_eq!(parsed[0].platform, "fmuv3");
-        assert!(parsed[0].latest);
-    }
-
-    #[test]
-    fn catalog_filters_non_apj_formats() {
-        let entries = vec![
-            sample_entry(140, "apj", "4.5.0", "fmuv3"),
-            serde_json::json!({
-                "board_id": 140,
-                "format": "px4",
-                "platform": "fmuv3",
-                "url": "https://example.com/fw.px4"
-            }),
-            serde_json::json!({
-                "board_id": 140,
-                "format": "ELF",
-                "platform": "SITL",
-                "url": "https://example.com/fw"
-            }),
-        ];
-        let gz = make_manifest_gz(&entries);
-        let parsed = parse_manifest_gz(&gz).unwrap();
-        assert_eq!(parsed.len(), 1, "only apj entries should be included");
-        assert_eq!(parsed[0].format, "apj");
-    }
-
-    #[test]
-    fn catalog_filter_by_board_id() {
-        let entries = vec![
-            sample_entry(140, "apj", "4.5.0", "fmuv3"),
-            sample_entry(9, "apj", "4.5.0", "fmuv2"),
-            sample_entry(140, "apj", "4.4.0", "fmuv3"),
-        ];
-        let gz = make_manifest_gz(&entries);
-        let all = parse_manifest_gz(&gz).unwrap();
-        let filtered = filter_by_board(&all, 140);
-        assert_eq!(filtered.len(), 2);
-        assert!(filtered.iter().all(|e| e.board_id == 140));
-    }
-
-    #[test]
-    fn catalog_filter_by_board_id_no_match() {
-        let entries = vec![sample_entry(140, "apj", "4.5.0", "fmuv3")];
-        let gz = make_manifest_gz(&entries);
-        let all = parse_manifest_gz(&gz).unwrap();
-        let filtered = filter_by_board(&all, 999);
-        assert!(filtered.is_empty());
-    }
-
-    #[test]
-    fn catalog_rejects_dfu_usage() {
-        let err = reject_catalog_for_dfu();
-        match err {
-            FirmwareError::CatalogUnavailable { reason } => {
-                assert!(reason.contains("DFU recovery"), "got: {reason}");
-                assert!(reason.contains(".bin"), "should guide to .bin: {reason}");
-            }
-            other => panic!("expected CatalogUnavailable, got: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn catalog_corrupt_gz_returns_error() {
-        let result = parse_manifest_gz(b"not gzip data at all");
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            FirmwareError::CatalogUnavailable { reason } => {
-                assert!(
-                    reason.contains("gzip") || reason.contains("decompression"),
-                    "got: {reason}"
-                );
-            }
-            other => panic!("expected CatalogUnavailable, got: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn catalog_corrupt_json_inside_gz_returns_error() {
-        use flate2::Compression;
-        use flate2::write::GzEncoder;
-        use std::io::Write;
-
-        let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
-        encoder.write_all(b"{{not valid json}}").unwrap();
-        let gz = encoder.finish().unwrap();
-
-        let result = parse_manifest_gz(&gz);
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            FirmwareError::CatalogUnavailable { reason } => {
-                assert!(reason.contains("JSON"), "got: {reason}");
-            }
-            other => panic!("expected CatalogUnavailable, got: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn catalog_entry_serializes() {
-        let entry = CatalogEntry {
-            board_id: 140,
-            platform: "fmuv3".into(),
-            vehicle_type: "Copter".into(),
-            version: "4.5.0".into(),
-            version_type: "OFFICIAL".into(),
-            format: "apj".into(),
-            url: "https://firmware.ardupilot.org/fmuv3/4.5.0/firmware.apj".into(),
-            image_size: 1_500_000,
-            latest: true,
-            git_sha: "abc123".into(),
-            brand_name: Some("CubeBlack".into()),
-            manufacturer: Some("Hex/ProfiCNC".into()),
-        };
-        let json = serde_json::to_string(&entry).unwrap();
-        assert!(json.contains("fmuv3"), "got: {json}");
-        assert!(json.contains("4.5.0"), "got: {json}");
-        assert!(json.contains("CubeBlack"), "got: {json}");
-        assert!(json.contains("Hex/ProfiCNC"), "got: {json}");
-    }
-
-    #[test]
-    fn catalog_skips_entries_missing_board_id() {
-        let entries = vec![
-            sample_entry(140, "apj", "4.5.0", "fmuv3"),
-            serde_json::json!({
-                "format": "apj",
-                "platform": "unknown",
-                "url": "https://example.com/fw.apj"
-            }),
-        ];
-        let json = make_manifest_json(&entries);
-        let parsed = parse_manifest_json(&json).unwrap();
-        assert_eq!(parsed.len(), 1);
-        assert_eq!(parsed[0].board_id, 140);
-    }
-
-    #[test]
-    fn catalog_cache_fresh_returns_data() {
-        let dir =
-            std::env::temp_dir().join(format!("ironwing_test_cache_fresh_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-
-        let cache = ManifestCache::new(dir.clone(), std::time::Duration::from_secs(3600));
-        let test_data = make_manifest_gz(&[sample_entry(140, "apj", "4.5.0", "fmuv3")]);
-
-        cache.store(&test_data).unwrap();
-        let cached = cache.get_if_fresh();
-        assert!(cached.is_some(), "fresh cache should return data");
-        assert_eq!(cached.unwrap(), test_data);
-        assert_eq!(cache.get_cached().unwrap(), test_data);
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn catalog_cache_expired_returns_none_but_preserves_cached_bytes() {
-        let dir = std::env::temp_dir().join(format!(
-            "ironwing_test_cache_expired_{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-
-        let cache = ManifestCache::new(dir.clone(), std::time::Duration::from_secs(0));
-        let test_data = b"old data";
-        cache.store(test_data).unwrap();
-
-        std::thread::sleep(std::time::Duration::from_millis(50));
-
-        let cached = cache.get_if_fresh();
-        assert!(cached.is_none(), "expired cache should return None");
-        assert_eq!(cache.get_cached().unwrap(), test_data);
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn catalog_cache_invalid_timestamp_preserves_cached_bytes_for_stale_fallback() {
-        let dir = std::env::temp_dir().join(format!(
-            "ironwing_test_cache_corrupt_{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-
-        let test_data = b"corrupt";
-        std::fs::write(dir.join("manifest.timestamp"), "not_a_number").unwrap();
-        std::fs::write(dir.join("manifest.json.gz"), test_data).unwrap();
-
-        let cache = ManifestCache::new(dir.clone(), std::time::Duration::from_secs(3600));
-        assert!(
-            cache.get_if_fresh().is_none(),
-            "invalid timestamp should skip the fresh-cache path"
-        );
-        assert_eq!(cache.get_cached().unwrap(), test_data);
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn catalog_cache_missing_timestamp_preserves_cached_bytes_for_stale_fallback() {
-        let dir = std::env::temp_dir().join(format!(
-            "ironwing_test_cache_missing_timestamp_{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-
-        let test_data = make_manifest_gz(&[sample_entry(140, "apj", "4.5.0", "fmuv3")]);
-        std::fs::write(dir.join("manifest.json.gz"), &test_data).unwrap();
-
-        let cache = ManifestCache::new(dir.clone(), std::time::Duration::from_secs(3600));
-        assert!(
-            cache.get_if_fresh().is_none(),
-            "missing timestamp should skip the fresh-cache path"
-        );
-        assert_eq!(cache.get_cached().unwrap(), test_data);
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn catalog_cache_missing_returns_none() {
-        let dir = std::env::temp_dir().join(format!(
-            "ironwing_test_cache_missing_{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-
-        let cache = ManifestCache::new(dir, std::time::Duration::from_secs(3600));
-        assert!(cache.get_if_fresh().is_none());
-        assert!(cache.get_cached().is_none());
-    }
-
-    // ── Catalog client tests ──
-
-    #[test]
-    fn catalog_client_fetches_on_cache_miss() {
-        let dir =
-            std::env::temp_dir().join(format!("ironwing_test_client_miss_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-
-        let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(3600));
-        let gz = make_manifest_gz(&[
-            sample_entry(140, "apj", "4.5.0", "fmuv3"),
-            sample_entry(9, "apj", "4.5.0", "fmuv2"),
-        ]);
-        let gz_clone = gz.clone();
-
-        let mut fetch_called = false;
-        let results = client
-            .get_entries_for_board(140, || {
-                fetch_called = true;
-                Ok(gz_clone.clone())
-            })
-            .unwrap();
-
-        assert!(fetch_called, "fetcher should be called on cache miss");
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].board_id, 140);
-        assert_eq!(results[0].version, "4.5.0");
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn catalog_client_uses_fresh_cache() {
-        let dir =
-            std::env::temp_dir().join(format!("ironwing_test_client_hit_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-
-        let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(3600));
-        let gz = make_manifest_gz(&[sample_entry(140, "apj", "4.5.0", "fmuv3")]);
-
-        let gz_for_prime = gz.clone();
-        client
-            .get_entries_for_board(140, || Ok(gz_for_prime))
-            .unwrap();
-
-        let results = client
-            .get_entries_for_board(140, || {
-                panic!("fetcher should not be called when cache is fresh")
-            })
-            .unwrap();
-
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].board_id, 140);
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn catalog_client_refetches_on_expired_cache() {
-        let dir = std::env::temp_dir().join(format!(
-            "ironwing_test_client_expired_{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-
-        let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(0));
-        let old_gz = make_manifest_gz(&[sample_entry(140, "apj", "4.4.0", "fmuv3")]);
-        let new_gz = make_manifest_gz(&[sample_entry(140, "apj", "4.5.0", "fmuv3")]);
-
-        let old_gz_clone = old_gz.clone();
-        client
-            .get_entries_for_board(140, || Ok(old_gz_clone))
-            .unwrap();
-
-        std::thread::sleep(std::time::Duration::from_millis(50));
-
-        let new_gz_clone = new_gz.clone();
-        let results = client
-            .get_entries_for_board(140, || Ok(new_gz_clone))
-            .unwrap();
-
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].version, "4.5.0", "should have new version");
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn catalog_client_falls_back_to_stale_cache_when_refresh_fails() {
-        let dir = std::env::temp_dir().join(format!(
-            "ironwing_test_client_stale_fallback_{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-
-        let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(0));
-        let stale_gz = make_manifest_gz(&[sample_entry(140, "apj", "4.4.0", "fmuv3")]);
-        let cache = ManifestCache::new(dir.clone(), std::time::Duration::from_secs(0));
-        cache.store(&stale_gz).unwrap();
-
-        std::thread::sleep(std::time::Duration::from_millis(50));
-
-        let results = client
-            .get_entries_for_board(140, || {
-                Err(FirmwareError::CatalogUnavailable {
-                    reason: "network unreachable".into(),
-                })
-            })
-            .unwrap();
-
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].version, "4.4.0");
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn catalog_client_falls_back_to_stale_cache_when_timestamp_is_missing() {
-        let dir = std::env::temp_dir().join(format!(
-            "ironwing_test_client_missing_timestamp_{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-
-        let stale_gz = make_manifest_gz(&[sample_entry(140, "apj", "4.4.0", "fmuv3")]);
-        std::fs::write(dir.join("manifest.json.gz"), &stale_gz).unwrap();
-
-        let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(3600));
-        let results = client
-            .get_entries_for_board(140, || {
-                Err(FirmwareError::CatalogUnavailable {
-                    reason: "manifest request timed out".into(),
-                })
-            })
-            .unwrap();
-
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].version, "4.4.0");
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn catalog_client_propagates_fetch_error_when_no_usable_cache_exists() {
-        let dir = std::env::temp_dir().join(format!(
-            "ironwing_test_client_no_cache_{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-
-        let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(3600));
-
-        let result = client.get_entries_for_board(140, || {
-            Err(FirmwareError::CatalogUnavailable {
-                reason: "network unreachable".into(),
-            })
-        });
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            FirmwareError::CatalogUnavailable { reason } => {
-                assert!(
-                    reason.contains("no cached manifest was available"),
-                    "got: {reason}"
-                );
-                assert!(reason.contains("network unreachable"), "got: {reason}");
-            }
-            other => panic!("expected CatalogUnavailable, got: {other:?}"),
-        }
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn catalog_client_reports_unusable_stale_cache_after_refresh_failure() {
-        let dir = std::env::temp_dir().join(format!(
-            "ironwing_test_client_bad_stale_cache_{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-
-        std::fs::write(dir.join("manifest.timestamp"), "0").unwrap();
-        std::fs::write(dir.join("manifest.json.gz"), b"not gzip data").unwrap();
-
-        let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(0));
-        let result = client.get_entries_for_board(140, || {
-            Err(FirmwareError::CatalogUnavailable {
-                reason: "manifest request timed out".into(),
-            })
-        });
-
-        assert!(result.is_err());
-        match result.unwrap_err() {
-            FirmwareError::CatalogUnavailable { reason } => {
-                assert!(
-                    reason.contains("stale cached manifest was unusable"),
-                    "got: {reason}"
-                );
-                assert!(reason.contains("timed out"), "got: {reason}");
-                assert!(
-                    reason.contains("gzip") || reason.contains("decompression"),
-                    "got: {reason}"
-                );
-            }
-            other => panic!("expected CatalogUnavailable, got: {other:?}"),
-        }
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn catalog_client_filters_by_board_from_cached_data() {
-        let dir = std::env::temp_dir().join(format!(
-            "ironwing_test_client_filter_{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-
-        let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(3600));
-        let gz = make_manifest_gz(&[
-            sample_entry(140, "apj", "4.5.0", "fmuv3"),
-            sample_entry(9, "apj", "4.5.0", "fmuv2"),
-            sample_entry(140, "apj", "4.4.0", "fmuv3"),
-        ]);
-        let gz_clone = gz.clone();
-        client.get_entries_for_board(140, || Ok(gz_clone)).unwrap();
-
-        let results = client
-            .get_entries_for_board(9, || panic!("should use cache"))
-            .unwrap();
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].board_id, 9);
-        assert_eq!(results[0].platform, "fmuv2");
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
     // ── Protocol constant sanity tests ──
 
     #[test]
@@ -3494,7 +2944,9 @@ mod tests {
         match &result {
             SerialFlowResult::BoardDetectionFailed { reason } => {
                 assert!(
-                    reason.contains("not found") || reason.contains("port"),
+                    reason.contains("not found")
+                        || reason.contains("port")
+                        || reason.contains("mock serial"),
                     "got: {reason}"
                 );
             }
@@ -3589,7 +3041,7 @@ mod tests {
     }
 
     #[test]
-    fn serial_flow_transition_probe_sends_get_sync() {
+    fn serial_flow_selected_port_probe_sends_get_sync() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
         let mirrored_written = Rc::new(RefCell::new(Vec::new()));
@@ -3616,12 +3068,12 @@ mod tests {
             mirrored_written
                 .borrow()
                 .starts_with(&[TEST_GET_SYNC, TEST_EOC]),
-            "transition probing should actively send GET_SYNC before waiting for sync bytes"
+            "selected-port probing should actively send GET_SYNC before waiting for sync bytes"
         );
     }
 
     #[test]
-    fn serial_flow_ignores_false_positive_bootloader_candidate_until_real_bootloader_appears() {
+    fn serial_flow_rejects_false_positive_on_selected_port_without_candidate_fallback() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
 
@@ -3649,17 +3101,22 @@ mod tests {
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         match &result {
-            SerialFlowResult::ReconnectVerified { board_id, .. } => {
-                assert_eq!(*board_id, 140);
+            SerialFlowResult::BoardDetectionFailed { reason } => {
+                assert!(reason.contains("bootloader sync mismatch"), "got: {reason}");
             }
             other => panic!(
-                "expected false positive candidate to be skipped and flash to succeed, got: {other:?}"
+                "expected false-positive selected port to fail before upload, got: {other:?}"
             ),
         }
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[String::from("/dev/ttyACM0")],
+            "serial install must not hunt for another bootloader port after the selected port fails"
+        );
     }
 
     #[test]
-    fn serial_flow_stale_selected_port_failure_does_not_block_new_bootloader_candidate() {
+    fn serial_flow_stale_selected_port_failure_does_not_probe_new_bootloader_candidate() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
 
@@ -3696,11 +3153,21 @@ mod tests {
 
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
-        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        match result {
+            SerialFlowResult::BoardDetectionFailed { reason } => {
+                assert!(reason.contains("permission denied"), "got: {reason}");
+            }
+            other => panic!("expected selected-port open failure before upload, got: {other:?}"),
+        }
+        assert_eq!(
+            deps.opened_ports.borrow().as_slice(),
+            &[stale_selected_port.port_name],
+            "serial install must use only the selected port"
+        );
     }
 
     #[test]
-    fn serial_flow_prefers_observed_transition_candidate_over_stale_selected_port() {
+    fn serial_flow_prefers_selected_port_over_observed_transition_candidates() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
 
@@ -3737,13 +3204,13 @@ mod tests {
         assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
         assert_eq!(
             deps.opened_ports.borrow().as_slice(),
-            &[new_bootloader_port.port_name],
-            "observed transition candidates must be probed before the stale selected port"
+            &[stale_selected_port.port_name],
+            "serial install must keep the user-selected port as the only upload target"
         );
     }
 
     #[test]
-    fn serial_flow_wider_bootloader_candidate_beats_stale_selected_port() {
+    fn serial_flow_selected_port_failure_ignores_wider_bootloader_candidate() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
         let stale_selected_port = make_normal_port();
@@ -3771,16 +3238,23 @@ mod tests {
 
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
-        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        match result {
+            SerialFlowResult::BoardDetectionFailed { reason } => {
+                assert!(reason.contains("bootloader sync mismatch"), "got: {reason}");
+            }
+            other => {
+                panic!("expected selected-port protocol failure before upload, got: {other:?}")
+            }
+        }
         assert_eq!(
             deps.opened_ports.borrow().as_slice(),
-            &[wider_bootloader_port.port_name],
-            "wider post-reboot bootloader candidates must outrank stale selected-port fallback"
+            &[stale_selected_port.port_name],
+            "wider bootloader candidates must not replace the selected port"
         );
     }
 
     #[test]
-    fn serial_flow_wider_bootloader_nonretryable_failure_does_not_abort_selected_port_success() {
+    fn serial_flow_does_not_fall_back_to_selected_success_after_open_error() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
         let selected_port = make_normal_port();
@@ -3810,19 +3284,21 @@ mod tests {
 
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
-        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        match result {
+            SerialFlowResult::BoardDetectionFailed { reason } => {
+                assert!(reason.contains("permission denied"), "got: {reason}");
+            }
+            other => panic!("expected selected-port open failure before upload, got: {other:?}"),
+        }
         assert_eq!(
             deps.opened_ports.borrow().as_slice(),
-            &[
-                wider_bootloader_port.port_name.clone(),
-                selected_port.port_name.clone(),
-            ],
-            "nonretryable wider-heuristic failures must behave like misses so later fallback success still wins"
+            &[selected_port.port_name],
+            "serial install should not retry other ports after an open failure"
         );
     }
 
     #[test]
-    fn serial_flow_wider_bootloader_candidate_does_not_mask_selected_port_fatal_failure() {
+    fn serial_flow_open_failure_on_selected_port_reports_board_detection_failed() {
         let selected_port = make_normal_port();
         let wider_bootloader_port = make_bootloader_port_named("/dev/ttyACM1", "BL999");
 
@@ -3856,26 +3332,20 @@ mod tests {
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         match result {
-            SerialFlowResult::Failed { reason } => {
-                assert!(reason.contains(&selected_port.port_name), "got: {reason}");
+            SerialFlowResult::BoardDetectionFailed { reason } => {
                 assert!(reason.contains("permission denied"), "got: {reason}");
             }
-            other => panic!(
-                "expected selected-port fatal failure to stay fatal when only wider heuristics preceded it, got: {other:?}"
-            ),
+            other => panic!("expected selected-port board detection failure, got: {other:?}"),
         }
         assert_eq!(
             deps.opened_ports.borrow().as_slice(),
-            &[
-                wider_bootloader_port.port_name.clone(),
-                selected_port.port_name.clone(),
-            ],
-            "wider heuristics must not downgrade a selected-port fatal result just by existing"
+            &[selected_port.port_name],
+            "serial install must not try wider heuristic ports"
         );
     }
 
     #[test]
-    fn serial_flow_observed_transition_outcome_beats_selected_port_fatal_fallback() {
+    fn serial_flow_selected_port_outcome_beats_observed_transition_candidates() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
         let selected_port = make_normal_port();
@@ -3914,28 +3384,24 @@ mod tests {
 
         match result {
             SerialFlowResult::BoardDetectionFailed { reason } => {
-                assert!(reason.contains("board mismatch"), "got: {reason}");
                 assert!(
-                    !reason.contains(&selected_port.port_name),
-                    "observed-transition mismatch should outrank selected-port fallback fatal: {reason}"
+                    reason.contains("selected-port fallback") || reason.contains("timed out"),
+                    "got: {reason}"
                 );
             }
-            other => panic!(
-                "expected observed-transition outcome to outrank selected-port fatal fallback, got: {other:?}"
-            ),
+            other => {
+                panic!("expected selected-port detection failure before upload, got: {other:?}")
+            }
         }
         assert_eq!(
             deps.opened_ports.borrow().as_slice(),
-            &[
-                observed_bootloader_port.port_name.clone(),
-                selected_port.port_name.clone(),
-            ],
-            "observed transition must be probed before selected-port fallback and its outcome must carry precedence"
+            &[selected_port.port_name],
+            "observed transition ports must not be probed when a selected port was provided"
         );
     }
 
     #[test]
-    fn serial_flow_multiple_wider_bootloader_candidates_continue_until_board_match() {
+    fn serial_flow_multiple_wider_bootloader_candidates_are_ignored_without_selected_match() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
         let first_wider_bootloader_port = make_bootloader_port_named("/dev/ttyACM1", "BL111");
@@ -3971,19 +3437,19 @@ mod tests {
 
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
-        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert!(matches!(
+            result,
+            SerialFlowResult::BoardDetectionFailed { .. }
+        ));
         assert_eq!(
             deps.opened_ports.borrow().as_slice(),
-            &[
-                first_wider_bootloader_port.port_name.clone(),
-                second_wider_bootloader_port.port_name.clone(),
-            ],
-            "board mismatch on one wider bootloader candidate must continue probing later ranked candidates"
+            &[String::from("/dev/ttyUSB9")],
+            "serial install must not probe unselected bootloader candidates"
         );
     }
 
     #[test]
-    fn serial_flow_unrelated_new_port_matching_board_succeeds_after_board_mismatch() {
+    fn serial_flow_unrelated_new_port_matching_board_is_not_used() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
         let wrong_board_port = make_bootloader_port_named("/dev/ttyACM1", "BL111");
@@ -4015,19 +3481,19 @@ mod tests {
 
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
-        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert!(matches!(
+            result,
+            SerialFlowResult::BoardDetectionFailed { .. }
+        ));
         assert_eq!(
             deps.opened_ports.borrow().as_slice(),
-            &[
-                wrong_board_port.port_name.clone(),
-                unrelated_matching_port.port_name.clone(),
-            ],
-            "a new unrelated bootloader port with the right board must still be tried after an earlier board mismatch"
+            &[String::from("/dev/ttyUSB9")],
+            "serial install must not use unrelated ports even if their board id would match"
         );
     }
 
     #[test]
-    fn serial_flow_silent_selected_port_uses_bounded_detection_probe_before_retrying_candidates() {
+    fn serial_flow_silent_selected_port_uses_bounded_detection_probe_without_retrying_candidates() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
         let selected_port = make_normal_port();
@@ -4064,11 +3530,16 @@ mod tests {
 
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
-        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        match result {
+            SerialFlowResult::BoardDetectionFailed { reason } => {
+                assert!(reason.contains("timed out"), "got: {reason}");
+            }
+            other => panic!("expected bounded selected-port detection failure, got: {other:?}"),
+        }
         assert_eq!(
             deps.opened_ports.borrow().as_slice(),
-            &[selected_port.port_name, new_bootloader_port.port_name],
-            "the executor should retry with later bootloader candidates after a bounded selected-port probe"
+            &[selected_port.port_name],
+            "the executor must not retry with later bootloader candidates after a bounded selected-port probe"
         );
         assert_eq!(
             silent_read_count.get(),
@@ -4078,7 +3549,7 @@ mod tests {
     }
 
     #[test]
-    fn serial_flow_retries_transient_open_failure_during_bootloader_transition() {
+    fn serial_flow_reports_transient_open_failure_during_bootloader_sync() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
         let bootloader_port = make_bootloader_port();
@@ -4104,11 +3575,16 @@ mod tests {
 
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
-        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        match result {
+            SerialFlowResult::BoardDetectionFailed { reason } => {
+                assert!(reason.contains("broken pipe"), "got: {reason}");
+            }
+            other => panic!("expected transient open failure before upload, got: {other:?}"),
+        }
     }
 
     #[test]
-    fn serial_flow_retries_transient_probe_flush_failure_during_bootloader_transition() {
+    fn serial_flow_reports_transient_probe_flush_failure_during_bootloader_sync() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
         let bootloader_port = make_bootloader_port();
@@ -4137,11 +3613,19 @@ mod tests {
 
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
-        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        match result {
+            SerialFlowResult::BoardDetectionFailed { reason } => {
+                assert!(
+                    reason.contains("broken pipe") || reason.contains("timed out"),
+                    "got: {reason}"
+                );
+            }
+            other => panic!("expected transient probe failure before upload, got: {other:?}"),
+        }
     }
 
     #[test]
-    fn serial_flow_retries_transient_probe_write_failure_during_bootloader_transition() {
+    fn serial_flow_reports_transient_probe_write_failure_during_bootloader_sync() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
         let bootloader_port = make_bootloader_port();
@@ -4170,11 +3654,16 @@ mod tests {
 
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
-        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        match result {
+            SerialFlowResult::BoardDetectionFailed { reason } => {
+                assert!(reason.contains("not connected"), "got: {reason}");
+            }
+            other => panic!("expected transient probe failure before upload, got: {other:?}"),
+        }
     }
 
     #[test]
-    fn serial_flow_keeps_non_transition_open_failures_as_real_failures() {
+    fn serial_flow_selected_port_open_failure_reports_board_detection_failed() {
         let bootloader_port = make_bootloader_port();
 
         let deps = MockFlowDeps::new()
@@ -4193,15 +3682,17 @@ mod tests {
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         match result {
-            SerialFlowResult::Failed { reason } => {
+            SerialFlowResult::BoardDetectionFailed { reason } => {
                 assert!(reason.contains("permission denied"), "got: {reason}");
             }
-            other => panic!("expected Failed for non-transition open error, got: {other:?}"),
+            other => {
+                panic!("expected BoardDetectionFailed for selected-port open error, got: {other:?}")
+            }
         }
     }
 
     #[test]
-    fn serial_flow_observed_transition_nonretryable_open_failure_stays_failed() {
+    fn serial_flow_unselected_bootloader_port_is_not_opened_after_selected_port_failure() {
         let bootloader_port = make_bootloader_port();
 
         let deps = MockFlowDeps::new()
@@ -4220,18 +3711,17 @@ mod tests {
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         match result {
-            SerialFlowResult::Failed { reason } => {
+            SerialFlowResult::BoardDetectionFailed { reason } => {
                 assert!(reason.contains("permission denied"), "got: {reason}");
             }
-            other => panic!(
-                "expected Failed for observed-transition nonretryable open error, got: {other:?}"
-            ),
+            other => {
+                panic!("expected BoardDetectionFailed for selected-port open error, got: {other:?}")
+            }
         }
     }
 
     #[test]
-    fn serial_flow_same_poll_later_observed_transition_candidate_still_probes_after_fatal_failure()
-    {
+    fn serial_flow_same_poll_later_bootloader_candidate_is_not_probed_after_selected_failure() {
         let image = vec![0x01, 0x02, 0x03, 0x04];
         let flash_size = 2_097_152;
         let first_bootloader_port = make_bootloader_port_named("/dev/ttyACM1", "BL111");
@@ -4261,14 +3751,14 @@ mod tests {
 
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
-        assert!(matches!(result, SerialFlowResult::ReconnectVerified { .. }));
+        assert!(matches!(
+            result,
+            SerialFlowResult::BoardDetectionFailed { .. }
+        ));
         assert_eq!(
             deps.opened_ports.borrow().as_slice(),
-            &[
-                first_bootloader_port.port_name.clone(),
-                second_bootloader_port.port_name.clone(),
-            ],
-            "a fatal failure on the first observed-transition candidate must not stop probing later candidates from the same poll"
+            &[String::from("/dev/ttyUSB9")],
+            "selected-port failure must not trigger probing of same-poll unselected candidates"
         );
     }
 
@@ -4619,7 +4109,7 @@ mod tests {
     }
 
     #[test]
-    fn serial_flow_protocol_error_returns_failed() {
+    fn serial_flow_protocol_error_during_detection_returns_board_detection_failed() {
         let mut mock = MockSerial::new();
         // sync succeeds but identify fails
         mock.queue_sync_ok();
@@ -4641,13 +4131,13 @@ mod tests {
         let result = execute_serial_flash(&deps, &preflight, &artifact, &|| false, |_, _, _| {});
 
         match &result {
-            SerialFlowResult::Failed { reason } => {
+            SerialFlowResult::BoardDetectionFailed { reason } => {
                 assert!(
                     reason.contains("unsupported") || reason.contains("protocol"),
                     "got: {reason}"
                 );
             }
-            other => panic!("expected Failed, got: {other:?}"),
+            other => panic!("expected BoardDetectionFailed, got: {other:?}"),
         }
     }
 
@@ -4889,7 +4379,6 @@ mod tests {
             param_count: 0,
             has_params_to_backup: false,
             available_ports: vec![],
-            detected_board_id: None,
             session_ready: true,
             session_status: FirmwareSessionStatus::Idle,
         };
@@ -4919,7 +4408,6 @@ mod tests {
                 product: None,
                 location: None,
             }],
-            detected_board_id: Some(140),
             session_ready: true,
             session_status: FirmwareSessionStatus::Idle,
         };
@@ -4940,7 +4428,6 @@ mod tests {
             param_count: 0,
             has_params_to_backup: false,
             available_ports: vec![],
-            detected_board_id: None,
             session_ready: false,
             session_status: FirmwareSessionStatus::FirmwareInstallUpdate {
                 phase: SerialFlashPhase::Idle,
@@ -4958,7 +4445,6 @@ mod tests {
             param_count: 1,
             has_params_to_backup: true,
             available_ports: vec![],
-            detected_board_id: None,
             session_ready: true,
             session_status: FirmwareSessionStatus::Idle,
         };
@@ -4970,7 +4456,6 @@ mod tests {
             param_count: 0,
             has_params_to_backup: false,
             available_ports: vec![],
-            detected_board_id: None,
             session_ready: true,
             session_status: FirmwareSessionStatus::Idle,
         };
@@ -5767,512 +5252,6 @@ mod tests {
         let json =
             serde_json::to_string(&FirmwareOutcome::BootloaderInstallation { outcome }).unwrap();
         assert!(json.contains("unsupported_bootloader_installation_path"));
-    }
-
-    #[test]
-    fn e2e_catalog_client_board_filtered() {
-        let dir =
-            std::env::temp_dir().join(format!("ironwing_test_e2e_catalog_{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-
-        let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(3600));
-        let gz = make_manifest_gz(&[
-            sample_entry(140, "apj", "4.5.0", "fmuv3"),
-            sample_entry(9, "apj", "4.5.0", "fmuv2"),
-            sample_entry(140, "apj", "4.4.0", "fmuv3"),
-        ]);
-        let gz_clone = gz.clone();
-
-        let results = client.get_entries_for_board(140, || Ok(gz_clone)).unwrap();
-        assert_eq!(results.len(), 2);
-        assert!(results.iter().all(|e| e.board_id == 140));
-        assert!(results.iter().any(|e| e.version == "4.5.0"));
-        assert!(results.iter().any(|e| e.version == "4.4.0"));
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    // ── Catalog target tests ──
-
-    use super::types::CatalogTargetSummary;
-
-    #[allow(clippy::too_many_arguments)]
-    fn sample_entry_full(
-        board_id: u32,
-        format: &str,
-        version: &str,
-        platform: &str,
-        vehicle_type: &str,
-        brand_name: Option<&str>,
-        manufacturer: Option<&str>,
-        latest: bool,
-    ) -> serde_json::Value {
-        let mut v = serde_json::json!({
-            "board_id": board_id,
-            "mav-type": vehicle_type,
-            "mav-firmware-version": version,
-            "mav-firmware-version-type": "OFFICIAL",
-            "format": format,
-            "platform": platform,
-            "url": format!("https://firmware.ardupilot.org/{platform}/{version}/firmware.apj"),
-            "image_size": 1_500_000,
-            "latest": if latest { 1 } else { 0 },
-            "git-sha": "abc123",
-        });
-        if let Some(bn) = brand_name {
-            v["brand_name"] = serde_json::Value::String(bn.into());
-        }
-        if let Some(mfr) = manufacturer {
-            v["manufacturer"] = serde_json::Value::String(mfr.into());
-        }
-        v
-    }
-
-    #[test]
-    fn catalog_target_groups_by_board_and_platform() {
-        let entries = vec![
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "CubeOrange",
-                "Copter",
-                Some("CubeOrange"),
-                Some("Hex"),
-                true,
-            ),
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "CubeOrange",
-                "Plane",
-                Some("CubeOrange"),
-                Some("Hex"),
-                true,
-            ),
-            sample_entry_full(
-                140,
-                "apj",
-                "4.4.0",
-                "CubeOrange",
-                "Copter",
-                Some("CubeOrange"),
-                Some("Hex"),
-                false,
-            ),
-        ];
-        let gz = make_manifest_gz(&entries);
-        let parsed = parse_manifest_gz(&gz).unwrap();
-        let targets = build_catalog_targets(&parsed);
-
-        assert_eq!(targets.len(), 1);
-        assert_eq!(targets[0].board_id, 140);
-        assert_eq!(targets[0].platform, "CubeOrange");
-        assert_eq!(targets[0].brand_name.as_deref(), Some("CubeOrange"));
-        assert_eq!(targets[0].manufacturer.as_deref(), Some("Hex"));
-        assert!(targets[0].vehicle_types.contains(&"Copter".to_string()));
-        assert!(targets[0].vehicle_types.contains(&"Plane".to_string()));
-        assert_eq!(targets[0].latest_version.as_deref(), Some("4.5.0"));
-    }
-
-    #[test]
-    fn catalog_target_duplicate_board_id_different_platforms() {
-        let entries = vec![
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "CubeOrange",
-                "Copter",
-                Some("CubeOrange"),
-                Some("Hex"),
-                true,
-            ),
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "CubeOrangePlus",
-                "Copter",
-                Some("CubeOrange+"),
-                Some("Hex"),
-                true,
-            ),
-        ];
-        let gz = make_manifest_gz(&entries);
-        let parsed = parse_manifest_gz(&gz).unwrap();
-        let targets = build_catalog_targets(&parsed);
-
-        assert_eq!(
-            targets.len(),
-            2,
-            "same board_id with different platforms must not collapse"
-        );
-        let platforms: Vec<&str> = targets.iter().map(|t| t.platform.as_str()).collect();
-        assert!(platforms.contains(&"CubeOrange"));
-        assert!(platforms.contains(&"CubeOrangePlus"));
-    }
-
-    #[test]
-    fn catalog_target_missing_brand_and_manufacturer() {
-        let entries = vec![sample_entry_full(
-            9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true,
-        )];
-        let gz = make_manifest_gz(&entries);
-        let parsed = parse_manifest_gz(&gz).unwrap();
-        let targets = build_catalog_targets(&parsed);
-
-        assert_eq!(targets.len(), 1);
-        assert!(targets[0].brand_name.is_none());
-        assert!(targets[0].manufacturer.is_none());
-    }
-
-    #[test]
-    fn catalog_target_latest_official_version_selected() {
-        let entries = vec![
-            sample_entry_full(
-                140,
-                "apj",
-                "4.3.0",
-                "CubeOrange",
-                "Copter",
-                Some("CO"),
-                None,
-                false,
-            ),
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "CubeOrange",
-                "Copter",
-                Some("CO"),
-                None,
-                false,
-            ),
-            sample_entry_full(
-                140,
-                "apj",
-                "4.4.0",
-                "CubeOrange",
-                "Copter",
-                Some("CO"),
-                None,
-                false,
-            ),
-        ];
-        let gz = make_manifest_gz(&entries);
-        let parsed = parse_manifest_gz(&gz).unwrap();
-        let targets = build_catalog_targets(&parsed);
-
-        assert_eq!(targets.len(), 1);
-        assert_eq!(
-            targets[0].latest_version.as_deref(),
-            Some("4.5.0"),
-            "OFFICIAL entries with latest=false must still populate latest_version"
-        );
-    }
-
-    #[test]
-    fn catalog_target_dotted_version_comparison() {
-        let entries = vec![
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "CubeOrange",
-                "Copter",
-                None,
-                None,
-                false,
-            ),
-            sample_entry_full(
-                140,
-                "apj",
-                "4.10.0",
-                "CubeOrange",
-                "Copter",
-                None,
-                None,
-                false,
-            ),
-            sample_entry_full(
-                140,
-                "apj",
-                "4.9.3",
-                "CubeOrange",
-                "Copter",
-                None,
-                None,
-                false,
-            ),
-        ];
-        let gz = make_manifest_gz(&entries);
-        let parsed = parse_manifest_gz(&gz).unwrap();
-        let targets = build_catalog_targets(&parsed);
-
-        assert_eq!(targets.len(), 1);
-        assert_eq!(
-            targets[0].latest_version.as_deref(),
-            Some("4.10.0"),
-            "dotted version comparison must treat 4.10.0 > 4.9.3 > 4.5.0"
-        );
-    }
-
-    #[test]
-    fn catalog_target_non_official_not_counted_as_latest() {
-        let entries = vec![serde_json::json!({
-            "board_id": 140,
-            "mav-type": "Copter",
-            "mav-firmware-version": "4.6.0-dev",
-            "mav-firmware-version-type": "DEV",
-            "format": "apj",
-            "platform": "CubeOrange",
-            "url": "https://firmware.ardupilot.org/CubeOrange/4.6.0-dev/firmware.apj",
-            "image_size": 1_500_000,
-            "latest": 1,
-            "git-sha": "def456",
-        })];
-        let gz = make_manifest_gz(&entries);
-        let parsed = parse_manifest_gz(&gz).unwrap();
-        let targets = build_catalog_targets(&parsed);
-
-        assert_eq!(targets.len(), 1);
-        assert!(
-            targets[0].latest_version.is_none(),
-            "DEV entries should not set latest_version"
-        );
-    }
-
-    #[test]
-    fn catalog_target_official_with_latest_false_populates_version() {
-        let entries = vec![sample_entry_full(
-            140,
-            "apj",
-            "4.5.0",
-            "CubeOrange",
-            "Copter",
-            Some("CO"),
-            None,
-            false,
-        )];
-        let gz = make_manifest_gz(&entries);
-        let parsed = parse_manifest_gz(&gz).unwrap();
-        let targets = build_catalog_targets(&parsed);
-
-        assert_eq!(targets.len(), 1);
-        assert_eq!(
-            targets[0].latest_version.as_deref(),
-            Some("4.5.0"),
-            "OFFICIAL entry with latest=false must still set latest_version"
-        );
-    }
-
-    #[test]
-    fn catalog_target_vehicle_types_deduplicated() {
-        let entries = vec![
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "CubeOrange",
-                "Copter",
-                None,
-                None,
-                true,
-            ),
-            sample_entry_full(
-                140,
-                "apj",
-                "4.4.0",
-                "CubeOrange",
-                "Copter",
-                None,
-                None,
-                false,
-            ),
-            sample_entry_full(140, "apj", "4.5.0", "CubeOrange", "Rover", None, None, true),
-        ];
-        let gz = make_manifest_gz(&entries);
-        let parsed = parse_manifest_gz(&gz).unwrap();
-        let targets = build_catalog_targets(&parsed);
-
-        assert_eq!(targets.len(), 1);
-        let copter_count = targets[0]
-            .vehicle_types
-            .iter()
-            .filter(|v| *v == "Copter")
-            .count();
-        assert_eq!(copter_count, 1, "Copter should appear exactly once");
-        assert!(targets[0].vehicle_types.contains(&"Rover".to_string()));
-    }
-
-    #[test]
-    fn catalog_target_summary_serializes() {
-        let target = CatalogTargetSummary {
-            board_id: 140,
-            platform: "CubeOrange".into(),
-            brand_name: Some("CubeOrange".into()),
-            manufacturer: Some("Hex".into()),
-            vehicle_types: vec!["Copter".into(), "Plane".into()],
-            latest_version: Some("4.5.0".into()),
-        };
-        let json = serde_json::to_string(&target).unwrap();
-        assert!(json.contains("CubeOrange"), "got: {json}");
-        assert!(json.contains("Hex"), "got: {json}");
-        assert!(json.contains("Copter"), "got: {json}");
-        assert!(json.contains("4.5.0"), "got: {json}");
-    }
-
-    #[test]
-    fn catalog_target_sorted_by_platform() {
-        let entries = vec![
-            sample_entry_full(9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true),
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "CubeOrange",
-                "Copter",
-                None,
-                None,
-                true,
-            ),
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "ABoardFirst",
-                "Copter",
-                None,
-                None,
-                true,
-            ),
-        ];
-        let gz = make_manifest_gz(&entries);
-        let parsed = parse_manifest_gz(&gz).unwrap();
-        let targets = build_catalog_targets(&parsed);
-
-        assert_eq!(targets.len(), 3);
-        assert_eq!(targets[0].platform, "ABoardFirst");
-        assert_eq!(targets[1].platform, "CubeOrange");
-        assert_eq!(targets[2].platform, "fmuv2");
-    }
-
-    // ── filter_by_board_and_platform tests ──
-
-    #[test]
-    fn catalog_filter_by_board_and_platform_with_platform() {
-        let entries = vec![
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "CubeOrange",
-                "Copter",
-                None,
-                None,
-                true,
-            ),
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "CubeOrangePlus",
-                "Copter",
-                None,
-                None,
-                true,
-            ),
-            sample_entry_full(9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true),
-        ];
-        let gz = make_manifest_gz(&entries);
-        let parsed = parse_manifest_gz(&gz).unwrap();
-
-        let filtered = filter_by_board_and_platform(&parsed, 140, Some("CubeOrange"));
-        assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].platform, "CubeOrange");
-    }
-
-    #[test]
-    fn catalog_filter_by_board_and_platform_without_platform() {
-        let entries = vec![
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "CubeOrange",
-                "Copter",
-                None,
-                None,
-                true,
-            ),
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "CubeOrangePlus",
-                "Copter",
-                None,
-                None,
-                true,
-            ),
-            sample_entry_full(9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true),
-        ];
-        let gz = make_manifest_gz(&entries);
-        let parsed = parse_manifest_gz(&gz).unwrap();
-
-        let filtered = filter_by_board_and_platform(&parsed, 140, None);
-        assert_eq!(filtered.len(), 2);
-        assert!(filtered.iter().all(|e| e.board_id == 140));
-    }
-
-    #[test]
-    fn catalog_target_client_returns_grouped_targets() {
-        let dir = std::env::temp_dir().join(format!(
-            "ironwing_test_client_targets_{}",
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-
-        let client = CatalogClient::with_max_age(dir.clone(), std::time::Duration::from_secs(3600));
-        let gz = make_manifest_gz(&[
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "CubeOrange",
-                "Copter",
-                Some("CO"),
-                Some("Hex"),
-                true,
-            ),
-            sample_entry_full(
-                140,
-                "apj",
-                "4.5.0",
-                "CubeOrange",
-                "Plane",
-                Some("CO"),
-                Some("Hex"),
-                true,
-            ),
-            sample_entry_full(9, "apj", "4.5.0", "fmuv2", "Copter", None, None, true),
-        ]);
-        let gz_clone = gz.clone();
-
-        let targets = client.get_catalog_targets(|| Ok(gz_clone)).unwrap();
-        assert_eq!(targets.len(), 2);
-
-        let co = targets.iter().find(|t| t.platform == "CubeOrange").unwrap();
-        assert_eq!(co.board_id, 140);
-        assert_eq!(co.vehicle_types.len(), 2);
-
-        let fmuv2 = targets.iter().find(|t| t.platform == "fmuv2").unwrap();
-        assert_eq!(fmuv2.board_id, 9);
-
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     // ── DFU recovery source contract tests ──
@@ -7542,30 +6521,6 @@ mod tests {
         assert!(json.contains("board reports 0"), "got: {json}");
     }
 
-    #[test]
-    fn catalog_target_manufacturer_parsed_from_manifest() {
-        let entries = vec![serde_json::json!({
-            "board_id": 140,
-            "mav-type": "Copter",
-            "mav-firmware-version": "4.5.0",
-            "mav-firmware-version-type": "OFFICIAL",
-            "format": "apj",
-            "platform": "CubeOrange",
-            "url": "https://firmware.ardupilot.org/CubeOrange/4.5.0/firmware.apj",
-            "image_size": 1_500_000,
-            "latest": 1,
-            "git-sha": "abc123",
-            "brand_name": "CubeOrange",
-            "manufacturer": "Hex/ProfiCNC"
-        })];
-        let gz = make_manifest_gz(&entries);
-        let parsed = parse_manifest_gz(&gz).unwrap();
-        assert_eq!(parsed[0].manufacturer.as_deref(), Some("Hex/ProfiCNC"));
-
-        let targets = build_catalog_targets(&parsed);
-        assert_eq!(targets[0].manufacturer.as_deref(), Some("Hex/ProfiCNC"));
-    }
-
     // ── Task 9: gap-coverage tests ──
 
     // R1: Android serial stub returns Err(String), not Ok(SerialFlowResult)
@@ -7891,7 +6846,7 @@ mod tests {
         );
     }
 
-    // R15: firmware_catalog_entries returning empty Vec serializes as JSON array [].
+    // R15: empty catalog entry lists serialize as JSON array [].
     #[test]
     fn empty_catalog_entries_serializes_as_empty_array() {
         let entries: Vec<crate::firmware::types::CatalogEntry> = vec![];

@@ -4,6 +4,7 @@ import { tryHandleLogCommand } from "./logs";
 import { tryHandleMissionCommand } from "./mission";
 import { tryHandleParamCommand } from "./params";
 import { tryHandleRecordingCommand } from "./recording";
+import { tryHandleSerialPortCommand } from "./serial-ports";
 import { tryHandleSessionCommand } from "./session";
 import { tryHandleSetupActionCommand } from "./setup-actions";
 import { unsupported } from "./unsupported";
@@ -12,6 +13,7 @@ import type { WebCommandArgs, WebCommandHandler } from "./command-handler";
 
 const commandHandlers: WebCommandHandler[] = [
   tryHandleSessionCommand,
+  tryHandleSerialPortCommand,
   tryHandleVehicleControlCommand,
   tryHandleGuidedCommand,
   tryHandleSetupActionCommand,

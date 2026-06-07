@@ -17,7 +17,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 ironwing-core = { path = "../crates/ironwing-core" }
-ironwing-firmware = { path = "../crates/ironwing-firmware", features = ["dfu-core-error"] }
+ironwing-firmware = { path = "../crates/ironwing-firmware", features = ["dfu-core"] }
 mavkit = { git = "https://github.com/AveryanAlex/mavkit.git", branch = "main", default-features = false, features = ["udp", "tcp", "ardupilot", "stream", "tlog", "sim"] }
 mavlink = { git = "https://github.com/AveryanAlex/rust-mavlink.git", rev = "a35d19c2708806f623406b5bfcd13a633416795a", package = "mavlink", default-features = false, features = ["std", "tokio", "serde", "format-generated-code", "mav2-message-extensions", "dialect-all"] }
 serde = { version = "1", features = ["derive"] }
@@ -30,7 +30,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-aptabase = "1"
 tauri-plugin-blec = "0.5"
 ardupilot-binlog = { git = "https://github.com/AveryanAlex/ardupilot-binlog.git", branch = "main" }
-tokio = { version = "1", features = ["io-util", "net", "sync"] }
+tokio = { version = "1", features = ["io-util", "net", "sync", "time"] }
 tokio-stream = "0.1"
 tracing = "0.1"
 uuid = "1"
@@ -48,8 +48,8 @@ tracing-subscriber = { version = "0.3", features = ["fmt"] }
 [target.'cfg(not(target_os = "android"))'.dependencies]
 mavkit = { git = "https://github.com/AveryanAlex/mavkit.git", branch = "main", features = ["serial"] }
 serialport = "4"
-nusb = "0.2"
-dfu-core = { version = "0.10", features = ["std"] }
+nusb = { version = "0.2", features = ["tokio"] }
+dfu-nusb = { version = "0.2", features = ["tokio"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 tauri-plugin-bluetooth-classic = { path = "../crates/tauri-plugin-bluetooth-classic" }

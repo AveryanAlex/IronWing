@@ -11,20 +11,19 @@ use crate::connection::ActiveLinkTarget;
 use crate::e2e_emit::emit_event;
 use crate::firmware::artifact;
 use crate::firmware::catalog::{
-    CatalogClient, fetch_supported_official_bootloader_targets_with_cache,
-    filter_catalog_targets_to_supported_official_bootloaders,
+    fetch_supported_official_bootloader_targets_with_cache,
     resolve_supported_official_bootloader_url,
 };
 use crate::firmware::dfu_recovery::{self, DfuRecoveryResult};
 use crate::firmware::discovery;
 use crate::firmware::serial_executor::{self, PreflightSnapshot};
 use crate::firmware::types::{
-    BOOTLOADER_INSTALLATION_PATH, CatalogEntry, CatalogTargetSummary, DfuDeviceInfo,
-    DfuRecoveryPhase, DfuRecoverySource, FIRMWARE_INSTALL_UPDATE_PATH, FirmwareError,
-    FirmwareProgress, FirmwareSessionStatus, InventoryResult, PortInfo, SerialBootloaderTransition,
-    SerialFlashOptions, SerialFlashPhase, SerialFlashSource, SerialFlowResult, SerialPreflightInfo,
-    SerialReadiness, SerialReadinessBlockedReason, SerialReadinessRequest, SerialReadinessResponse,
-    SerialReadinessTargetHint,
+    BOOTLOADER_INSTALLATION_PATH, DfuDeviceInfo, DfuRecoveryPhase, DfuRecoverySource,
+    FIRMWARE_INSTALL_UPDATE_PATH, FirmwareBootloaderBoardInfo, FirmwareError,
+    FirmwareInstallBootloaderStatus, FirmwareProgress, FirmwareRebootToBootloaderResult,
+    FirmwareSessionStatus, InventoryResult, PortInfo, SerialFlashOptions, SerialFlashPhase,
+    SerialFlashSource, SerialFlowResult, SerialPreflightInfo, SerialReadiness,
+    SerialReadinessBlockedReason, SerialReadinessRequest, SerialReadinessResponse,
 };
 use crate::helpers::ensure_live_write_allowed;
 use crate::ipc::OperationId;
@@ -142,6 +141,13 @@ pub(crate) async fn firmware_install_update(
         return Ok(result);
     }
 
+    let active_link_target = connection::active_link_target(&state).await;
+    if selected_port_has_active_serial_link(active_link_target.as_ref(), &port) {
+        let err = "selected serial port has an active MAVLink connection; reboot to bootloader before starting install".to_string();
+        finish_serial_session_failed(&state, err.clone());
+        return Err(err);
+    }
+
     let apj_bytes = match resolve_source_with_cancellation(&state, source).await {
         Ok(bytes) => bytes,
         Err(ResolveSerialSourceError::Cancelled) => {
@@ -169,73 +175,12 @@ pub(crate) async fn firmware_install_update(
         }
     };
 
-    let was_connected = connection::is_vehicle_connected(&state).await;
-    let active_link_target = connection::active_link_target(&state).await;
-
-    let bootloader_transition = serial_bootloader_transition(
-        &port,
-        &available_ports,
-        active_link_target.as_ref(),
-        was_connected,
-    );
     let preflight = capture_preflight(&port, baud);
 
     if cancellation_signal(&state) {
         let result = SerialFlowResult::Cancelled;
         finish_serial_session(&state, &result);
         return Ok(result);
-    }
-
-    if matches!(
-        bootloader_transition,
-        SerialBootloaderTransition::AutoRebootSupported
-    ) {
-        // Connected preflight path: request bootloader reboot via MAVLink, then disconnect
-        let reboot_result = {
-            if let Some(vehicle) = state.live_runtime.with_runtime(|runtime| runtime.vehicle()) {
-                vehicle.ardupilot().reboot_to_bootloader().await
-            } else {
-                Ok(())
-            }
-        };
-        if let Err(e) = &reboot_result {
-            tracing::warn!("bootloader reboot request failed (proceeding with disconnect): {e}");
-        }
-    }
-
-    if matches!(
-        bootloader_transition,
-        SerialBootloaderTransition::AutoRebootAttemptable
-    ) {
-        // Best-effort: open a temporary MAVLink session to reboot the board into bootloader.
-        // USB CDC ignores baud, and 115200 is ArduPilot's default MAVLink baud for true UARTs.
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(5),
-            mavkit::Vehicle::connect(&format!("serial:{port}:115200")),
-        )
-        .await
-        {
-            Ok(Ok(vehicle)) => {
-                if let Err(e) = vehicle.ardupilot().reboot_to_bootloader().await {
-                    tracing::warn!(
-                        "temporary MAVLink reboot-to-bootloader failed (proceeding): {e}"
-                    );
-                }
-                let _ = vehicle.disconnect().await;
-            }
-            Ok(Err(e)) => {
-                tracing::warn!("temporary MAVLink connection to {port} failed (proceeding): {e}");
-            }
-            Err(_) => {
-                tracing::warn!("temporary MAVLink connection to {port} timed out (proceeding)");
-            }
-        }
-    }
-
-    if let Err(err) = connection::force_disconnect(&state, &app).await {
-        let reason = err.to_string();
-        finish_serial_session_failed(&state, reason.clone());
-        return Err(reason);
     }
 
     if cancellation_requested(&state.firmware_session.status()) || cancellation_signal(&state) {
@@ -343,9 +288,6 @@ pub(crate) async fn firmware_install_update_preflight(
         _ => vec![],
     };
 
-    let detected_board_id =
-        crate::firmware::discovery::detect_board_id_from_ports(&available_ports);
-
     let session_status = state.firmware_session.status();
     let session_ready = matches!(session_status, FirmwareSessionStatus::Idle);
 
@@ -354,77 +296,9 @@ pub(crate) async fn firmware_install_update_preflight(
         param_count,
         has_params_to_backup: param_count > 0,
         available_ports,
-        detected_board_id,
         session_ready,
         session_status,
     })
-}
-
-#[tauri::command]
-pub(crate) async fn firmware_catalog_entries(
-    app: tauri::AppHandle,
-    board_id: u32,
-    platform: Option<String>,
-) -> Result<Vec<CatalogEntry>, String> {
-    tokio::task::spawn_blocking(move || {
-        let cache_dir = app
-            .path()
-            .app_cache_dir()
-            .unwrap_or_else(|_| std::env::temp_dir())
-            .join("firmware_catalog");
-        let client = CatalogClient::new(cache_dir.clone());
-        client
-            .get_entries_filtered_online(board_id, platform.as_deref())
-            .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| format!("catalog task failed: {e}"))?
-}
-
-#[tauri::command]
-pub(crate) async fn firmware_catalog_targets(
-    app: tauri::AppHandle,
-) -> Result<Vec<CatalogTargetSummary>, String> {
-    tokio::task::spawn_blocking(move || {
-        let cache_dir = app
-            .path()
-            .app_cache_dir()
-            .unwrap_or_else(|_| std::env::temp_dir())
-            .join("firmware_catalog");
-        let client = CatalogClient::new(cache_dir.clone());
-        client
-            .get_catalog_targets_online()
-            .map_err(|e| e.to_string())
-    })
-    .await
-    .map_err(|e| format!("catalog task failed: {e}"))?
-}
-
-#[tauri::command]
-pub(crate) async fn firmware_bootloader_catalog_targets(
-    app: tauri::AppHandle,
-) -> Result<Vec<CatalogTargetSummary>, String> {
-    tokio::task::spawn_blocking(move || {
-        let cache_dir = app
-            .path()
-            .app_cache_dir()
-            .unwrap_or_else(|_| std::env::temp_dir())
-            .join("firmware_catalog");
-        let client = CatalogClient::new(cache_dir.clone());
-        let targets = client
-            .get_catalog_targets_online()
-            .map_err(|e| e.to_string())?;
-        let supported = fetch_supported_official_bootloader_targets_with_cache(
-            cache_dir.join("bootloader_index"),
-            crate::firmware::catalog::fetch_bootloader_index_listing,
-        )
-        .map_err(|e| e.to_string())?;
-        Ok(filter_catalog_targets_to_supported_official_bootloaders(
-            &targets, &supported,
-        ))
-    })
-    .await
-    .map_err(|e| format!("catalog task failed: {e}"))?
 }
 
 #[tauri::command]
@@ -479,28 +353,114 @@ pub(crate) async fn firmware_install_update_readiness(
     };
 
     let session_status = state.firmware_session.status();
-    let vehicle_connected = connection::is_vehicle_connected(&state).await;
     let active_link_target = connection::active_link_target(&state).await;
-    let target_hint = serial_readiness_target_hint(&request.port, &available_ports);
     let blocked_reason =
         serial_readiness_blocked_reason(&request, &available_ports, &session_status);
-    let session_ready = blocked_reason.is_none();
     let readiness = serial_readiness(blocked_reason);
-    let bootloader_transition = serial_bootloader_transition(
-        &request.port,
-        &available_ports,
-        active_link_target.as_ref(),
-        vehicle_connected,
-    );
+    let bootloader_status =
+        serial_bootloader_status(&request.port, &available_ports, active_link_target.as_ref());
 
     Ok(SerialReadinessResponse {
         request_token: serial_readiness_request_token(&request),
         session_status,
         readiness,
-        target_hint,
-        validation_pending: serial_validation_pending(&request, session_ready),
-        bootloader_transition,
+        bootloader_status,
     })
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+pub(crate) async fn firmware_reboot_to_bootloader(
+    state: tauri::State<'_, AppState>,
+    app: tauri::AppHandle,
+    port: String,
+) -> Result<FirmwareRebootToBootloaderResult, String> {
+    if let Err(error) =
+        ensure_live_write_allowed(state.inner(), OperationId::FirmwareInstallUpdate).await
+    {
+        return Ok(FirmwareRebootToBootloaderResult::Failed { error });
+    }
+
+    let selected_port = port.trim();
+    if selected_port.is_empty() {
+        return Ok(FirmwareRebootToBootloaderResult::Unsupported {
+            reason: "choose a serial port before requesting bootloader reboot".into(),
+        });
+    }
+
+    if !connection::is_vehicle_connected(&state).await
+        || !selected_port_has_active_serial_link(
+            connection::active_link_target(&state).await.as_ref(),
+            selected_port,
+        )
+    {
+        return Ok(FirmwareRebootToBootloaderResult::Unsupported {
+            reason: "reboot is only available for the active live serial link on the selected port"
+                .into(),
+        });
+    }
+
+    let Some(vehicle) = state.live_runtime.with_runtime(|runtime| runtime.vehicle()) else {
+        return Ok(FirmwareRebootToBootloaderResult::Failed {
+            error: "active live vehicle runtime is unavailable".into(),
+        });
+    };
+
+    if let Err(error) = vehicle.ardupilot().reboot_to_bootloader().await {
+        return Ok(FirmwareRebootToBootloaderResult::Failed {
+            error: error.to_string(),
+        });
+    }
+
+    if let Err(error) = connection::force_disconnect(&state, &app).await {
+        return Ok(FirmwareRebootToBootloaderResult::Failed {
+            error: error.to_string(),
+        });
+    }
+
+    Ok(FirmwareRebootToBootloaderResult::Requested)
+}
+
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub(crate) async fn firmware_reboot_to_bootloader(
+    _state: tauri::State<'_, AppState>,
+    _app: tauri::AppHandle,
+    _port: String,
+) -> Result<FirmwareRebootToBootloaderResult, String> {
+    Ok(FirmwareRebootToBootloaderResult::Unsupported {
+        reason: "firmware serial reboot is not supported on this platform".into(),
+    })
+}
+
+#[cfg(not(target_os = "android"))]
+#[tauri::command]
+pub(crate) async fn firmware_detect_bootloader_board(
+    state: tauri::State<'_, AppState>,
+    port: String,
+) -> Result<FirmwareBootloaderBoardInfo, String> {
+    let selected_port = port.trim().to_string();
+    validate_bootloader_board_detection_target(
+        &selected_port,
+        connection::active_link_target(&state).await.as_ref(),
+    )?;
+
+    tokio::task::spawn_blocking(move || {
+        let deps = serial_executor::RealSerialDeps;
+        serial_executor::detect_bootloader_board(&deps, &selected_port, &|| false)
+            .map(|(_io, info)| serial_executor::build_bootloader_board_info(&selected_port, &info))
+            .map_err(|error| bootloader_board_detection_error(&selected_port, error))
+    })
+    .await
+    .unwrap_or_else(|error| Err(format!("bootloader board detection task failed: {error}")))
+}
+
+#[cfg(target_os = "android")]
+#[tauri::command]
+pub(crate) async fn firmware_detect_bootloader_board(
+    _port: String,
+) -> Result<FirmwareBootloaderBoardInfo, String> {
+    Err(crate::firmware::types::FirmwareError::PlatformUnsupported.to_string())
 }
 
 pub(crate) fn serial_readiness_request_token(request: &SerialReadinessRequest) -> String {
@@ -511,7 +471,7 @@ pub(crate) fn serial_readiness_request_token(request: &SerialReadinessRequest) -
     let (source_kind, source_identity) = serial_readiness_source_identity(&request.source);
 
     format!(
-        "serial-readiness:port={}:source_kind={source_kind}:source_identity={source_identity}:full_chip_erase={}",
+        "firmware-install-readiness:port={}:source_kind={source_kind}:source_identity={source_identity}:full_chip_erase={}",
         request.port,
         u8::from(full_chip_erase),
     )
@@ -553,66 +513,62 @@ fn serial_readiness(blocked_reason: Option<SerialReadinessBlockedReason>) -> Ser
     }
 }
 
-fn serial_validation_pending(request: &SerialReadinessRequest, session_ready: bool) -> bool {
-    session_ready && is_serial_source_ready(&request.source)
-}
-
-fn serial_readiness_target_hint(
-    port: &str,
-    available_ports: &[crate::firmware::types::PortInfo],
-) -> Option<SerialReadinessTargetHint> {
-    let detected_board_id = available_ports
-        .iter()
-        .find(|candidate| candidate.port_name == port)
-        .and_then(crate::firmware::discovery::detect_board_id_from_port);
-
-    Some(SerialReadinessTargetHint { detected_board_id })
-}
-
-fn should_auto_reboot_selected_serial_target(
+fn selected_port_has_active_serial_link(
     active_link_target: Option<&ActiveLinkTarget>,
     selected_port: &str,
-    vehicle_connected: bool,
 ) -> bool {
-    vehicle_connected
-        && matches!(
-            active_link_target,
-            Some(ActiveLinkTarget::Serial { port }) if port == selected_port
-        )
+    matches!(
+        active_link_target,
+        Some(ActiveLinkTarget::Serial { port }) if port == selected_port
+    )
 }
 
-fn serial_bootloader_transition(
+fn bootloader_board_detection_error(port: &str, error: FirmwareError) -> String {
+    match error {
+        FirmwareError::Timeout { .. }
+        | FirmwareError::BootloaderSyncMismatch { .. }
+        | FirmwareError::ProtocolError { .. }
+        | FirmwareError::IoTransient { .. } => {
+            format!("no ArduPilot bootloader responded on {port}: {error}")
+        }
+        other => other.to_string(),
+    }
+}
+
+fn validate_bootloader_board_detection_target(
+    selected_port: &str,
+    active_link_target: Option<&ActiveLinkTarget>,
+) -> Result<(), String> {
+    if selected_port.trim().is_empty() {
+        return Err("serial port not selected".into());
+    }
+
+    if selected_port_has_active_serial_link(active_link_target, selected_port) {
+        return Err("selected serial port has an active MAVLink connection; reboot to bootloader before autodetecting the board".into());
+    }
+
+    Ok(())
+}
+
+fn serial_bootloader_status(
     selected_port: &str,
     available_ports: &[crate::firmware::types::PortInfo],
     active_link_target: Option<&ActiveLinkTarget>,
-    vehicle_connected: bool,
-) -> SerialBootloaderTransition {
+) -> FirmwareInstallBootloaderStatus {
     let selected_port_info = available_ports
         .iter()
         .find(|candidate| candidate.port_name == selected_port);
 
-    if should_auto_reboot_selected_serial_target(
-        active_link_target,
-        selected_port,
-        vehicle_connected,
-    ) {
-        return SerialBootloaderTransition::AutoRebootSupported;
-    }
-
     if selected_port_info.is_some_and(crate::firmware::discovery::is_authoritative_bootloader_port)
     {
-        return SerialBootloaderTransition::AlreadyInBootloader;
+        return FirmwareInstallBootloaderStatus::AlreadyInBootloader;
     }
 
-    if selected_port_info.is_some_and(discovery::is_known_fc_application_port) {
-        return SerialBootloaderTransition::AutoRebootAttemptable;
+    if selected_port_has_active_serial_link(active_link_target, selected_port) {
+        return FirmwareInstallBootloaderStatus::NotInBootloader { can_reboot: true };
     }
 
-    if vehicle_connected {
-        return SerialBootloaderTransition::TargetMismatch;
-    }
-
-    SerialBootloaderTransition::ManualBootloaderEntryRequired
+    FirmwareInstallBootloaderStatus::Unknown
 }
 
 pub(crate) fn normalize_serial_options(
@@ -785,14 +741,10 @@ fn finish_serial_session_failed(state: &tauri::State<'_, AppState>, reason: Stri
 }
 
 fn capture_preflight(port: &str, baud: u32) -> PreflightSnapshot {
-    let ports_before = match crate::firmware::discovery::list_firmware_ports() {
-        InventoryResult::Available { ports } => ports,
-        _ => vec![],
-    };
     PreflightSnapshot {
         port: port.to_string(),
         baud,
-        ports_before,
+        ports_before: Vec::new(),
     }
 }
 
@@ -876,46 +828,18 @@ pub(crate) async fn firmware_bootloader_installation(
         return Ok(result);
     }
 
-    let (task, abort_handle) = {
-        let handle = tokio::task::spawn_blocking({
-            let app = app.clone();
-            let firmware_session = state.firmware_session.clone();
-            let device = request.device.clone();
-            let image = recovery_artifact.image;
-            let cancel_requested = state.firmware_cancel_requested.clone();
-            move || {
-                let usb = dfu_recovery::NusbDfuAccess::new();
-                dfu_recovery::execute_dfu_recovery_with_phases(
-                    &usb,
-                    &device,
-                    &image,
-                    &|| cancel_requested.load(Ordering::SeqCst),
-                    |phase| report_dfu_phase(&app, &firmware_session, phase),
-                    |written, total| {
-                        emit_dfu_progress(&app, DfuRecoveryPhase::Downloading, written, total)
-                    },
-                )
-            }
-        });
-        let abort = handle.abort_handle();
-        (handle, abort)
-    };
+    let mut usb = dfu_recovery::NusbDfuAccess::new();
+    let cancel_requested = state.firmware_cancel_requested.clone();
+    let result = dfu_recovery::execute_async_dfu_recovery_with_phases(
+        &mut usb,
+        &request.device,
+        &recovery_artifact.image,
+        &|| cancel_requested.load(Ordering::SeqCst),
+        |phase| report_dfu_phase(&app, &state.firmware_session, phase),
+        |written, total| emit_dfu_progress(&app, DfuRecoveryPhase::Downloading, written, total),
+    )
+    .await;
 
-    *state.firmware_abort.lock().await = Some(FirmwareAbortHandle::Cooperative {
-        _handle: abort_handle,
-    });
-
-    let result = task.await.unwrap_or_else(|e| {
-        if e.is_cancelled() {
-            DfuRecoveryResult::Cancelled
-        } else {
-            DfuRecoveryResult::Failed {
-                reason: format!("DFU recovery task panicked: {e}"),
-            }
-        }
-    });
-
-    *state.firmware_abort.lock().await = None;
     finish_dfu_session(&state, &result);
     Ok(result)
 }
@@ -965,13 +889,7 @@ async fn resolve_dfu_source(
 }
 
 pub(crate) fn apj_to_dfu_bin(apj_bytes: &[u8]) -> Result<Vec<u8>, FirmwareError> {
-    let parsed = artifact::parse_apj(apj_bytes)?;
-    if parsed.extf.is_some() {
-        return Err(FirmwareError::ManualDfuRecoveryRequiresSerialPath {
-            guidance: "this APJ contains an external-flash payload; DFU recovery can only write internal flash. Use the serial bootloader path for boards with external flash".into(),
-        });
-    }
-    Ok(parsed.image)
+    ironwing_firmware::dfu_flow::apj_to_dfu_bin(apj_bytes)
 }
 
 #[cfg(not(target_os = "android"))]
@@ -1147,13 +1065,13 @@ mod tests {
     use super::{
         SessionCancelAction, cancellation_requested, classify_dfu_pretransfer_error,
         classify_session_cancel_action, evaluate_serial_readiness, map_dfu_validation_error,
-        normalize_serial_options, serial_bootloader_transition, serial_readiness_blocked_reason,
-        serial_readiness_request_token, serial_readiness_target_hint, serial_validation_pending,
-        should_auto_reboot_selected_serial_target, with_serial_flash_start_guard,
+        normalize_serial_options, selected_port_has_active_serial_link, serial_bootloader_status,
+        serial_readiness_blocked_reason, serial_readiness_request_token,
+        validate_bootloader_board_detection_target, with_serial_flash_start_guard,
     };
     use crate::connection::ActiveLinkTarget;
     use crate::firmware::types::{
-        FirmwareSessionStatus, PortInfo, SerialBootloaderTransition, SerialFlashOptions,
+        FirmwareInstallBootloaderStatus, FirmwareSessionStatus, PortInfo, SerialFlashOptions,
         SerialFlashSource, SerialReadinessRequest,
     };
 
@@ -1361,29 +1279,6 @@ mod tests {
     }
 
     #[test]
-    fn serial_validation_pending_only_applies_to_startable_catalog_requests() {
-        let catalog = SerialReadinessRequest {
-            port: "/dev/ttyACM0".into(),
-            source: SerialFlashSource::CatalogUrl {
-                url: "https://example.com/fw.apj".into(),
-            },
-            options: None,
-        };
-        let local = SerialReadinessRequest {
-            port: "/dev/ttyACM0".into(),
-            source: SerialFlashSource::LocalApjBytes {
-                data: vec![1, 2, 3],
-            },
-            options: None,
-        };
-
-        assert!(serial_validation_pending(&catalog, true));
-        assert!(!serial_validation_pending(&catalog, false));
-        assert!(serial_validation_pending(&local, true));
-        assert!(!serial_validation_pending(&local, false));
-    }
-
-    #[test]
     fn serial_readiness_request_token_is_stable_for_identical_requests() {
         let request = SerialReadinessRequest {
             port: "/dev/ttyACM0".into(),
@@ -1518,82 +1413,44 @@ mod tests {
     }
 
     #[test]
-    fn serial_readiness_target_hint_uses_bootloader_product_when_vid_pid_is_insufficient() {
-        let ports = vec![PortInfo {
-            port_name: "/dev/ttyACM0".into(),
-            vid: None,
-            pid: None,
-            serial_number: Some("ABC123".into()),
-            manufacturer: Some("Hex".into()),
-            product: Some("CubeOrange Bootloader".into()),
-            location: Some("1-2".into()),
-        }];
-
-        let hint = serial_readiness_target_hint("/dev/ttyACM0", &ports);
-
-        assert_eq!(
-            hint.as_ref().and_then(|value| value.detected_board_id),
-            Some(140)
-        );
-    }
-
-    #[test]
-    fn serial_readiness_target_hint_uses_matek_bootloader_identity() {
-        let ports = vec![PortInfo {
-            port_name: "/dev/ttyACM0".into(),
-            vid: Some(0x1209),
-            pid: Some(0x5741),
-            serial_number: Some("36001D001647333135353532".into()),
-            manufacturer: Some("ArduPilot".into()),
-            product: Some("MatekF405-TE-BL".into()),
-            location: Some("pci-0000:02:00.0-usb-0:8:1.0".into()),
-        }];
-
-        let hint = serial_readiness_target_hint("/dev/ttyACM0", &ports);
-
-        assert_eq!(
-            hint.as_ref().and_then(|value| value.detected_board_id),
-            Some(1054)
-        );
-    }
-
-    #[test]
-    fn auto_reboot_requires_active_selected_serial_target_match() {
-        assert!(should_auto_reboot_selected_serial_target(
+    fn active_serial_match_requires_selected_port() {
+        assert!(selected_port_has_active_serial_link(
             Some(&ActiveLinkTarget::Serial {
                 port: "/dev/ttyACM0".into(),
             }),
             "/dev/ttyACM0",
-            true,
         ));
-        assert!(!should_auto_reboot_selected_serial_target(
+        assert!(!selected_port_has_active_serial_link(
             Some(&ActiveLinkTarget::Serial {
                 port: "/dev/ttyUSB1".into(),
             }),
             "/dev/ttyACM0",
-            true,
         ));
-        assert!(!should_auto_reboot_selected_serial_target(
+        assert!(!selected_port_has_active_serial_link(
             Some(&ActiveLinkTarget::Other),
             "/dev/ttyACM0",
-            true,
         ));
-        assert!(!should_auto_reboot_selected_serial_target(
-            None,
-            "/dev/ttyACM0",
-            true
-        ));
-        assert!(!should_auto_reboot_selected_serial_target(
-            Some(&ActiveLinkTarget::Serial {
-                port: "/dev/ttyACM0".into(),
-            }),
-            "/dev/ttyACM0",
-            false,
-        ));
+        assert!(!selected_port_has_active_serial_link(None, "/dev/ttyACM0"));
     }
 
     #[test]
-    fn serial_bootloader_transition_reports_already_in_bootloader_for_authoritative_identity() {
+    fn bootloader_board_detection_target_rejects_active_mavlink_port() {
+        let result = validate_bootloader_board_detection_target(
+            "/dev/ttyACM0",
+            Some(&ActiveLinkTarget::Serial {
+                port: "/dev/ttyACM0".into(),
+            }),
+        );
+
+        assert!(
+            result
+                .unwrap_err()
+                .contains("reboot to bootloader before autodetecting")
+        );
+    }
+
+    #[test]
+    fn serial_bootloader_status_reports_already_in_bootloader_for_authoritative_identity() {
         let ports = vec![PortInfo {
             port_name: "/dev/ttyACM0".into(),
             vid: Some(0x2DAE),
@@ -1605,13 +1462,13 @@ mod tests {
         }];
 
         assert!(matches!(
-            serial_bootloader_transition("/dev/ttyACM0", &ports, None, false,),
-            SerialBootloaderTransition::AlreadyInBootloader
+            serial_bootloader_status("/dev/ttyACM0", &ports, None),
+            FirmwareInstallBootloaderStatus::AlreadyInBootloader
         ));
     }
 
     #[test]
-    fn serial_bootloader_transition_reports_auto_reboot_only_for_proven_match() {
+    fn serial_bootloader_status_reports_not_in_bootloader_only_for_active_serial_match() {
         let ports = vec![PortInfo {
             port_name: "/dev/ttyACM0".into(),
             vid: Some(0x2DAE),
@@ -1623,33 +1480,29 @@ mod tests {
         }];
 
         assert!(matches!(
-            serial_bootloader_transition(
+            serial_bootloader_status(
                 "/dev/ttyACM0",
                 &ports,
                 Some(&ActiveLinkTarget::Serial {
                     port: "/dev/ttyACM0".into(),
                 }),
-                true,
             ),
-            SerialBootloaderTransition::AutoRebootSupported
+            FirmwareInstallBootloaderStatus::NotInBootloader { can_reboot: true }
         ));
-        // When connected on a different port but selected port has a known FC VID/PID,
-        // auto-reboot is attemptable via a temporary MAVLink session on the selected port.
         assert!(matches!(
-            serial_bootloader_transition(
+            serial_bootloader_status(
                 "/dev/ttyACM0",
                 &ports,
                 Some(&ActiveLinkTarget::Serial {
                     port: "/dev/ttyUSB1".into(),
                 }),
-                true,
             ),
-            SerialBootloaderTransition::AutoRebootAttemptable
+            FirmwareInstallBootloaderStatus::Unknown
         ));
     }
 
     #[test]
-    fn serial_bootloader_transition_reports_auto_reboot_attemptable_when_no_live_vehicle() {
+    fn serial_bootloader_status_reports_unknown_for_disconnected_application_port() {
         let ports = vec![PortInfo {
             port_name: "/dev/ttyACM0".into(),
             vid: Some(0x2DAE),
@@ -1661,64 +1514,37 @@ mod tests {
         }];
 
         assert!(matches!(
-            serial_bootloader_transition(
-                "/dev/ttyACM0",
-                &ports,
-                Some(&ActiveLinkTarget::Serial {
-                    port: "/dev/ttyACM0".into(),
-                }),
-                false,
-            ),
-            SerialBootloaderTransition::AutoRebootAttemptable
+            serial_bootloader_status("/dev/ttyACM0", &ports, None),
+            FirmwareInstallBootloaderStatus::Unknown
         ));
     }
 
     #[test]
-    fn serial_bootloader_transition_reports_auto_reboot_attemptable_when_known_fc_and_disconnected()
-    {
+    fn serial_bootloader_status_prefers_authoritative_bootloader_identity_over_active_match() {
         let ports = vec![PortInfo {
             port_name: "/dev/ttyACM0".into(),
-            vid: Some(0x2DAE),
-            pid: Some(0x1058),
-            serial_number: Some("app".into()),
+            vid: None,
+            pid: None,
+            serial_number: Some("BL123".into()),
             manufacturer: Some("Hex".into()),
-            product: Some("CubeOrange".into()),
+            product: Some("CubeOrange Bootloader".into()),
             location: None,
         }];
 
         assert!(matches!(
-            serial_bootloader_transition("/dev/ttyACM0", &ports, None, false),
-            SerialBootloaderTransition::AutoRebootAttemptable
-        ));
-    }
-
-    #[test]
-    fn serial_bootloader_transition_prefers_auto_reboot_over_ambiguous_matek_identity() {
-        let ports = vec![PortInfo {
-            port_name: "/dev/ttyACM0".into(),
-            vid: Some(0x1209),
-            pid: Some(0x5741),
-            serial_number: Some("36001D001647333135353532".into()),
-            manufacturer: Some("ArduPilot".into()),
-            product: Some("MatekF405-TE-BL".into()),
-            location: None,
-        }];
-
-        assert!(matches!(
-            serial_bootloader_transition(
+            serial_bootloader_status(
                 "/dev/ttyACM0",
                 &ports,
                 Some(&ActiveLinkTarget::Serial {
                     port: "/dev/ttyACM0".into(),
                 }),
-                true,
             ),
-            SerialBootloaderTransition::AutoRebootSupported
+            FirmwareInstallBootloaderStatus::AlreadyInBootloader
         ));
     }
 
     #[test]
-    fn serial_bootloader_transition_treats_ambiguous_matek_identity_as_manual_when_disconnected() {
+    fn serial_bootloader_status_reports_already_in_bootloader_for_matek_bl_suffix() {
         let ports = vec![PortInfo {
             port_name: "/dev/ttyACM0".into(),
             vid: Some(0x1209),
@@ -1730,27 +1556,8 @@ mod tests {
         }];
 
         assert!(matches!(
-            serial_bootloader_transition("/dev/ttyACM0", &ports, None, false),
-            SerialBootloaderTransition::ManualBootloaderEntryRequired
-        ));
-    }
-
-    #[test]
-    fn serial_bootloader_transition_reports_auto_reboot_attemptable_for_known_fc_port() {
-        // CubeOrange application-mode VID/PID, no active session
-        let ports = vec![PortInfo {
-            port_name: "/dev/ttyACM0".into(),
-            vid: Some(0x2DAE),
-            pid: Some(0x1058),
-            serial_number: Some("app".into()),
-            manufacturer: Some("Hex".into()),
-            product: Some("CubeOrange".into()),
-            location: None,
-        }];
-
-        assert!(matches!(
-            serial_bootloader_transition("/dev/ttyACM0", &ports, None, false),
-            SerialBootloaderTransition::AutoRebootAttemptable
+            serial_bootloader_status("/dev/ttyACM0", &ports, None),
+            FirmwareInstallBootloaderStatus::AlreadyInBootloader
         ));
     }
 

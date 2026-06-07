@@ -116,6 +116,7 @@ mod tests {
             system_status: mavkit::SystemStatus::Standby,
             vehicle_type: VehicleType::FixedWing,
             autopilot: AutopilotType::ArduPilotMega,
+            firmware_version: None,
             system_id: 1,
             component_id: 1,
             heartbeat_received: false,
@@ -123,6 +124,7 @@ mod tests {
         let json = serde_json::to_value(&state).expect("serialize VehicleState");
         assert_eq!(json["vehicle_type"], "fixed_wing");
         assert_eq!(json["autopilot"], "ardu_pilot_mega");
+        assert_eq!(json["firmware_version"], serde_json::Value::Null);
         assert_eq!(json["system_status"], "standby");
     }
 

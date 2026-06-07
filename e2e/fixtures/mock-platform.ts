@@ -424,6 +424,7 @@ export const firmwareWorkspaceSelectors = {
     catalogEntryState: `[data-testid="${firmwareWorkspaceTestIds.catalogEntryState}"]`,
     catalogEntryError: `[data-testid="${firmwareWorkspaceTestIds.catalogEntryError}"]`,
     catalogEntryRetry: `[data-testid="${firmwareWorkspaceTestIds.catalogEntryRetry}"]`,
+    catalogVehicleTypeSelect: `[data-testid="${firmwareWorkspaceTestIds.catalogVehicleTypeSelect}"]`,
     catalogEntrySelect: `[data-testid="${firmwareWorkspaceTestIds.catalogEntrySelect}"]`,
     sourceCatalog: `[data-testid="${firmwareWorkspaceTestIds.sourceCatalog}"]`,
     sourceLocal: `[data-testid="${firmwareWorkspaceTestIds.sourceLocal}"]`,
@@ -526,7 +527,6 @@ export type MockPlatformFixture = {
     emitLiveSessionState: (vehicleState: MockLiveVehicleState) => Promise<void>;
     emitLiveTelemetryDomain: (telemetry: OpenSessionSnapshot["telemetry"]) => Promise<void>;
     emitLiveSupportDomain: (support: OpenSessionSnapshot["support"]) => Promise<void>;
-    emitLiveConfigurationFactsDomain: (facts: OpenSessionSnapshot["configuration_facts"]) => Promise<void>;
     emitLiveCalibrationDomain: (calibration: OpenSessionSnapshot["calibration"]) => Promise<void>;
     emitLiveStatusTextDomain: (statusText: OpenSessionSnapshot["status_text"]) => Promise<void>;
     emitMissionState: (missionState: MockMissionState) => Promise<void>;
@@ -845,7 +845,6 @@ async function emitLiveScopedDomain<T>(
     event:
         | "telemetry://state"
         | "support://state"
-        | "configuration_facts://state"
         | "calibration://state"
         | "status_text://state",
     value: T,
@@ -927,12 +926,12 @@ export async function expectOperatorWorkspace(page: Page): Promise<void> {
 }
 
 export async function openSetupWorkspace(page: Page): Promise<void> {
-    const setupButton = page.getByRole("button", { name: "Setup" });
+    const setupLink = page.getByRole("link", { name: "Setup", exact: true });
     await expect(
-        setupButton,
+        setupLink,
         "Setup workspace entry point is missing; keep the shared shell workspace labels aligned with the shipped header tabs.",
     ).toBeVisible();
-    await setupButton.click();
+    await setupLink.click();
     await expectSetupWorkspace(page);
 }
 
@@ -1247,10 +1246,6 @@ export function setupNavLocator(page: Page, sectionId: string): Locator {
     return page.locator(`[data-testid="${setupWorkspaceTestIds.navPrefix}-${sectionId}"]`);
 }
 
-export function setupNavGroupProgressLocator(page: Page, groupId: string): Locator {
-    return page.locator(`[data-testid="${setupWorkspaceTestIds.navGroupProgressPrefix}-${groupId}"]`);
-}
-
 export function setupStatusNoticeLocator(page: Page, noticeId: string): Locator {
     return page.locator(`[data-testid="${setupWorkspaceTestIds.statusNoticePrefix}-${noticeId}"]`);
 }
@@ -1269,10 +1264,6 @@ export function setupOverviewDocLinkLocator(page: Page, docId: string): Locator 
 
 export function setupOverviewGroupCountLocator(page: Page, groupId: string): Locator {
     return page.locator(`[data-testid="${setupWorkspaceTestIds.overviewGroupCountPrefix}-${groupId}"]`);
-}
-
-export function setupOverviewGroupProgressLocator(page: Page, groupId: string): Locator {
-    return page.locator(`[data-testid="${setupWorkspaceTestIds.overviewGroupProgressPrefix}-${groupId}"]`);
 }
 
 export function setupOverviewQuickActionLocator(page: Page, actionId: string): Locator {
@@ -1776,7 +1767,6 @@ export const test = base.extend<Fixtures>({
             emitLiveSessionState: (vehicleState) => withMockController(page, "emitLiveSessionState", vehicleState),
             emitLiveTelemetryDomain: (telemetry) => emitLiveScopedDomain(page, "telemetry://state", telemetry),
             emitLiveSupportDomain: (support) => emitLiveScopedDomain(page, "support://state", support),
-            emitLiveConfigurationFactsDomain: (facts) => emitLiveScopedDomain(page, "configuration_facts://state", facts),
             emitLiveCalibrationDomain: (calibration) => emitLiveScopedDomain(page, "calibration://state", calibration),
             emitLiveStatusTextDomain: (statusText) => emitLiveScopedDomain(page, "status_text://state", statusText),
             emitMissionState: (missionState) => withMockController(page, "emitMissionState", missionState),

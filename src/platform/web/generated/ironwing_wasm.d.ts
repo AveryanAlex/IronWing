@@ -38,6 +38,7 @@ export class IronwingWasmRuntime {
     rallyDownload(): Promise<any>;
     rallyUpload(plan: any): Promise<void>;
     rcOverride(channels: any): Promise<void>;
+    rebootToBootloader(): Promise<void>;
     rebootVehicle(): Promise<void>;
     requestPrearmChecks(): Promise<void>;
     setFlightMode(custom_mode: number): Promise<void>;
@@ -63,12 +64,6 @@ export class WasmByteBridge {
 
 export function availableMessageRates(): any;
 
-export function firmwareBootloaderCatalogTargetsFromManifest(manifest_gz: Uint8Array, bootloader_index_html: string): any;
-
-export function firmwareCatalogEntriesFromManifest(manifest_gz: Uint8Array, board_id: number, platform?: string | null): any;
-
-export function firmwareCatalogTargetsFromManifest(manifest_gz: Uint8Array): any;
-
 export function logChartSeriesQuery(path: string, format: string, bytes: Uint8Array, request: any): any;
 
 export function logExportCsvBytes(path: string, format: string, bytes: Uint8Array, request: any): any;
@@ -89,9 +84,13 @@ export function logTelemetryTrack(path: string, format: string, bytes: Uint8Arra
 
 export function start(): void;
 
+export function webSerialDetectBootloaderBoard(port_name: string, serial_adapter: any, is_cancelled: Function): Promise<any>;
+
 export function webSerialFirmwareInstallUpdate(port_name: string, serial_adapter: any, source: any, options: any, progress_sink: Function, is_cancelled: Function): Promise<any>;
 
 export function webTransportDescriptors(websocket_available: boolean, web_serial_available: boolean, web_bluetooth_available: boolean): any;
+
+export function webUsbBootloaderInstallation(usb_device: any, device_info: any, source: any, progress_sink: Function, is_cancelled: Function): Promise<any>;
 
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
@@ -100,9 +99,6 @@ export interface InitOutput {
     readonly __wbg_ironwingwasmruntime_free: (a: number, b: number) => void;
     readonly __wbg_wasmbytebridge_free: (a: number, b: number) => void;
     readonly availableMessageRates: () => [number, number, number];
-    readonly firmwareBootloaderCatalogTargetsFromManifest: (a: number, b: number, c: number, d: number) => [number, number, number];
-    readonly firmwareCatalogEntriesFromManifest: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
-    readonly firmwareCatalogTargetsFromManifest: (a: number, b: number) => [number, number, number];
     readonly ironwingwasmruntime_ackSessionSnapshot: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly ironwingwasmruntime_armVehicle: (a: number, b: number) => any;
     readonly ironwingwasmruntime_beginConnect: (a: number) => [number, number, number];
@@ -137,6 +133,7 @@ export interface InitOutput {
     readonly ironwingwasmruntime_rallyDownload: (a: number) => any;
     readonly ironwingwasmruntime_rallyUpload: (a: number, b: any) => any;
     readonly ironwingwasmruntime_rcOverride: (a: number, b: any) => any;
+    readonly ironwingwasmruntime_rebootToBootloader: (a: number) => any;
     readonly ironwingwasmruntime_rebootVehicle: (a: number) => any;
     readonly ironwingwasmruntime_requestPrearmChecks: (a: number) => any;
     readonly ironwingwasmruntime_setFlightMode: (a: number, b: number) => any;
@@ -162,11 +159,19 @@ export interface InitOutput {
     readonly wasmbytebridge_isClosed: (a: number) => number;
     readonly wasmbytebridge_nextOutbound: (a: number) => any;
     readonly wasmbytebridge_pushInbound: (a: number, b: any) => any;
+    readonly webSerialDetectBootloaderBoard: (a: number, b: number, c: any, d: any) => any;
     readonly webSerialFirmwareInstallUpdate: (a: number, b: number, c: any, d: any, e: any, f: any, g: any) => any;
     readonly webTransportDescriptors: (a: number, b: number, c: number) => [number, number, number];
-    readonly wasm_bindgen__convert__closures_____invoke__hd4c8cbd6c98bd34a: (a: number, b: number, c: any) => [number, number];
-    readonly wasm_bindgen__convert__closures_____invoke__h2b1cbf5ec2613011: (a: number, b: number, c: any, d: any) => void;
-    readonly wasm_bindgen__convert__closures_____invoke__h5a562c310a1ac94f: (a: number, b: number) => void;
+    readonly webUsbBootloaderInstallation: (a: any, b: any, c: any, d: any, e: any) => any;
+    readonly wasm_bindgen__convert__closures_____invoke__h8f67efa4787c1885: (a: number, b: number, c: any) => [number, number];
+    readonly wasm_bindgen__convert__closures_____invoke__h079663ee66662fca: (a: number, b: number, c: any) => [number, number];
+    readonly wasm_bindgen__convert__closures_____invoke__h079663ee66662fca_3: (a: number, b: number, c: any) => [number, number];
+    readonly wasm_bindgen__convert__closures_____invoke__h079663ee66662fca_4: (a: number, b: number, c: any) => [number, number];
+    readonly wasm_bindgen__convert__closures_____invoke__h12fab0fa72c2c1f7: (a: number, b: number, c: any) => [number, number];
+    readonly wasm_bindgen__convert__closures_____invoke__h18c16e2faf47c920: (a: number, b: number, c: any, d: any) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__h3000400f0ba28d99: (a: number, b: number, c: any) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__h5f4a1cc399451ae6: (a: number, b: number) => void;
+    readonly wasm_bindgen__convert__closures_____invoke__h7931cd75748053bb: (a: number, b: number) => void;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_exn_store: (a: number) => void;

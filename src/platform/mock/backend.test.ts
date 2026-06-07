@@ -15,9 +15,9 @@ import type {
     FirmwareInstallPreflightInfo,
     FirmwareInstallReadinessRequest,
     FirmwareInstallResult,
-    InventoryResult,
     PortInfo,
 } from "../../firmware";
+import type { SerialPortInventoryResult } from "../../serial-ports";
 
 import { getMockPlatformController, invokeMockCommand, listenMockEvent, type MockLogSeedPreset } from "./backend";
 
@@ -89,7 +89,6 @@ describe("mock guided backend parity", () => {
 
         expect(snapshot.session.provenance).toBe("playback");
         expect(snapshot.sensor_health).toEqual({ available: false, complete: false, provenance: "playback", value: null });
-        expect(snapshot.configuration_facts).toEqual({ available: false, complete: false, provenance: "playback", value: null });
         expect(snapshot.calibration).toEqual({ available: false, complete: false, provenance: "playback", value: null });
         expect(snapshot.telemetry.value.flight.altitude_m).toBeNull();
         expect(snapshot.playback.cursor_usec).toBeNull();
@@ -223,6 +222,7 @@ describe("mock guided backend parity", () => {
             system_status: "standby",
             vehicle_type: "copter",
             autopilot: "ardupilot",
+            firmware_version: null,
             system_id: 42,
             component_id: 24,
             heartbeat_received: true,
@@ -236,7 +236,6 @@ describe("mock guided backend parity", () => {
         expect(live.telemetry.provenance).toBe("bootstrap");
         expect(live.support).toEqual({ available: true, complete: false, provenance: "bootstrap", value: null });
         expect(live.sensor_health).toEqual({ available: true, complete: false, provenance: "bootstrap", value: null });
-        expect(live.configuration_facts).toEqual({ available: true, complete: false, provenance: "bootstrap", value: null });
         expect(live.calibration).toEqual({ available: true, complete: false, provenance: "bootstrap", value: null });
     });
 
@@ -570,7 +569,6 @@ describe("mock guided backend parity", () => {
             listenMockEvent("status_text://state", () => seen.push("status_text://state")),
             listenMockEvent("playback://state", () => seen.push("playback://state")),
             listenMockEvent("sensor_health://state", () => seen.push("sensor_health://state")),
-            listenMockEvent("configuration_facts://state", () => seen.push("configuration_facts://state")),
             listenMockEvent("calibration://state", () => seen.push("calibration://state")),
         ];
 
@@ -837,6 +835,7 @@ describe("mock guided backend parity", () => {
             system_status: "ACTIVE",
             vehicle_type: "copter",
             autopilot: "ardupilot",
+            firmware_version: null,
             system_id: 1,
             component_id: 1,
             heartbeat_received: true,
@@ -914,10 +913,11 @@ describe("mock discovery backend parity", () => {
             { kind: "bluetooth_ble", label: "BLE", available: true, validation: { address_required: true } },
             { kind: "bluetooth_spp", label: "SPP", available: true, validation: { address_required: true } },
         ]);
-        await expect(invokeMockCommand("list_serial_ports_cmd")).resolves.toEqual([
-            "/dev/ttyUSB0",
-            "/dev/ttyACM0",
-        ]);
+        await expect(invokeMockCommand("list_serial_port_inventory")).resolves.toEqual({
+            kind: "available",
+            ports: [expect.objectContaining({ port_name: "/dev/ttyACM0" })],
+            can_request_web_serial: false,
+        });
         await expect(invokeMockCommand("bt_request_permissions")).resolves.toBeUndefined();
         await expect(invokeMockCommand("bt_get_bonded_devices")).resolves.toEqual([
             { name: "Demo SPP Radio", address: "11:22:33:44:55:66", device_type: "classic" },
@@ -1494,7 +1494,6 @@ describe("mock firmware backend parity", () => {
             param_count: 0,
             has_params_to_backup: false,
             available_ports: expectedPorts,
-            detected_board_id: null,
             session_ready: true,
             session_status: { kind: "idle" },
         });
@@ -1502,8 +1501,8 @@ describe("mock firmware backend parity", () => {
         await expect(invokeMockCommand("firmware_session_status")).resolves.toEqual({ kind: "idle" });
         await expect(invokeMockCommand("firmware_session_clear_completed")).resolves.toBeUndefined();
 
-        const ports = await invokeMockCommand<InventoryResult>("firmware_list_ports");
-        expect(ports).toEqual({ kind: "available", ports: expectedPorts });
+        const ports = await invokeMockCommand<SerialPortInventoryResult>("list_serial_port_inventory");
+        expect(ports).toEqual({ kind: "available", ports: expectedPorts, can_request_web_serial: false });
 
         const dfuDevices = await invokeMockCommand<DfuScanResult>("firmware_list_dfu_devices");
         expect(dfuDevices).toEqual({
@@ -1594,9 +1593,25 @@ describe("mock firmware backend parity", () => {
             request_token: "firmware-install-readiness:port=/dev/ttyACM0:source_kind=catalog_url:source_identity=41-c7f40b36334f961c:full_chip_erase=0",
             session_status: { kind: "idle" },
             readiness: { kind: "advisory" },
-            target_hint: null,
-            validation_pending: true,
-            bootloader_transition: { kind: "manual_bootloader_entry_required" },
+            bootloader_status: { kind: "unknown" },
+        });
+
+        await expect(invokeMockCommand("firmware_reboot_to_bootloader", {
+            port: "/dev/ttyACM0",
+        })).resolves.toEqual({
+            result: "unsupported",
+            reason: "Mock firmware backend has no live serial link to reboot.",
+        });
+
+        await expect(invokeMockCommand("firmware_detect_bootloader_board", {
+            port: "/dev/ttyACM0",
+        })).resolves.toEqual({
+            port: "/dev/ttyACM0",
+            board_id: 140,
+            board_rev: 1,
+            bootloader_rev: 5,
+            flash_size: 2_097_152,
+            extf_size: null,
         });
 
         const serialResult = await invokeMockCommand<FirmwareInstallResult>("firmware_install_update", {

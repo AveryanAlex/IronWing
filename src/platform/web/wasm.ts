@@ -1,6 +1,6 @@
 import { emitWebEvent } from "./event";
 import type { RcOverrideChannel } from "../../calibration";
-import type { CatalogEntry, CatalogTargetSummary, FirmwareInstallOptions, FirmwareInstallResult, FirmwareInstallSource } from "../../firmware";
+import type { BootloaderInstallationResult, BootloaderInstallationSource, DfuDeviceInfo, FirmwareBootloaderBoardInfo, FirmwareInstallOptions, FirmwareInstallResult, FirmwareInstallSource } from "../../firmware";
 import type { StartGuidedSessionRequest, UpdateGuidedSessionRequest, GuidedCommandResult } from "../../guided";
 import type { ChartSeriesPage, ChartSeriesRequest, FlightSummary, LogDataPoint, LogExportRequest, LogExportResult, LogFormat, LogSummary, RawMessagePage, RawMessageQuery } from "../../logs";
 import type { FencePlan, MissionDownload, MissionIssue, MissionPlan, RallyPlan } from "../../mission";
@@ -155,26 +155,41 @@ export async function wasmWebSerialFirmwareInstallUpdate(options: {
   ) as Promise<FirmwareInstallResult>;
 }
 
-export async function wasmFirmwareCatalogEntriesFromManifest(
-  manifestGz: Uint8Array,
-  boardId: number,
-  platform?: string | null,
-): Promise<CatalogEntry[]> {
+export async function wasmWebSerialDetectBootloaderBoard(options: {
+  portName: string;
+  serialAdapter: unknown;
+  isCancelled: () => boolean;
+}): Promise<FirmwareBootloaderBoardInfo> {
   const module = await ensureWasmModule();
-  return module.firmwareCatalogEntriesFromManifest(manifestGz, boardId, platform ?? null) as CatalogEntry[];
+  const webSerialDetectBootloaderBoard = (module as unknown as {
+    webSerialDetectBootloaderBoard(
+      portName: string,
+      serialAdapter: unknown,
+      isCancelled: () => boolean,
+    ): Promise<FirmwareBootloaderBoardInfo>;
+  }).webSerialDetectBootloaderBoard;
+  return webSerialDetectBootloaderBoard(
+    options.portName,
+    options.serialAdapter,
+    options.isCancelled,
+  );
 }
 
-export async function wasmFirmwareCatalogTargetsFromManifest(manifestGz: Uint8Array): Promise<CatalogTargetSummary[]> {
+export async function wasmWebUsbBootloaderInstallation(options: {
+  usbDevice: unknown;
+  deviceInfo: DfuDeviceInfo;
+  source: BootloaderInstallationSource;
+  onProgress: (phase: string, written: number, total: number) => void;
+  isCancelled: () => boolean;
+}): Promise<BootloaderInstallationResult> {
   const module = await ensureWasmModule();
-  return module.firmwareCatalogTargetsFromManifest(manifestGz) as CatalogTargetSummary[];
-}
-
-export async function wasmFirmwareBootloaderCatalogTargetsFromManifest(
-  manifestGz: Uint8Array,
-  bootloaderIndexHtml: string,
-): Promise<CatalogTargetSummary[]> {
-  const module = await ensureWasmModule();
-  return module.firmwareBootloaderCatalogTargetsFromManifest(manifestGz, bootloaderIndexHtml) as CatalogTargetSummary[];
+  return module.webUsbBootloaderInstallation(
+    options.usbDevice,
+    options.deviceInfo,
+    options.source,
+    options.onProgress,
+    options.isCancelled,
+  ) as Promise<BootloaderInstallationResult>;
 }
 
 export async function wasmParamDownloadAll(): Promise<void> {
@@ -310,6 +325,16 @@ export async function wasmCalibrateCompassCancel(compassMask: number): Promise<v
 export async function wasmRebootVehicle(): Promise<void> {
   const runtime = await ensureWasmRuntime();
   return runtime.rebootVehicle();
+}
+
+export async function wasmRebootToBootloader(): Promise<void> {
+  const runtime = await ensureWasmRuntime();
+  return runtime.rebootToBootloader();
+}
+
+export async function wasmDisconnectLink(): Promise<void> {
+  const runtime = await ensureWasmRuntime();
+  return runtime.disconnectLink();
 }
 
 export async function wasmMotorTest(motorInstance: number, throttlePct: number, durationS: number): Promise<void> {

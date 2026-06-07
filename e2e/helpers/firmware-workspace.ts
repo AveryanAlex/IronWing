@@ -93,6 +93,23 @@ export async function selectManualTarget(
     });
 }
 
+export async function chooseCatalogRelease(
+    page: Page,
+    options: { vehicleType?: string; versionUrl?: string } = {},
+): Promise<void> {
+    const vehicleType = options.vehicleType ?? "Copter";
+    const versionUrl = options.versionUrl ?? "https://example.com/cubeorange-copter.apj";
+
+    const vehicleSelect = firmwareLocator(page, "catalogVehicleTypeSelect");
+    await expect(vehicleSelect, "Vehicle type selector should appear after choosing a catalog board.").toBeVisible();
+    await vehicleSelect.selectOption(vehicleType);
+
+    const versionSelect = firmwareLocator(page, "catalogEntrySelect");
+    await expect(versionSelect, "Firmware version selector should be enabled after choosing a vehicle type.").toBeEnabled();
+    await versionSelect.selectOption(versionUrl);
+    await expect(firmwareLocator(page, "selectedSourceState")).toContainText("catalog_url");
+}
+
 export async function waitForSerialStartEnabled(page: Page): Promise<void> {
     await expect(
         firmwareLocator(page, "startSerial"),
@@ -259,6 +276,8 @@ export async function chooseLocalSerialApj(
     const openStateBefore = await readOpenFileState(mockPlatform);
     const queued = await queueFirmwareBinarySelection(mockPlatform, { ...fixture, kind: "apj" });
 
+    await firmwareLocator(page, "sourceLocal").click();
+    await expect(firmwareLocator(page, "sourceBrowse")).toBeVisible();
     await firmwareLocator(page, "sourceBrowse").click();
     await waitForOpenFileCount(mockPlatform, openStateBefore.openCount + 1);
     await expect(firmwareLocator(page, "selectedSourceState")).toContainText("local_apj_bytes");
@@ -275,6 +294,9 @@ export async function chooseLocalRecoveryFile(
     const openStateBefore = await readOpenFileState(mockPlatform);
     const queued = await queueFirmwareBinarySelection(mockPlatform, fixture);
 
+    await firmwareLocator(page, "recoveryAdvancedToggle").click();
+    await expect(firmwareLocator(page, "recoveryManualPanel")).toBeVisible();
+    await firmwareLocator(page, fixture.kind === "apj" ? "recoveryManualApj" : "recoveryManualBin").click();
     await firmwareLocator(page, "recoveryBrowse").click();
     await waitForOpenFileCount(mockPlatform, openStateBefore.openCount + 1);
     await expect(firmwareLocator(page, "recoverySourceState")).toContainText(

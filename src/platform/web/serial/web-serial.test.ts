@@ -1,18 +1,20 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
-  isWebSerialFirmwareAvailable,
-  listGrantedWebSerialFirmwarePorts,
-  openWebSerialFirmwarePort,
-  requestWebSerialFirmwarePort,
+  isWebSerialGrantAvailable,
+  listGrantedWebSerialPorts,
+  openWebSerialPort,
+  requestWebSerialPort,
+  resetGrantedWebSerialPortsForTests,
 } from "./web-serial";
 
-describe("web serial firmware adapter", () => {
+describe("web serial registry and adapter", () => {
   afterEach(() => {
+    resetGrantedWebSerialPortsForTests();
     vi.unstubAllGlobals();
   });
 
-  it("requests and lists granted firmware ports with USB metadata", async () => {
+  it("requests and lists granted ports with USB metadata", async () => {
     const port = makePort();
     vi.stubGlobal("navigator", {
       serial: {
@@ -21,13 +23,13 @@ describe("web serial firmware adapter", () => {
       },
     });
 
-    expect(isWebSerialFirmwareAvailable()).toBe(true);
-    await expect(requestWebSerialFirmwarePort()).resolves.toEqual(expect.objectContaining({
+    expect(isWebSerialGrantAvailable()).toBe(true);
+    await expect(requestWebSerialPort()).resolves.toEqual(expect.objectContaining({
       port_name: "webserial:1",
       vid: 1155,
       pid: 22336,
     }));
-    await expect(listGrantedWebSerialFirmwarePorts()).resolves.toEqual([
+    await expect(listGrantedWebSerialPorts()).resolves.toEqual([
       expect.objectContaining({ port_name: "webserial:1" }),
     ]);
   });
@@ -54,8 +56,8 @@ describe("web serial firmware adapter", () => {
       },
     });
 
-    const granted = await requestWebSerialFirmwarePort();
-    const adapter = await openWebSerialFirmwarePort(granted.port_name, 115200, new AbortController().signal);
+    const granted = await requestWebSerialPort();
+    const adapter = await openWebSerialPort(granted.port_name, 115200, new AbortController().signal);
     controller.enqueue(new Uint8Array([1, 2, 3, 4]));
     await new Promise((resolve) => setTimeout(resolve, 0));
 

@@ -692,6 +692,14 @@ impl IronwingWasmRuntime {
             .map_err(|error| JsValue::from_str(&error.to_string()))
     }
 
+    #[wasm_bindgen(js_name = rebootToBootloader)]
+    pub async fn reboot_to_bootloader(&self) -> Result<(), JsValue> {
+        let vehicle = live_vehicle_for_write(&self.state, OperationId::FirmwareInstallUpdate)?;
+        live_commands::reboot_to_bootloader(&vehicle)
+            .await
+            .map_err(|error| JsValue::from_str(&error.to_string()))
+    }
+
     #[wasm_bindgen(js_name = motorTest)]
     pub async fn motor_test(
         &self,
@@ -1002,20 +1010,12 @@ fn spawn_demo_stepper(state: &Rc<RefCell<RuntimeState>>) {
 }
 
 fn wasm_vehicle_config() -> mavkit::VehicleConfig {
-    let mut init_policy = mavkit::InitPolicyConfig::default();
-    init_policy.autopilot_version.enabled = false;
-    init_policy.available_modes.enabled = false;
-    init_policy.home.enabled = false;
-    init_policy.origin.enabled = false;
-
-    mavkit::VehicleConfig {
-        connect_timeout: Duration::from_secs(20),
-        command_timeout: Duration::from_secs(10),
-        command_completion_timeout: Duration::from_secs(20),
-        init_policy,
-        auto_request_home: false,
-        ..mavkit::VehicleConfig::default()
-    }
+    ironwing_core::vehicle_config::adapter_vehicle_config(
+        Duration::from_secs(20),
+        Duration::from_secs(10),
+        Duration::from_secs(20),
+        Duration::from_secs(20),
+    )
 }
 
 fn spawn_runtime_task(
