@@ -2,6 +2,7 @@ use std::{env, error::Error, fs, path::PathBuf, process};
 
 mod commands;
 mod events;
+mod json_wire;
 
 use ironwing_core::{
     ipc::{self, calibration, guided, logs},
@@ -73,6 +74,8 @@ fn generated_files() -> Result<Vec<(&'static str, String)>, Box<dyn Error>> {
         ("ironwing.ts", generated_ironwing()?),
         ("events.ts", generated_events()?),
         ("commands.ts", generated_commands()?),
+        ("ironwing-json.ts", generated_ironwing_json()),
+        ("mavkit-json.ts", generated_mavkit_json()),
         ("index.ts", generated_index()),
     ])
 }
@@ -340,9 +343,17 @@ fn generated_commands() -> Result<String, Box<dyn Error>> {
     Ok(with_header(commands::command_names_ts()?))
 }
 
+fn generated_ironwing_json() -> String {
+    with_header(json_wire::ironwing_json_ts())
+}
+
+fn generated_mavkit_json() -> String {
+    with_header(json_wire::mavkit_json_ts())
+}
+
 fn generated_index() -> String {
     with_header(
-        "export * as MavkitContracts from \"./mavkit\";\nexport * as IronWingContracts from \"./ironwing\";\nexport * from \"./events\";\nexport * from \"./commands\";\n",
+        "export * as MavkitContracts from \"./mavkit\";\nexport * as IronWingContracts from \"./ironwing\";\nexport * as MavkitJsonContracts from \"./mavkit-json\";\nexport * as IronWingJsonContracts from \"./ironwing-json\";\nexport * from \"./events\";\nexport * from \"./commands\";\n",
     )
 }
 
