@@ -219,7 +219,7 @@ export type InvokeCommandMap = {
   param_download_all: CommandSpec<NoArgs, void>;
   param_format_file: CommandSpec<{ store: ParamStore }, string>;
   param_parse_file: CommandSpec<{ contents: string }, Record<string, number>>;
-  param_write: CommandSpec<{ name: string; value: number }, Param>;
+  param_write: CommandSpec<{ name: string; value: number }, ParamWriteResult>;
   param_write_batch: CommandSpec<{ params: [string, number][] }, ParamWriteResult[]>;
   playback_pause: CommandSpec<NoArgs, PlaybackStateSnapshot>;
   playback_play: CommandSpec<NoArgs, PlaybackStateSnapshot>;

@@ -84,7 +84,7 @@ export async function cancelParamDownload(): Promise<void> {
   return typedInvoke("param_cancel");
 }
 
-export async function writeParam(name: string, value: number): Promise<Param> {
+export async function writeParam(name: string, value: number): Promise<ParamWriteResult> {
   return typedInvoke("param_write", { name, value });
 }
 

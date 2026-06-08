@@ -5,10 +5,10 @@ import { createWebSocketTransport } from "../transports/websocket";
 import { isWebSerialGrantAvailable } from "../serial/web-serial";
 import { FIRMWARE_INSTALL_UPDATE_WEB_UNSUPPORTED_GUIDANCE } from "../../../lib/firmware/platform-guidance";
 import { resetActiveConnection, webBackendRuntime, type WebActiveLinkTarget } from "./runtime";
-import { handled, WEB_COMMAND_UNHANDLED } from "./command-handler";
+import { definePlatformCommandHandlers } from "./command-handler";
 import { observeRecordingInboundBridge, startAutoRecordingOnConnect, stopWebRecording } from "./recording";
 import { unsupported } from "./unsupported";
-import type { WebCommandArgs, WebCommandResult } from "./command-handler";
+import type { WebOnlyCommandHandlers } from "./command-handler";
 import type { TransportDescriptor } from "../../../transport";
 import type { Capability, RuntimeCapabilities } from "../../../lib/generated/ironwing";
 
@@ -21,6 +21,11 @@ type WebConnectTransportRequest = {
   port_id?: string;
   profile?: "nordic_uart";
   vehicle_preset?: string;
+};
+
+type WebConnectLinkRequest = {
+  transport?: WebConnectTransportRequest;
+  auto_record_on_connect?: boolean;
 };
 
 export const maybe = (reason: string): Capability => ({ kind: "maybe", reason });
@@ -54,51 +59,36 @@ export async function webRuntimeCapabilities(): Promise<RuntimeCapabilities> {
   };
 }
 
-export async function tryHandleSessionCommand(cmd: string, args?: WebCommandArgs): Promise<WebCommandResult> {
-  switch (cmd) {
-    case "available_transports":
-      return handled(await webTransportDescriptors());
-    case "runtime_capabilities":
-      return handled(await webRuntimeCapabilities());
-    case "bt_request_permissions":
-    case "bt_stop_scan_ble":
-      return handled(undefined);
-    case "bt_scan_ble":
-    case "bt_get_bonded_devices":
-      return handled([]);
-    case "connect_link":
-      return handled(await connectLink(cmd, args));
-    case "open_session_snapshot": {
-      const runtime = await ensureLoadedWasmRuntime();
-      return handled(runtime.openSessionSnapshot(String(args?.sourceKind ?? "live")));
+export const sessionCommandHandlers = definePlatformCommandHandlers({
+  available_transports: async () => webTransportDescriptors(),
+  bt_request_permissions: async () => undefined,
+  bt_stop_scan_ble: async () => undefined,
+  bt_scan_ble: async () => [],
+  bt_get_bonded_devices: async () => [],
+  connect_link: async ({ request }) => connectLink("connect_link", request),
+  open_session_snapshot: async ({ sourceKind }) => {
+    const runtime = await ensureLoadedWasmRuntime();
+    return runtime.openSessionSnapshot(sourceKind);
+  },
+  ack_session_snapshot: async ({ sessionId, seekEpoch, resetRevision }) => {
+    const runtime = await ensureLoadedWasmRuntime();
+    return runtime.ackSessionSnapshot(sessionId, seekEpoch, resetRevision);
+  },
+  disconnect_link: async () => {
+    stopWebRecording({ saveToUserDestination: false });
+    await resetActiveConnection();
+    if (webBackendRuntime.runtimeLoaded) {
+      const runtime = await ensureWasmRuntime();
+      await runtime.disconnectLink();
     }
-    case "ack_session_snapshot": {
-      const runtime = await ensureLoadedWasmRuntime();
-      return handled(runtime.ackSessionSnapshot(
-        String(args?.sessionId ?? ""),
-        Number(args?.seekEpoch ?? 0),
-        Number(args?.resetRevision ?? 0),
-      ));
-    }
-    case "disconnect_link": {
-      stopWebRecording({ saveToUserDestination: false });
-      await resetActiveConnection();
-      if (webBackendRuntime.runtimeLoaded) {
-        const runtime = await ensureWasmRuntime();
-        await runtime.disconnectLink();
-      }
-      return handled(undefined);
-    }
-    default:
-      return WEB_COMMAND_UNHANDLED;
-  }
-}
+  },
+});
 
-async function connectLink(cmd: string, args?: WebCommandArgs): Promise<void> {
-  const request = args?.request as {
-    transport?: WebConnectTransportRequest;
-    auto_record_on_connect?: boolean;
-  } | undefined;
+export const webSessionCommandHandlers = {
+  runtime_capabilities: async () => webRuntimeCapabilities(),
+} satisfies WebOnlyCommandHandlers;
+
+async function connectLink(cmd: string, request: WebConnectLinkRequest | undefined): Promise<void> {
   if (!request?.transport) {
     throw new Error("connect_link requires a transport request");
   }

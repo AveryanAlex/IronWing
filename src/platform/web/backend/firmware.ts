@@ -12,8 +12,8 @@ import {
   openWebSerialPort,
 } from "../serial/web-serial";
 import { IDLE_WEB_FIRMWARE_STATUS, resetActiveConnection, webBackendRuntime } from "./runtime";
-import { handled, WEB_COMMAND_UNHANDLED } from "./command-handler";
-import type { WebCommandArgs, WebCommandResult } from "./command-handler";
+import { definePlatformCommandHandlers } from "./command-handler";
+import type { WebCommandArgs, WebOnlyCommandHandlers } from "./command-handler";
 import type {
   BootloaderInstallationResult,
   BootloaderInstallationSource,
@@ -78,56 +78,45 @@ type WebUsb = {
 
 type WebUsbNavigator = Navigator & { usb?: WebUsb };
 
-export async function tryHandleFirmwareCommand(cmd: string, args?: WebCommandArgs): Promise<WebCommandResult> {
-  switch (cmd) {
-    case "firmware_session_status":
-      return handled(webBackendRuntime.firmwareSessionStatus);
-    case "firmware_session_cancel":
-      webBackendRuntime.firmwareInstallAbort?.abort();
-      if (webBackendRuntime.firmwareSessionStatus.kind === "firmware_install_update") {
-        webBackendRuntime.firmwareSessionStatus = { kind: "cancelling", path: "firmware_install_update" };
-      } else if (webBackendRuntime.firmwareSessionStatus.kind === "bootloader_installation") {
-        webBackendRuntime.firmwareSessionStatus = { kind: "cancelling", path: "bootloader_installation" };
-      }
-      return handled(undefined);
-    case "firmware_session_clear_completed":
-      if (webBackendRuntime.firmwareSessionStatus.kind === "completed") {
-        webBackendRuntime.firmwareSessionStatus = IDLE_WEB_FIRMWARE_STATUS;
-      }
-      return handled(undefined);
-    case "firmware_list_dfu_devices":
-      return handled(await webDfuDevices());
-    case "firmware_install_update_preflight": {
-      const availablePorts = await webFirmwarePorts();
-      return handled({
-        vehicle_connected: false,
-        param_count: 0,
-        has_params_to_backup: false,
-        available_ports: availablePorts,
-        session_ready: isWebSerialGrantAvailable() && isFirmwareSessionReady(webBackendRuntime.firmwareSessionStatus),
-        session_status: webBackendRuntime.firmwareSessionStatus,
-      } satisfies FirmwareInstallPreflightInfo);
+export const firmwareCommandHandlers = definePlatformCommandHandlers({
+  firmware_session_status: () => webBackendRuntime.firmwareSessionStatus,
+  firmware_session_cancel: () => {
+    webBackendRuntime.firmwareInstallAbort?.abort();
+    if (webBackendRuntime.firmwareSessionStatus.kind === "firmware_install_update") {
+      webBackendRuntime.firmwareSessionStatus = { kind: "cancelling", path: "firmware_install_update" };
+    } else if (webBackendRuntime.firmwareSessionStatus.kind === "bootloader_installation") {
+      webBackendRuntime.firmwareSessionStatus = { kind: "cancelling", path: "bootloader_installation" };
     }
-    case "firmware_catalog_targets":
-      return handled(await firmwareCatalogTargets());
-    case "firmware_bootloader_catalog_targets":
-      return handled(await firmwareBootloaderCatalogTargets());
-    case "firmware_catalog_entries":
-      return handled(await firmwareCatalogEntries(args));
-    case "firmware_install_update_readiness":
-      return handled(await firmwareInstallUpdateReadiness(args));
-    case "firmware_reboot_to_bootloader":
-      return handled(await firmwareRebootToBootloader(args));
-    case "firmware_detect_bootloader_board":
-      return handled(await firmwareDetectBootloaderBoard(args));
-    case "firmware_install_update":
-      return handled(await firmwareInstallUpdate(args));
-    case "firmware_bootloader_installation":
-      return handled(await firmwareBootloaderInstallation(args));
-    default:
-      return WEB_COMMAND_UNHANDLED;
-  }
-}
+  },
+  firmware_session_clear_completed: () => {
+    if (webBackendRuntime.firmwareSessionStatus.kind === "completed") {
+      webBackendRuntime.firmwareSessionStatus = IDLE_WEB_FIRMWARE_STATUS;
+    }
+  },
+  firmware_list_dfu_devices: async () => webDfuDevices(),
+  firmware_install_update_preflight: async () => {
+    const availablePorts = await webFirmwarePorts();
+    return {
+      vehicle_connected: false,
+      param_count: 0,
+      has_params_to_backup: false,
+      available_ports: availablePorts,
+      session_ready: isWebSerialGrantAvailable() && isFirmwareSessionReady(webBackendRuntime.firmwareSessionStatus),
+      session_status: webBackendRuntime.firmwareSessionStatus,
+    } satisfies FirmwareInstallPreflightInfo;
+  },
+  firmware_install_update_readiness: async (args?) => firmwareInstallUpdateReadiness(args?.request),
+  firmware_reboot_to_bootloader: async (args?) => firmwareRebootToBootloader(args?.port),
+  firmware_detect_bootloader_board: async (args?) => firmwareDetectBootloaderBoard(args?.port),
+  firmware_install_update: async (args?) => firmwareInstallUpdate(args?.request),
+  firmware_bootloader_installation: async (args?) => firmwareBootloaderInstallation(args?.request),
+});
+
+export const webFirmwareCommandHandlers = {
+  firmware_catalog_targets: async () => firmwareCatalogTargets(),
+  firmware_bootloader_catalog_targets: async () => firmwareBootloaderCatalogTargets(),
+  firmware_catalog_entries: async (args) => firmwareCatalogEntries(args),
+} satisfies WebOnlyCommandHandlers;
 
 export function isFirmwareSessionReady(status: FirmwareSessionStatus): boolean {
   return status.kind === "idle" || status.kind === "completed";
@@ -425,8 +414,7 @@ export function fnv1a64Digest(bytes: number[]): string {
   return hash.toString(16).padStart(16, "0");
 }
 
-async function firmwareInstallUpdateReadiness(args?: WebCommandArgs): Promise<FirmwareInstallReadinessResponse> {
-  const readinessRequest = args?.request as FirmwareInstallReadinessRequest | undefined;
+async function firmwareInstallUpdateReadiness(readinessRequest?: FirmwareInstallReadinessRequest): Promise<FirmwareInstallReadinessResponse> {
   const availablePorts = await webFirmwarePorts();
   const blockedReason = readinessRequest
     ? webFirmwareInstallReadinessBlockedReason(readinessRequest, availablePorts, webBackendRuntime.firmwareSessionStatus)
@@ -443,8 +431,8 @@ async function firmwareInstallUpdateReadiness(args?: WebCommandArgs): Promise<Fi
   };
 }
 
-async function firmwareRebootToBootloader(args?: WebCommandArgs): Promise<FirmwareRebootToBootloaderResult> {
-  const port = String(args?.port ?? "").trim();
+async function firmwareRebootToBootloader(portValue?: string): Promise<FirmwareRebootToBootloaderResult> {
+  const port = String(portValue ?? "").trim();
   if (port.length === 0) {
     return {
       result: "unsupported",
@@ -482,12 +470,12 @@ async function disconnectAfterWebBootloaderReboot(): Promise<void> {
   }
 }
 
-async function firmwareDetectBootloaderBoard(args?: WebCommandArgs): Promise<FirmwareBootloaderBoardInfo> {
+async function firmwareDetectBootloaderBoard(portValue?: string): Promise<FirmwareBootloaderBoardInfo> {
   if (!isWebSerialGrantAvailable()) {
     throw new Error(WEB_SERIAL_FLASH_UNSUPPORTED_REASON);
   }
 
-  const port = String(args?.port ?? "");
+  const port = String(portValue ?? "");
   if (port.trim().length === 0) {
     throw new Error("serial port not selected");
   }
@@ -509,7 +497,12 @@ async function firmwareDetectBootloaderBoard(args?: WebCommandArgs): Promise<Fir
   }
 }
 
-async function firmwareInstallUpdate(args?: WebCommandArgs): Promise<FirmwareInstallResult> {
+async function firmwareInstallUpdate(request?: {
+  port?: string;
+  baud?: number;
+  source?: FirmwareInstallSource;
+  options?: FirmwareInstallOptions | null;
+}): Promise<FirmwareInstallResult> {
   if (!isWebSerialGrantAvailable()) {
     return WEB_SERIAL_FLASH_UNSUPPORTED_RESULT;
   }
@@ -517,12 +510,6 @@ async function firmwareInstallUpdate(args?: WebCommandArgs): Promise<FirmwareIns
     throw new Error("firmware session already active: firmware_install_update");
   }
 
-  const request = args?.request as {
-    port?: string;
-    baud?: number;
-    source?: FirmwareInstallSource;
-    options?: FirmwareInstallOptions | null;
-  } | undefined;
   const port = String(request?.port ?? "");
   const source = request?.source;
   const options = request?.options ?? null;
@@ -583,7 +570,10 @@ async function firmwareInstallUpdate(args?: WebCommandArgs): Promise<FirmwareIns
   }
 }
 
-async function firmwareBootloaderInstallation(args?: WebCommandArgs): Promise<BootloaderInstallationResult> {
+async function firmwareBootloaderInstallation(request?: {
+  device?: DfuDeviceInfo;
+  source?: BootloaderInstallationSource;
+}): Promise<BootloaderInstallationResult> {
   if (!browserWebUsb()) {
     return WEB_BOOTLOADER_INSTALLATION_UNSUPPORTED_RESULT;
   }
@@ -591,10 +581,6 @@ async function firmwareBootloaderInstallation(args?: WebCommandArgs): Promise<Bo
     throw new Error("firmware session already active: firmware_bootloader_installation");
   }
 
-  const request = args?.request as {
-    device?: DfuDeviceInfo;
-    source?: BootloaderInstallationSource;
-  } | undefined;
   const device = request?.device;
   const source = request?.source;
   if (!device) {

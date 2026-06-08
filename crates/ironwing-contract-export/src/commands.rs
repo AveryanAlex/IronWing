@@ -278,7 +278,7 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
     command("param_download_all", "NoArgs", "void", ALL_PLATFORMS),
     command("param_format_file", "{ store: ParamStore }", "string", ALL_PLATFORMS),
     command("param_parse_file", "{ contents: string }", "Record<string, number>", ALL_PLATFORMS),
-    command("param_write", "{ name: string; value: number }", "Param", ALL_PLATFORMS),
+    command("param_write", "{ name: string; value: number }", "ParamWriteResult", ALL_PLATFORMS),
     command("param_write_batch", "{ params: [string, number][] }", "ParamWriteResult[]", ALL_PLATFORMS),
     command("playback_pause", "NoArgs", "PlaybackStateSnapshot", ALL_PLATFORMS),
     command("playback_play", "NoArgs", "PlaybackStateSnapshot", ALL_PLATFORMS),

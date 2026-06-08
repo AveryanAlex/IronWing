@@ -3,7 +3,8 @@ import type { RcOverrideChannel } from "../../calibration";
 import type { BootloaderInstallationResult, BootloaderInstallationSource, DfuDeviceInfo, FirmwareBootloaderBoardInfo, FirmwareInstallOptions, FirmwareInstallResult, FirmwareInstallSource } from "../../firmware";
 import type { StartGuidedSessionRequest, UpdateGuidedSessionRequest, GuidedCommandResult } from "../../guided";
 import type { ChartSeriesPage, ChartSeriesRequest, FlightSummary, LogDataPoint, LogExportRequest, LogExportResult, LogFormat, LogSummary, RawMessagePage, RawMessageQuery } from "../../logs";
-import type { FencePlan, MissionDownload, MissionIssue, MissionPlan, RallyPlan } from "../../mission";
+import type { FencePlan, MissionDownload, MissionIssue, RallyPlan } from "../../mission";
+import type { WireMissionPlan } from "../../lib/mavkit-types";
 import type { ParamStore, ParamWriteResult } from "../../params";
 import type { FlightPathPoint, TelemetrySnapshot } from "../../playback";
 import type { MessageRateInfo } from "../../telemetry";
@@ -222,12 +223,12 @@ export async function wasmParamFormatFile(store: ParamStore): Promise<string> {
   return runtime.paramFormatFile(store);
 }
 
-export async function wasmMissionValidate(plan: MissionPlan): Promise<MissionIssue[]> {
+export async function wasmMissionValidate(plan: WireMissionPlan): Promise<MissionIssue[]> {
   const runtime = await ensureWasmRuntime();
   return runtime.missionValidate(plan) as MissionIssue[];
 }
 
-export async function wasmMissionUpload(plan: MissionPlan): Promise<void> {
+export async function wasmMissionUpload(plan: WireMissionPlan): Promise<void> {
   const runtime = await ensureWasmRuntime();
   return runtime.missionUpload(plan);
 }

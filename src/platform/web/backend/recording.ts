@@ -1,9 +1,8 @@
 import { saveBrowserBytes } from "./browser-files";
 import { getBrowserPersistentStorage } from "./browser-storage";
-import { handled, WEB_COMMAND_UNHANDLED } from "./command-handler";
+import { definePlatformCommandHandlers } from "./command-handler";
 import { registerBrowserLogBytes } from "./logs";
 import type { BrowserFileMetadata, BrowserSaveResult } from "./browser-files";
-import type { WebCommandArgs, WebCommandResult } from "./command-handler";
 import type { RecordingMode, RecordingSettings, RecordingSettingsResult, RecordingStartRequest, RecordingStatus } from "../../../recording";
 import type { OperationFailure } from "../../../session";
 import type { WasmByteBridge } from "../types";
@@ -39,25 +38,16 @@ let activeRecording: ActiveRecording | null = null;
 let stoppingRecording: StoppingRecording | null = null;
 let failedRecording: OperationFailure | null = null;
 
-export function tryHandleRecordingCommand(cmd: string, args?: WebCommandArgs): WebCommandResult {
-  switch (cmd) {
-    case "recording_start":
-      return handled(startWebRecording((args?.request ?? {}) as Partial<RecordingStartRequest>));
-    case "recording_stop":
-      return handled(stopWebRecording());
-    case "recording_status":
-      return handled(webRecordingStatus());
-    case "recording_settings_read":
-      return handled({
-        operation_id: "recording_settings_read",
-        settings: webRecordingSettings,
-      } satisfies RecordingSettingsResult);
-    case "recording_settings_write":
-      return handled(writeWebRecordingSettings((args?.settings ?? {}) as Partial<RecordingSettings>));
-    default:
-      return WEB_COMMAND_UNHANDLED;
-  }
-}
+export const recordingCommandHandlers = definePlatformCommandHandlers({
+  recording_start: ({ request }) => startWebRecording(request),
+  recording_stop: () => stopWebRecording(),
+  recording_status: () => webRecordingStatus(),
+  recording_settings_read: () => ({
+    operation_id: "recording_settings_read",
+    settings: webRecordingSettings,
+  }) satisfies RecordingSettingsResult,
+  recording_settings_write: ({ settings }) => writeWebRecordingSettings(settings),
+});
 
 export function observeRecordingInboundBridge(bridge: WasmByteBridge): WasmByteBridge {
   return {

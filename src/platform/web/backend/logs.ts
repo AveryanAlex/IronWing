@@ -10,7 +10,7 @@ import {
   wasmLogTelemetryAt,
   wasmLogTelemetryTrack,
 } from "../wasm";
-import { handled, WEB_COMMAND_UNHANDLED } from "./command-handler";
+import { definePlatformCommandHandlers } from "./command-handler";
 import {
   BROWSER_LOG_STORAGE_LOCATION,
   createEmptyBrowserLogLibraryCatalog,
@@ -18,7 +18,6 @@ import {
 } from "./browser-storage";
 import { metadataForBrowserFile, openBrowserBinaryFile, saveBrowserBytes } from "./browser-files";
 import type { BrowserFileMetadata } from "./browser-files";
-import type { WebCommandArgs, WebCommandResult } from "./command-handler";
 import type {
   ChartSeriesRequest,
   LogDiagnostic,
@@ -77,6 +76,20 @@ type BrowserPlayback = {
   startCursorUsec: number;
 };
 
+type LogQueryArgs = {
+  msgType: string;
+  startUsec: number | null;
+  endUsec: number | null;
+  maxPoints: number | null;
+};
+
+type FlightPathArgs =
+  | { maxPoints: number | null }
+  | { entryId: string; startUsec: number | null; endUsec: number | null; maxPoints: number | null };
+
+type TelemetryTrackArgs = { maxPoints: number | null };
+type LogExportCsvArgs = { path: string; startUsec: number | null; endUsec: number | null };
+
 let activeLog: ActiveLog | null = null;
 let activeOperation: AbortController | null = null;
 let playback: BrowserPlayback = {
@@ -87,62 +100,35 @@ let playback: BrowserPlayback = {
   startCursorUsec: 0,
 };
 
-export async function tryHandleLogCommand(cmd: string, args?: WebCommandArgs): Promise<WebCommandResult> {
-  switch (cmd) {
-    case "log_format_adapters":
-      return handled(WEB_LOG_FORMAT_ADAPTERS);
-    case "log_library_list":
-      return handled(await getBrowserPersistentStorage().loadLogCatalog());
-    case "log_library_register":
-      return handled(await registerPath(String(args?.path ?? "")));
-    case "log_library_register_open_file":
-      return handled(await registerOpenFile());
-    case "log_library_remove":
-      return handled(await removeEntry(String(args?.entryId ?? "")));
-    case "log_library_relink":
-      return handled(await relinkEntry(String(args?.entryId ?? ""), String(args?.path ?? "")));
-    case "log_library_reindex":
-      return handled(await reindexEntry(String(args?.entryId ?? "")));
-    case "log_library_cancel":
-      return handled(cancelLogOperation());
-    case "log_open":
-      return handled(await openStoredLog(String(args?.path ?? "")));
-    case "log_query":
-      return handled(await queryActiveLogMessages(args));
-    case "log_get_summary":
-      return handled(activeLog?.summary ?? null);
-    case "log_close":
-      stopPlayback(false);
-      activeLog = null;
-      return handled(undefined);
-    case "log_raw_messages_query":
-      return handled(await queryRawMessages(args?.request as RawMessageQuery));
-    case "log_chart_series_query":
-      return handled(await queryChartSeries(args?.request as ChartSeriesRequest));
-    case "log_get_flight_path":
-      return handled(await getFlightPath(args));
-    case "log_get_telemetry_track":
-      return handled(await getTelemetryTrack(args));
-    case "log_get_flight_summary":
-      return handled(await getFlightSummary());
-    case "log_export":
-      return handled(await exportLog(args));
-    case "log_export_csv":
-      return handled(await exportCompatCsv(args));
-    case "playback_play":
-      return handled(await playPlayback());
-    case "playback_pause":
-      return handled(pausePlayback());
-    case "playback_seek":
-      return handled(await seekPlayback(args?.cursorUsec == null ? null : Number(args.cursorUsec)));
-    case "playback_set_speed":
-      return handled(await setPlaybackSpeed(Number(args?.speed ?? 1)));
-    case "playback_stop":
-      return handled(stopPlayback(true));
-    default:
-      return WEB_COMMAND_UNHANDLED;
-  }
-}
+export const logCommandHandlers = definePlatformCommandHandlers({
+  log_format_adapters: () => WEB_LOG_FORMAT_ADAPTERS,
+  log_library_list: async () => getBrowserPersistentStorage().loadLogCatalog(),
+  log_library_register: async ({ path }) => registerPath(path),
+  log_library_register_open_file: async () => registerOpenFile(),
+  log_library_remove: async ({ entryId }) => removeEntry(entryId),
+  log_library_relink: async ({ entryId, path }) => relinkEntry(entryId, path),
+  log_library_reindex: async ({ entryId }) => reindexEntry(entryId),
+  log_library_cancel: () => cancelLogOperation(),
+  log_open: async ({ path }) => openStoredLog(path),
+  log_query: async (args) => queryActiveLogMessages(args),
+  log_get_summary: () => activeLog?.summary ?? null,
+  log_close: () => {
+    stopPlayback(false);
+    activeLog = null;
+  },
+  log_raw_messages_query: async ({ request }) => queryRawMessages(request),
+  log_chart_series_query: async ({ request }) => queryChartSeries(request),
+  log_get_flight_path: async (args) => getFlightPath(args),
+  log_get_telemetry_track: async (args) => getTelemetryTrack(args),
+  log_get_flight_summary: async () => getFlightSummary(),
+  log_export: async ({ request }) => exportLog(request),
+  log_export_csv: async (args) => exportCompatCsv(args),
+  playback_play: async () => playPlayback(),
+  playback_pause: () => pausePlayback(),
+  playback_seek: async ({ cursorUsec }) => seekPlayback(cursorUsec),
+  playback_set_speed: async ({ speed }) => setPlaybackSpeed(speed),
+  playback_stop: () => stopPlayback(true),
+});
 
 async function registerOpenFile(): Promise<LogLibraryEntry | null> {
   if (!canOpenBrowserPicker()) {
@@ -304,16 +290,16 @@ async function openStoredLog(path: string) {
   return parsed.summary;
 }
 
-async function queryActiveLogMessages(args?: WebCommandArgs) {
+async function queryActiveLogMessages(args: LogQueryArgs) {
   const log = requireActiveLog();
   return wasmLogQueryMessages({
     path: log.sourcePath,
     format: log.format,
     bytes: log.bytes,
-    msgType: String(args?.msgType ?? ""),
-    startUsec: args?.startUsec == null ? null : Number(args.startUsec),
-    endUsec: args?.endUsec == null ? null : Number(args.endUsec),
-    maxPoints: args?.maxPoints == null ? null : Number(args.maxPoints),
+    msgType: args.msgType,
+    startUsec: args.startUsec,
+    endUsec: args.endUsec,
+    maxPoints: args.maxPoints,
   });
 }
 
@@ -327,21 +313,21 @@ async function queryChartSeries(request: ChartSeriesRequest) {
   return wasmLogChartSeriesQuery(log.sourcePath, log.format, log.bytes, request);
 }
 
-async function getFlightPath(args?: WebCommandArgs) {
-  const log = args?.entryId ? await logForEntry(String(args.entryId)) : requireActiveLog();
+async function getFlightPath(args: FlightPathArgs) {
+  const log = "entryId" in args ? await logForEntry(args.entryId) : requireActiveLog();
   return wasmLogFlightPath({
     path: log.sourcePath,
     format: log.format,
     bytes: log.bytes,
-    startUsec: args?.startUsec == null ? null : Number(args.startUsec),
-    endUsec: args?.endUsec == null ? null : Number(args.endUsec),
-    maxPoints: args?.maxPoints == null ? null : Number(args.maxPoints),
+    startUsec: "startUsec" in args ? args.startUsec : null,
+    endUsec: "endUsec" in args ? args.endUsec : null,
+    maxPoints: args.maxPoints,
   });
 }
 
-async function getTelemetryTrack(args?: WebCommandArgs) {
+async function getTelemetryTrack(args: TelemetryTrackArgs) {
   const log = requireActiveLog();
-  return wasmLogTelemetryTrack(log.sourcePath, log.format, log.bytes, args?.maxPoints == null ? null : Number(args.maxPoints));
+  return wasmLogTelemetryTrack(log.sourcePath, log.format, log.bytes, args.maxPoints);
 }
 
 async function getFlightSummary() {
@@ -349,8 +335,7 @@ async function getFlightSummary() {
   return wasmLogFlightSummary(log.sourcePath, log.format, log.bytes);
 }
 
-async function exportLog(args?: WebCommandArgs) {
-  const request = args?.request as LogExportRequest;
+async function exportLog(request: LogExportRequest) {
   const log = await logForEntry(request.entry_id);
   const result = await wasmLogExportCsvBytes(log.sourcePath, log.format, log.bytes, request);
   const bytes = new Uint8Array(result.bytes);
@@ -364,20 +349,20 @@ async function exportLog(args?: WebCommandArgs) {
   return wireResult;
 }
 
-async function exportCompatCsv(args?: WebCommandArgs): Promise<number> {
+async function exportCompatCsv(args: LogExportCsvArgs): Promise<number> {
   const log = requireActiveLog();
   const request = {
     entry_id: log.entryId,
     instance_id: "browser-compat-export",
     format: "csv" as const,
-    destination_path: String(args?.path ?? `${log.summary.file_name}.csv`),
-    start_usec: args?.startUsec == null ? null : Number(args.startUsec),
-    end_usec: args?.endUsec == null ? null : Number(args.endUsec),
+    destination_path: args.path,
+    start_usec: args.startUsec,
+    end_usec: args.endUsec,
     message_types: [],
     text: null,
     field_filters: [],
   };
-  const result = await exportLog({ request });
+  const result = await exportLog(request);
   return result.rows_written;
 }
 

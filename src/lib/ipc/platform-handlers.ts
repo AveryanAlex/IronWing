@@ -12,6 +12,13 @@ export function definePlatformCommandHandlers<const H extends PlatformCommandHan
   return handlers;
 }
 
+export function hasPlatformCommandHandler(
+  handlers: PlatformCommandHandlers,
+  command: PropertyKey,
+): command is keyof InvokeCommandMap {
+  return Object.prototype.hasOwnProperty.call(handlers, command);
+}
+
 export function invokePlatformCommand<C extends NoArgCommandName>(
   handlers: PlatformCommandHandlers,
   command: C,

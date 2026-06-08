@@ -1,5 +1,5 @@
 export { invokeWebCommand } from "./commands";
-export type { WebCommandArgs, WebCommandHandler, WebCommandResult } from "./command-handler";
+export type { WebCommandArgs, WebOnlyCommandHandler, WebOnlyCommandHandlers } from "./command-handler";
 export {
   ensureLoadedWasmRuntime,
   maybe,

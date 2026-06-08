@@ -1,35 +1,50 @@
-import { tryHandleFirmwareCommand } from "./firmware";
-import { tryHandleGuidedCommand } from "./guided";
-import { tryHandleLogCommand } from "./logs";
-import { tryHandleMissionCommand } from "./mission";
-import { tryHandleParamCommand } from "./params";
-import { tryHandleRecordingCommand } from "./recording";
-import { tryHandleSerialPortCommand } from "./serial-ports";
-import { tryHandleSessionCommand } from "./session";
-import { tryHandleSetupActionCommand } from "./setup-actions";
+import { firmwareCommandHandlers, webFirmwareCommandHandlers } from "./firmware";
+import { guidedCommandHandlers } from "./guided";
+import { logCommandHandlers } from "./logs";
+import { missionCommandHandlers } from "./mission";
+import { paramCommandHandlers } from "./params";
+import { recordingCommandHandlers } from "./recording";
+import { serialPortCommandHandlers } from "./serial-ports";
+import { sessionCommandHandlers, webSessionCommandHandlers } from "./session";
+import { setupActionCommandHandlers } from "./setup-actions";
 import { unsupported } from "./unsupported";
-import { tryHandleVehicleControlCommand } from "./vehicle-control";
-import type { WebCommandArgs, WebCommandHandler } from "./command-handler";
+import { vehicleControlCommandHandlers } from "./vehicle-control";
+import {
+  hasPlatformCommandHandler,
+  invokePlatformCommand,
+  type PlatformCommandHandlers,
+  type WebCommandArgs,
+  type WebOnlyCommandHandlers,
+} from "./command-handler";
 
-const commandHandlers: WebCommandHandler[] = [
-  tryHandleSessionCommand,
-  tryHandleSerialPortCommand,
-  tryHandleVehicleControlCommand,
-  tryHandleGuidedCommand,
-  tryHandleSetupActionCommand,
-  tryHandleLogCommand,
-  tryHandleRecordingCommand,
-  tryHandleFirmwareCommand,
-  tryHandleParamCommand,
-  tryHandleMissionCommand,
-];
+const commandHandlers: PlatformCommandHandlers = Object.assign(
+  {},
+  sessionCommandHandlers,
+  serialPortCommandHandlers,
+  vehicleControlCommandHandlers,
+  guidedCommandHandlers,
+  setupActionCommandHandlers,
+  logCommandHandlers,
+  recordingCommandHandlers,
+  firmwareCommandHandlers,
+  paramCommandHandlers,
+  missionCommandHandlers,
+);
+
+const webOnlyCommandHandlers: WebOnlyCommandHandlers = Object.assign(
+  {},
+  webSessionCommandHandlers,
+  webFirmwareCommandHandlers,
+);
 
 export async function invokeWebCommand<T>(cmd: string, args?: WebCommandArgs): Promise<T> {
-  for (const handleCommand of commandHandlers) {
-    const result = await handleCommand(cmd, args);
-    if (result.handled) {
-      return await result.value as T;
-    }
+  if (hasPlatformCommandHandler(commandHandlers, cmd)) {
+    return await invokePlatformCommand(commandHandlers, cmd as never, args as never) as T;
+  }
+
+  const webOnlyHandler = webOnlyCommandHandlers[cmd];
+  if (webOnlyHandler) {
+    return await webOnlyHandler(args) as T;
   }
 
   unsupported(cmd, "This feature is not supported in pure web mode.");
