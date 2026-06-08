@@ -133,6 +133,26 @@ const DIRECT_ANALYTICS_ADAPTER_IMPORT_RULES: ImportRule[] = [
   },
 ];
 
+const DIRECT_PLATFORM_IPC_IMPORT_RULES: ImportRule[] = [
+  {
+    label: "@platform/core",
+    predicate: (specifier) => specifier === "@platform/core",
+    allowlist: new Set([
+      "src/lib/ipc/client.ts",
+      "src/platform/tauri/analytics.ts",
+      "src/components/ui/ExternalLink.svelte",
+    ]),
+    guidance:
+      "Use src/lib/ipc/client typedInvoke for IronWing command IPC. Analytics platform adapters and the shared external-link openUrl primitive stay on separate raw platform paths.",
+  },
+  {
+    label: "@platform/event",
+    predicate: (specifier) => specifier === "@platform/event",
+    allowlist: new Set(["src/lib/ipc/client.ts"]),
+    guidance: "Use src/lib/ipc/client typedListen for IronWing event IPC.",
+  },
+];
+
 const UI_PRIMITIVE_DIR_PREFIX = "src/components/ui/";
 
 const RAW_ANCHOR_ALLOWLIST = new Set([
@@ -527,6 +547,7 @@ describe("platform import boundary", () => {
     ...DIRECT_TAURI_IMPORT_RULES,
     ...DIRECT_APTABASE_IMPORT_RULES,
     ...DIRECT_ANALYTICS_ADAPTER_IMPORT_RULES,
+    ...DIRECT_PLATFORM_IPC_IMPORT_RULES,
   ]) {
     it(
       `no files outside the allowlist import ${rule.label}`,
