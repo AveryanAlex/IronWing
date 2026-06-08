@@ -1,7 +1,6 @@
 export const DIST_DIRS = {
   tauri: "dist/tauri",
   web: "dist/web",
-  e2e: "dist/e2e",
 };
 
 function analyticsCommonFrontendEnv(env = process.env) {

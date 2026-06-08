@@ -5,12 +5,11 @@ const SUPPORTED_PLATFORMS = ["mock", "remote", "tauri", "web"];
 const base = process.env.IRONWING_BASE;
 const platformDir = resolvePlatformDir();
 const DEFAULT_OUT_DIRS = {
-  mock: "dist/e2e",
   remote: "dist/tauri",
   tauri: "dist/tauri",
   web: "dist/web",
 };
-const outDir = process.env.IRONWING_OUT_DIR ?? DEFAULT_OUT_DIRS[platformDir];
+const outDir = process.env.IRONWING_OUT_DIR ?? DEFAULT_OUT_DIRS[platformDir] ?? DEFAULT_OUT_DIRS.web;
 
 function isTauriCliEnv(env = process.env) {
   return env.TAURI_ENV_PLATFORM != null || env.TAURI_ENV_TARGET_TRIPLE != null;

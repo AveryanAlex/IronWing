@@ -117,8 +117,8 @@ Browser-based E2E tests run against the production frontend bundle with `IRONWIN
 
 ### How it works
 
-1. Playwright builds the frontend with `IRONWING_PLATFORM=web`, which uses the browser Web/WASM platform adapter.
-2. Playwright starts a local Vite preview server for the built app.
+1. By default, Playwright runs `pnpm run build:web`, which builds the browser Web/WASM bundle in `dist/web`.
+2. Playwright starts a local Vite preview server for the built app. Set `IRONWING_E2E_SKIP_BUILD=1` to reuse an existing `dist/web` bundle without rebuilding.
 3. Specs select the Demo transport in the rendered connection UI and connect to `mavkit::sim::DemoVehicle`.
 4. Specs drive the app through real browser interactions and assert visible state changes. They do not patch app internals, dispatch fake platform events, or use command overrides.
 
@@ -136,7 +136,7 @@ pnpm run e2e:browser:headed   # Run tests with a visible browser window
 pnpm run e2e                  # Run all browser and native E2E lanes sequentially
 ```
 
-`pnpm run e2e:browser` uses Playwright's built-in `webServer` support to build the frontend, start a preview server, run the browser suite, and clean up afterward.
+`pnpm run e2e:browser` uses Playwright's built-in `webServer` support to run `build:web` unless `IRONWING_E2E_SKIP_BUILD=1`, start a preview server, run the browser suite, and clean up afterward. CI downloads the `dist/web` artifact from the build job and sets that skip flag so the browser E2E lane never rebuilds the web bundle.
 
 ### Current test scope
 
@@ -150,7 +150,7 @@ Compact demo-backed specs live under `e2e/specs/`. The default shape is one read
 - **setup.spec.ts** — Downloads demo parameters, opens every setup section, applies guided and raw safe parameter edits, reloads from the vehicle, and verifies persistence.
 - **logs.spec.ts** / **firmware.spec.ts** / **settings.spec.ts** — Check workspace-specific empty, capability-limited/recovery, and mutable settings surfaces.
 
-Each Playwright invocation still runs serially (`workers: 1`). Traces, screenshots, and video are captured on failure.
+Local Playwright runs stay serial (`workers: 1`); CI uses limited parallelism. Traces, screenshots, and video are captured on failure.
 
 ### Scope limits
 
@@ -190,10 +190,10 @@ Frontend bundles are separated by target under `dist/`:
 | `pnpm run build:desktop` | `dist/tauri` |
 | `pnpm run build:android` | `dist/tauri` |
 | `pnpm run build:web` | `dist/web` |
-| `pnpm run e2e:browser` | `dist/e2e` |
+| `pnpm run e2e:browser` | reuses `dist/web` |
 
 Set `IRONWING_OUT_DIR` to override a specific build artifact directory.
 
 ## CI
 
-- `.github/workflows/ci.yml`: frontend checks/build/tests + Rust check/tests on every push and PR
+- `.github/workflows/ci.yml`: frontend checks/tests, backend checks/tests, native E2E, web build artifact creation, browser E2E from the downloaded artifact, and GitHub Pages publishing on `main` after all checks pass.

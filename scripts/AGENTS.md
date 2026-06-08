@@ -4,7 +4,7 @@
 
 `scripts/` contains thin Node entrypoints for package scripts plus the shared `scripts/workflow/` orchestration library. Keep target-specific command shape in the entrypoints and put reusable process, environment, port, SITL, Tauri, and WASM behavior in `workflow/` modules.
 
-SvelteKit's Vite CLI is now the web/WASM default: `pnpm exec vite` serves the pure web platform and `pnpm exec vite build` writes `dist/web`. Tauri and remote UI flows must opt into their platform explicitly through env helpers; browser E2E also uses the web platform but writes its preview bundle to `dist/e2e`.
+SvelteKit's Vite CLI is now the web/WASM default: `pnpm exec vite` serves the pure web platform and `pnpm exec vite build` writes `dist/web`. Tauri and remote UI flows must opt into their platform explicitly through env helpers; browser E2E runs `build:web` by default and previews the same `dist/web` bundle, while CI can set `IRONWING_E2E_SKIP_BUILD=1` after downloading the build artifact.
 
 ## Where To Look
 
