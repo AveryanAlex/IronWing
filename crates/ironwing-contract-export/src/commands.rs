@@ -153,8 +153,18 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         ALL_PLATFORMS,
     ),
     command("arm_vehicle", "{ force: boolean }", "void", ALL_PLATFORMS),
-    command("available_transports", "NoArgs", "TransportDescriptor[]", ALL_PLATFORMS),
-    command("bt_get_bonded_devices", "NoArgs", "BluetoothDevice[]", ALL_PLATFORMS),
+    command(
+        "available_transports",
+        "NoArgs",
+        "TransportDescriptor[]",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "bt_get_bonded_devices",
+        "NoArgs",
+        "BluetoothDevice[]",
+        ALL_PLATFORMS,
+    ),
     command("bt_request_permissions", "NoArgs", "void", ALL_PLATFORMS),
     command(
         "bt_scan_ble",
@@ -164,13 +174,43 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
     ),
     command("bt_stop_scan_ble", "NoArgs", "void", ALL_PLATFORMS),
     command("calibrate_accel", "NoArgs", "void", ALL_PLATFORMS),
-    command("calibrate_compass_accept", "{ compassMask: number }", "void", ALL_PLATFORMS),
-    command("calibrate_compass_cancel", "{ compassMask: number }", "void", ALL_PLATFORMS),
-    command("calibrate_compass_start", "{ compassMask: number }", "void", ALL_PLATFORMS),
+    command(
+        "calibrate_compass_accept",
+        "{ compassMask: number }",
+        "void",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "calibrate_compass_cancel",
+        "{ compassMask: number }",
+        "void",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "calibrate_compass_start",
+        "{ compassMask: number }",
+        "void",
+        ALL_PLATFORMS,
+    ),
     command("calibrate_gyro", "NoArgs", "void", ALL_PLATFORMS),
-    command("connect_link", "{ request: ConnectLinkRequest }", "void", ALL_PLATFORMS),
-    command("disconnect_link", "{ request?: DisconnectRequest }", "void", ALL_PLATFORMS),
-    command("disarm_vehicle", "{ force: boolean }", "void", ALL_PLATFORMS),
+    command(
+        "connect_link",
+        "{ request: ConnectLinkRequest }",
+        "void",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "disconnect_link",
+        "{ request?: DisconnectRequest }",
+        "void",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "disarm_vehicle",
+        "{ force: boolean }",
+        "void",
+        ALL_PLATFORMS,
+    ),
     command("fence_clear", "NoArgs", "void", ALL_PLATFORMS),
     command("fence_download", "NoArgs", "FencePlan", ALL_PLATFORMS),
     command("fence_upload", "{ plan: FencePlan }", "void", ALL_PLATFORMS),
@@ -204,7 +244,12 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         "FirmwareInstallReadinessResponse",
         ALL_PLATFORMS,
     ),
-    command("firmware_list_dfu_devices", "NoArgs", "DfuScanResult", ALL_PLATFORMS),
+    command(
+        "firmware_list_dfu_devices",
+        "NoArgs",
+        "DfuScanResult",
+        ALL_PLATFORMS,
+    ),
     command(
         "firmware_reboot_to_bootloader",
         "{ port: string }",
@@ -212,24 +257,79 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         ALL_PLATFORMS,
     ),
     command("firmware_session_cancel", "NoArgs", "void", ALL_PLATFORMS),
-    command("firmware_session_clear_completed", "NoArgs", "void", ALL_PLATFORMS),
-    command("firmware_session_status", "NoArgs", "FirmwareSessionStatus", ALL_PLATFORMS),
-    command("get_available_message_rates", "NoArgs", "MessageRateInfo[]", ALL_PLATFORMS),
-    command("get_available_modes", "NoArgs", "FlightModeEntry[]", ALL_PLATFORMS),
-    command("list_serial_port_inventory", "NoArgs", "SerialPortInventoryResult", ALL_PLATFORMS),
-    command("log_chart_series_query", "{ request: ChartSeriesRequest }", "ChartSeriesPage", ALL_PLATFORMS),
+    command(
+        "firmware_session_clear_completed",
+        "NoArgs",
+        "void",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "firmware_session_status",
+        "NoArgs",
+        "FirmwareSessionStatus",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "get_available_message_rates",
+        "NoArgs",
+        "MessageRateInfo[]",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "get_available_modes",
+        "NoArgs",
+        "FlightModeEntry[]",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "list_serial_port_inventory",
+        "NoArgs",
+        "SerialPortInventoryResult",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "log_chart_series_query",
+        "{ request: ChartSeriesRequest }",
+        "ChartSeriesPage",
+        ALL_PLATFORMS,
+    ),
     command("log_close", "NoArgs", "void", ALL_PLATFORMS),
-    command("log_export", "{ request: LogExportRequest }", "LogExportResult", ALL_PLATFORMS),
+    command(
+        "log_export",
+        "{ request: LogExportRequest }",
+        "LogExportResult",
+        ALL_PLATFORMS,
+    ),
     command(
         "log_export_csv",
         "{ path: string; startUsec: number | null; endUsec: number | null }",
         "number",
         ALL_PLATFORMS,
     ),
-    command("log_format_adapters", "NoArgs", "LogFormatAdapter[]", ALL_PLATFORMS),
-    command("log_get_flight_path", "LogFlightPathArgs", "FlightPathPoint[]", ALL_PLATFORMS),
-    command("log_get_flight_summary", "NoArgs", "FlightSummary", ALL_PLATFORMS),
-    command("log_get_summary", "NoArgs", "LogSummary | null", ALL_PLATFORMS),
+    command(
+        "log_format_adapters",
+        "NoArgs",
+        "LogFormatAdapter[]",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "log_get_flight_path",
+        "LogFlightPathArgs",
+        "FlightPathPoint[]",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "log_get_flight_summary",
+        "NoArgs",
+        "FlightSummary",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "log_get_summary",
+        "NoArgs",
+        "LogSummary | null",
+        ALL_PLATFORMS,
+    ),
     command(
         "log_get_telemetry_track",
         "{ maxPoints: number | null }",
@@ -237,22 +337,42 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         ALL_PLATFORMS,
     ),
     command("log_library_cancel", "NoArgs", "boolean", ALL_PLATFORMS),
-    command("log_library_list", "NoArgs", "LogLibraryCatalog", ALL_PLATFORMS),
-    command("log_library_register", "{ path: string }", "LogLibraryEntry", ALL_PLATFORMS),
+    command(
+        "log_library_list",
+        "NoArgs",
+        "LogLibraryCatalog",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "log_library_register",
+        "{ path: string }",
+        "LogLibraryEntry",
+        ALL_PLATFORMS,
+    ),
     command(
         "log_library_register_open_file",
         "NoArgs",
         "LogLibraryEntry | null",
         ALL_PLATFORMS,
     ),
-    command("log_library_reindex", "{ entryId: string }", "LogLibraryEntry", ALL_PLATFORMS),
+    command(
+        "log_library_reindex",
+        "{ entryId: string }",
+        "LogLibraryEntry",
+        ALL_PLATFORMS,
+    ),
     command(
         "log_library_relink",
         "{ entryId: string; path: string }",
         "LogLibraryEntry",
         ALL_PLATFORMS,
     ),
-    command("log_library_remove", "{ entryId: string }", "LogLibraryCatalog", ALL_PLATFORMS),
+    command(
+        "log_library_remove",
+        "{ entryId: string }",
+        "LogLibraryCatalog",
+        ALL_PLATFORMS,
+    ),
     command("log_open", "{ path: string }", "LogSummary", ALL_PLATFORMS),
     command(
         "log_query",
@@ -260,66 +380,196 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         "LogDataPoint[]",
         ALL_PLATFORMS,
     ),
-    command("log_raw_messages_query", "{ request: RawMessageQuery }", "RawMessagePage", ALL_PLATFORMS),
+    command(
+        "log_raw_messages_query",
+        "{ request: RawMessageQuery }",
+        "RawMessagePage",
+        ALL_PLATFORMS,
+    ),
     command("mission_cancel", "NoArgs", "void", ALL_PLATFORMS),
     command("mission_clear", "NoArgs", "void", ALL_PLATFORMS),
-    command("mission_download", "NoArgs", "MissionDownload", ALL_PLATFORMS),
-    command("mission_set_current", "{ seq: number }", "void", ALL_PLATFORMS),
-    command("mission_upload", "{ plan: WireMissionPlan }", "void", ALL_PLATFORMS),
-    command("mission_validate", "{ plan: WireMissionPlan }", "MissionIssue[]", ALL_PLATFORMS),
+    command(
+        "mission_download",
+        "NoArgs",
+        "MissionDownload",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "mission_set_current",
+        "{ seq: number }",
+        "void",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "mission_upload",
+        "{ plan: WireMissionPlan }",
+        "void",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "mission_validate",
+        "{ plan: WireMissionPlan }",
+        "MissionIssue[]",
+        ALL_PLATFORMS,
+    ),
     command(
         "motor_test",
         "{ motorInstance: number; throttlePct: number; durationS: number }",
         "void",
         ALL_PLATFORMS,
     ),
-    command("open_session_snapshot", "{ sourceKind: SourceKind }", "OpenSessionSnapshot", ALL_PLATFORMS),
+    command(
+        "open_session_snapshot",
+        "{ sourceKind: SourceKind }",
+        "OpenSessionSnapshot",
+        ALL_PLATFORMS,
+    ),
     command("param_cancel", "NoArgs", "void", ALL_PLATFORMS),
     command("param_download_all", "NoArgs", "void", ALL_PLATFORMS),
-    command("param_format_file", "{ store: ParamStore }", "string", ALL_PLATFORMS),
-    command("param_parse_file", "{ contents: string }", "Record<string, number>", ALL_PLATFORMS),
-    command("param_write", "{ name: string; value: number }", "ParamWriteResult", ALL_PLATFORMS),
-    command("param_write_batch", "{ params: [string, number][] }", "ParamWriteResult[]", ALL_PLATFORMS),
-    command("playback_pause", "NoArgs", "PlaybackStateSnapshot", ALL_PLATFORMS),
-    command("playback_play", "NoArgs", "PlaybackStateSnapshot", ALL_PLATFORMS),
-    command("playback_seek", "{ cursorUsec: number | null }", "PlaybackSeekResult", ALL_PLATFORMS),
-    command("playback_set_speed", "{ speed: number }", "PlaybackStateSnapshot", ALL_PLATFORMS),
-    command("playback_stop", "NoArgs", "PlaybackStateSnapshot", ALL_PLATFORMS),
+    command(
+        "param_format_file",
+        "{ store: ParamStore }",
+        "string",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "param_parse_file",
+        "{ contents: string }",
+        "Record<string, number>",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "param_write",
+        "{ name: string; value: number }",
+        "ParamWriteResult",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "param_write_batch",
+        "{ params: [string, number][] }",
+        "ParamWriteResult[]",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "playback_pause",
+        "NoArgs",
+        "PlaybackStateSnapshot",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "playback_play",
+        "NoArgs",
+        "PlaybackStateSnapshot",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "playback_seek",
+        "{ cursorUsec: number | null }",
+        "PlaybackSeekResult",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "playback_set_speed",
+        "{ speed: number }",
+        "PlaybackStateSnapshot",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "playback_stop",
+        "NoArgs",
+        "PlaybackStateSnapshot",
+        ALL_PLATFORMS,
+    ),
     command("rally_clear", "NoArgs", "void", ALL_PLATFORMS),
     command("rally_download", "NoArgs", "RallyPlan", ALL_PLATFORMS),
     command("rally_upload", "{ plan: RallyPlan }", "void", ALL_PLATFORMS),
-    command("rc_override", "{ channels: RcOverrideChannel[] }", "void", ALL_PLATFORMS),
+    command(
+        "rc_override",
+        "{ channels: RcOverrideChannel[] }",
+        "void",
+        ALL_PLATFORMS,
+    ),
     command("reboot_vehicle", "NoArgs", "void", ALL_PLATFORMS),
-    command("recording_settings_read", "NoArgs", "RecordingSettingsResult", ALL_PLATFORMS),
+    command(
+        "recording_settings_read",
+        "NoArgs",
+        "RecordingSettingsResult",
+        ALL_PLATFORMS,
+    ),
     command(
         "recording_settings_write",
         "{ settings: RecordingSettings }",
         "RecordingSettingsResult",
         ALL_PLATFORMS,
     ),
-    command("recording_start", "{ request: RecordingStartRequest }", "string", ALL_PLATFORMS),
-    command("recording_status", "NoArgs", "RecordingStatus", ALL_PLATFORMS),
+    command(
+        "recording_start",
+        "{ request: RecordingStartRequest }",
+        "string",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "recording_status",
+        "NoArgs",
+        "RecordingStatus",
+        ALL_PLATFORMS,
+    ),
     command("recording_stop", "NoArgs", "void", ALL_PLATFORMS),
     command("request_prearm_checks", "NoArgs", "void", ALL_PLATFORMS),
-    command("request_web_serial_port", "NoArgs", "SerialPortInfo | null", WEB_MOCK),
-    command("set_flight_mode", "{ customMode: number }", "void", ALL_PLATFORMS),
-    command("set_message_rate", "{ messageId: number; rateHz: number }", "void", ALL_PLATFORMS),
-    command("set_servo", "{ instance: number; pwmUs: number }", "void", ALL_PLATFORMS),
-    command("set_telemetry_rate", "{ rateHz: number }", "void", ALL_PLATFORMS),
+    command(
+        "request_web_serial_port",
+        "NoArgs",
+        "SerialPortInfo | null",
+        WEB_MOCK,
+    ),
+    command(
+        "set_flight_mode",
+        "{ customMode: number }",
+        "void",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "set_message_rate",
+        "{ messageId: number; rateHz: number }",
+        "void",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "set_servo",
+        "{ instance: number; pwmUs: number }",
+        "void",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "set_telemetry_rate",
+        "{ rateHz: number }",
+        "void",
+        ALL_PLATFORMS,
+    ),
     command(
         "start_guided_session",
         "{ request: StartGuidedSessionRequest }",
         "GuidedCommandResult",
         ALL_PLATFORMS,
     ),
-    command("stop_guided_session", "NoArgs", "GuidedCommandResult", ALL_PLATFORMS),
+    command(
+        "stop_guided_session",
+        "NoArgs",
+        "GuidedCommandResult",
+        ALL_PLATFORMS,
+    ),
     command(
         "update_guided_session",
         "{ request: UpdateGuidedSessionRequest }",
         "GuidedCommandResult",
         ALL_PLATFORMS,
     ),
-    command("vehicle_takeoff", "{ altitudeM: number }", "void", ALL_PLATFORMS),
+    command(
+        "vehicle_takeoff",
+        "{ altitudeM: number }",
+        "void",
+        ALL_PLATFORMS,
+    ),
 ];
 
 pub fn command_names_ts() -> Result<String, Box<dyn Error>> {
@@ -369,16 +619,26 @@ fn command_map_ts() -> Result<String, Box<dyn Error>> {
         body.push_str(">;\n");
     }
     body.push_str("};\n\n");
-    body.push_str("export type KnownInvokeCommandName = keyof InvokeCommandMap & InvokeCommandName;\n");
-    body.push_str("export type UnlistedMappedCommand = Exclude<keyof InvokeCommandMap, InvokeCommandName>;\n");
+    body.push_str(
+        "export type KnownInvokeCommandName = keyof InvokeCommandMap & InvokeCommandName;\n",
+    );
+    body.push_str(
+        "export type UnlistedMappedCommand = Exclude<keyof InvokeCommandMap, InvokeCommandName>;\n",
+    );
     body.push_str("export type UnmappedGeneratedCommand = Exclude<InvokeCommandName, keyof InvokeCommandMap>;\n");
     body.push_str("export type InvokeResult<C extends keyof InvokeCommandMap> = InvokeCommandMap[C][\"result\"];\n");
     body.push_str("export type NoArgCommandName = {\n");
     body.push_str("  [C in keyof InvokeCommandMap]: InvokeCommandMap[C][\"args\"] extends NoArgs ? C : never;\n");
     body.push_str("}[keyof InvokeCommandMap];\n");
-    body.push_str("export type ArgCommandName = Exclude<keyof InvokeCommandMap, NoArgCommandName>;\n");
-    body.push_str("export type InvokeArg<C extends ArgCommandName> = InvokeCommandMap[C][\"args\"];\n\n");
-    body.push_str("export type PlatformSupport = \"native\" | \"web\" | \"remote\" | \"mock\";\n\n");
+    body.push_str(
+        "export type ArgCommandName = Exclude<keyof InvokeCommandMap, NoArgCommandName>;\n",
+    );
+    body.push_str(
+        "export type InvokeArg<C extends ArgCommandName> = InvokeCommandMap[C][\"args\"];\n\n",
+    );
+    body.push_str(
+        "export type PlatformSupport = \"native\" | \"web\" | \"remote\" | \"mock\";\n\n",
+    );
     body.push_str("export const COMMAND_PLATFORM_SUPPORT = {\n");
     for spec in COMMAND_SPECS {
         body.push_str("  ");
@@ -387,7 +647,9 @@ fn command_map_ts() -> Result<String, Box<dyn Error>> {
         body.push_str(&platforms_ts(spec.platforms)?);
         body.push_str(",\n");
     }
-    body.push_str("} as const satisfies Record<InvokeCommandName, readonly PlatformSupport[]>;\n\n");
+    body.push_str(
+        "} as const satisfies Record<InvokeCommandName, readonly PlatformSupport[]>;\n\n",
+    );
     body.push_str("const commandMapUsesGeneratedCatalog: UnlistedMappedCommand extends never ? true : never = true;\n");
     body.push_str("const commandMapCoversGeneratedCatalog: UnmappedGeneratedCommand extends never ? true : never = true;\n\n");
     body.push_str("export { commandMapCoversGeneratedCatalog, commandMapUsesGeneratedCatalog };\n");

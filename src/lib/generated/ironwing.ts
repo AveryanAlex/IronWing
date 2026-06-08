@@ -126,7 +126,27 @@ export type CondYaw = {
 /**  Typed mission command API item used by plan serialization and validation. */
 export type ConditionCommand = ({ Delay: CondDelay }) & { Distance?: never; Yaw?: never } | ({ Distance: CondDistance }) & { Delay?: never; Yaw?: never } | ({ Yaw: CondYaw }) & { Delay?: never; Distance?: never };
 
+export type ConnectRequest = ConnectRequest_Serialize | ConnectRequest_Deserialize;
+
+export type ConnectRequest_Deserialize = {
+	transport: ConnectTransport_Deserialize,
+	auto_record_on_connect?: boolean,
+};
+
+export type ConnectRequest_Serialize = {
+	transport: ConnectTransport_Serialize,
+	auto_record_on_connect: boolean,
+};
+
+export type ConnectTransport = ConnectTransport_Serialize | ConnectTransport_Deserialize;
+
+export type ConnectTransport_Deserialize = ({ kind: "udp"; bind_addr: string }) & { address?: never; baud?: never; device_id?: never; port?: never; port_id?: never; profile?: never; url?: never; vehicle_preset?: never } | ({ kind: "tcp"; address: string }) & { baud?: never; bind_addr?: never; device_id?: never; port?: never; port_id?: never; profile?: never; url?: never; vehicle_preset?: never } | ({ kind: "serial"; port: string; baud: number }) & { address?: never; bind_addr?: never; device_id?: never; port_id?: never; profile?: never; url?: never; vehicle_preset?: never } | ({ kind: "bluetooth_ble"; address: string; profile?: BluetoothProfile | null }) & { baud?: never; bind_addr?: never; device_id?: never; port?: never; port_id?: never; url?: never; vehicle_preset?: never } | ({ kind: "bluetooth_spp"; address: string }) & { baud?: never; bind_addr?: never; device_id?: never; port?: never; port_id?: never; profile?: never; url?: never; vehicle_preset?: never } | ({ kind: "websocket"; url: string }) & { address?: never; baud?: never; bind_addr?: never; device_id?: never; port?: never; port_id?: never; profile?: never; vehicle_preset?: never } | ({ kind: "web_serial"; baud: number; port_id: string }) & { address?: never; bind_addr?: never; device_id?: never; port?: never; profile?: never; url?: never; vehicle_preset?: never } | ({ kind: "web_bluetooth"; device_id?: string | null; profile: BluetoothProfile }) & { address?: never; baud?: never; bind_addr?: never; port?: never; port_id?: never; url?: never; vehicle_preset?: never } | ({ kind: "demo"; vehicle_preset: DemoVehiclePreset }) & { address?: never; baud?: never; bind_addr?: never; device_id?: never; port?: never; port_id?: never; profile?: never; url?: never };
+
+export type ConnectTransport_Serialize = ({ kind: "udp"; bind_addr: string }) & { address?: never; baud?: never; device_id?: never; port?: never; port_id?: never; profile?: never; url?: never; vehicle_preset?: never } | ({ kind: "tcp"; address: string }) & { baud?: never; bind_addr?: never; device_id?: never; port?: never; port_id?: never; profile?: never; url?: never; vehicle_preset?: never } | ({ kind: "serial"; port: string; baud: number }) & { address?: never; bind_addr?: never; device_id?: never; port_id?: never; profile?: never; url?: never; vehicle_preset?: never } | ({ kind: "bluetooth_ble"; address: string; profile?: BluetoothProfile | null }) & { baud?: never; bind_addr?: never; device_id?: never; port?: never; port_id?: never; url?: never; vehicle_preset?: never } | ({ kind: "bluetooth_spp"; address: string }) & { baud?: never; bind_addr?: never; device_id?: never; port?: never; port_id?: never; profile?: never; url?: never; vehicle_preset?: never } | ({ kind: "websocket"; url: string }) & { address?: never; baud?: never; bind_addr?: never; device_id?: never; port?: never; port_id?: never; profile?: never; vehicle_preset?: never } | ({ kind: "web_serial"; baud: number; port_id: string }) & { address?: never; bind_addr?: never; device_id?: never; port?: never; profile?: never; url?: never; vehicle_preset?: never } | ({ kind: "web_bluetooth"; device_id?: string | null; profile: BluetoothProfile }) & { address?: never; baud?: never; bind_addr?: never; port?: never; port_id?: never; url?: never; vehicle_preset?: never } | ({ kind: "demo"; vehicle_preset: DemoVehiclePreset }) & { address?: never; baud?: never; bind_addr?: never; device_id?: never; port?: never; port_id?: never; profile?: never; url?: never };
+
 export type DemoValidation = Record<string, never>;
+
+export type DemoVehiclePreset = "quadcopter" | "airplane" | "quadplane";
 
 export type DfuDeviceInfo = {
 	vid: number,
@@ -159,6 +179,16 @@ export type DfuRecoverySource =
 { kind: "local_bin_bytes"; data: number[] };
 
 export type DfuScanResult = { kind: "available"; devices: DfuDeviceInfo[] } | { kind: "unsupported" };
+
+export type DisconnectRequest = DisconnectRequest_Serialize | DisconnectRequest_Deserialize;
+
+export type DisconnectRequest_Deserialize = {
+	session_id?: string | null,
+};
+
+export type DisconnectRequest_Serialize = {
+	session_id?: string | null,
+};
 
 /**  Typed mission command API item used by plan serialization and validation. */
 export type DoAutotuneEnable = {

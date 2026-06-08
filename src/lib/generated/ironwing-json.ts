@@ -14,6 +14,10 @@ export type JsonWire<T> = T extends bigint
 
 export type DomainValue<T> = JsonWire<Ironwing.DomainValue<T>>;
 export type SessionEnvelope = JsonWire<Ironwing.SessionEnvelope>;
+export type DemoVehiclePreset = JsonWire<Ironwing.DemoVehiclePreset>;
+export type ConnectTransport = JsonWire<Ironwing.ConnectTransport>;
+export type ConnectRequest = JsonWire<Ironwing.ConnectRequest>;
+export type DisconnectRequest = JsonWire<Ironwing.DisconnectRequest>;
 export type SessionConnection = JsonWire<Ironwing.SessionConnection>;
 export type SessionSnapshot = JsonWire<Ironwing.SessionSnapshot>;
 export type OpenSessionSnapshot = JsonWire<Ironwing.OpenSessionSnapshot>;

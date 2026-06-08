@@ -46,7 +46,10 @@ describe("session selectors and connect workflow", () => {
         ]);
         expect(
             buildConnectRequest(descriptor, { port: "/dev/ttyACM0", baud: 57600 }),
-        ).toEqual({ transport: { kind: "serial", port: "/dev/ttyACM0", baud: 57600 } });
+        ).toEqual({
+            transport: { kind: "serial", port: "/dev/ttyACM0", baud: 57600 },
+            auto_record_on_connect: false,
+        });
     });
 
     it("maps vehicle status card display fields and tones", () => {
@@ -64,6 +67,7 @@ describe("session selectors and connect workflow", () => {
                     system_id: 1,
                     component_id: 1,
                     heartbeat_received: true,
+                    firmware_version: null,
                 },
             }),
         ).toEqual({
@@ -112,6 +116,7 @@ describe("session selectors and connect workflow", () => {
                     system_id: 1,
                     component_id: 1,
                     heartbeat_received: true,
+                    firmware_version: null,
                 },
             }),
         ).toEqual({
@@ -141,6 +146,7 @@ describe("session selectors and connect workflow", () => {
                     system_id: 1,
                     component_id: 1,
                     heartbeat_received: true,
+                    firmware_version: null,
                 },
             }),
         ).toEqual({

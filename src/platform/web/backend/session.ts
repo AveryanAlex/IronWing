@@ -9,24 +9,10 @@ import { definePlatformCommandHandlers } from "./command-handler";
 import { observeRecordingInboundBridge, startAutoRecordingOnConnect, stopWebRecording } from "./recording";
 import { unsupported } from "./unsupported";
 import type { WebOnlyCommandHandlers } from "./command-handler";
-import type { TransportDescriptor } from "../../../transport";
+import type { ConnectRequest, ConnectTransport, TransportDescriptor } from "../../../transport";
 import type { Capability, RuntimeCapabilities } from "../../../lib/generated/ironwing";
 
 export type { Capability, RuntimeCapabilities };
-
-type WebConnectTransportRequest = {
-  kind?: string;
-  url?: string;
-  baud?: number;
-  port_id?: string;
-  profile?: "nordic_uart";
-  vehicle_preset?: string;
-};
-
-type WebConnectLinkRequest = {
-  transport?: WebConnectTransportRequest;
-  auto_record_on_connect?: boolean;
-};
 
 export const maybe = (reason: string): Capability => ({ kind: "maybe", reason });
 export const unsupportedCapability = (reason: string): Capability => ({ kind: "unsupported", reason });
@@ -88,7 +74,7 @@ export const webSessionCommandHandlers = {
   runtime_capabilities: async () => webRuntimeCapabilities(),
 } satisfies WebOnlyCommandHandlers;
 
-async function connectLink(cmd: string, request: WebConnectLinkRequest | undefined): Promise<void> {
+async function connectLink(cmd: string, request: ConnectRequest | undefined): Promise<void> {
   if (!request?.transport) {
     throw new Error("connect_link requires a transport request");
   }
@@ -106,7 +92,7 @@ async function connectLink(cmd: string, request: WebConnectLinkRequest | undefin
   await resetActiveConnection();
 
   if (request.transport.kind === "demo") {
-    await runtime.connectDemo(String(request.transport.vehicle_preset ?? "quadcopter"));
+    await runtime.connectDemo(request.transport.vehicle_preset);
     webBackendRuntime.activeLinkTarget = { kind: "other" };
     return;
   }
@@ -117,7 +103,7 @@ async function connectLink(cmd: string, request: WebConnectLinkRequest | undefin
     switch (request.transport.kind) {
       case "websocket":
         return createWebSocketTransport(
-          { kind: "websocket", url: String(request.transport.url ?? "") },
+          { kind: "websocket", url: request.transport.url },
           bridge,
           connectAbort.signal,
         );
@@ -125,15 +111,15 @@ async function connectLink(cmd: string, request: WebConnectLinkRequest | undefin
         return createWebSerialTransport(
           {
             kind: "web_serial",
-            baud: Number(request.transport.baud ?? 57600),
-            port_id: typeof request.transport.port_id === "string" ? request.transport.port_id : undefined,
+            baud: request.transport.baud,
+            port_id: request.transport.port_id,
           },
           bridge,
           connectAbort.signal,
         );
       case "web_bluetooth":
         return createWebBluetoothTransport(
-          { kind: "web_bluetooth", profile: request.transport.profile ?? "nordic_uart" },
+          { kind: "web_bluetooth", profile: request.transport.profile },
           bridge,
           connectAbort.signal,
         );
@@ -159,9 +145,9 @@ async function connectLink(cmd: string, request: WebConnectLinkRequest | undefin
   }
 }
 
-function activeLinkTargetForTransportRequest(request: WebConnectTransportRequest): WebActiveLinkTarget {
+function activeLinkTargetForTransportRequest(request: ConnectTransport): WebActiveLinkTarget {
   if (request.kind === "web_serial") {
-    const portId = typeof request.port_id === "string" ? request.port_id.trim() : "";
+    const portId = request.port_id.trim();
     return portId ? { kind: "web_serial", port_id: portId } : { kind: "other" };
   }
 

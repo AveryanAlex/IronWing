@@ -31,13 +31,21 @@ pub const EVENT_SPECS: &[EventSpec] = &[
         event_names::TELEMETRY_STATE,
         "SessionEvent<TelemetryDomain>",
     ),
-    event("MISSION_STATE", event_names::MISSION_STATE, "SessionEvent<MissionState>"),
+    event(
+        "MISSION_STATE",
+        event_names::MISSION_STATE,
+        "SessionEvent<MissionState>",
+    ),
     event(
         "MISSION_PROGRESS",
         event_names::MISSION_PROGRESS,
         "SessionEvent<TransferProgress>",
     ),
-    event("PARAM_STORE", event_names::PARAM_STORE, "SessionEvent<ParamStore>"),
+    event(
+        "PARAM_STORE",
+        event_names::PARAM_STORE,
+        "SessionEvent<ParamStore>",
+    ),
     event(
         "PARAM_PROGRESS",
         event_names::PARAM_PROGRESS,
@@ -53,22 +61,42 @@ pub const EVENT_SPECS: &[EventSpec] = &[
         event_names::CALIBRATION_STATE,
         "SessionEvent<CalibrationDomain>",
     ),
-    event("COMPASS_CAL_PROGRESS", event_names::COMPASS_CAL_PROGRESS, "MagCalProgress"),
-    event("COMPASS_CAL_REPORT", event_names::COMPASS_CAL_REPORT, "MagCalReport"),
+    event(
+        "COMPASS_CAL_PROGRESS",
+        event_names::COMPASS_CAL_PROGRESS,
+        "MagCalProgress",
+    ),
+    event(
+        "COMPASS_CAL_REPORT",
+        event_names::COMPASS_CAL_REPORT,
+        "MagCalReport",
+    ),
     event(
         "STATUS_TEXT_STATE",
         event_names::STATUS_TEXT_STATE,
         "SessionEvent<StatusTextDomain>",
     ),
-    event("SUPPORT_STATE", event_names::SUPPORT_STATE, "SessionEvent<SupportDomain>"),
-    event("GUIDED_STATE", event_names::GUIDED_STATE, "SessionEvent<GuidedDomain>"),
+    event(
+        "SUPPORT_STATE",
+        event_names::SUPPORT_STATE,
+        "SessionEvent<SupportDomain>",
+    ),
+    event(
+        "GUIDED_STATE",
+        event_names::GUIDED_STATE,
+        "SessionEvent<GuidedDomain>",
+    ),
     event(
         "PLAYBACK_STATE",
         event_names::PLAYBACK_STATE,
         "SessionEvent<PlaybackStateSnapshot>",
     ),
     event("LOG_PROGRESS", event_names::LOG_PROGRESS, "LogProgress"),
-    event("FIRMWARE_PROGRESS", event_names::FIRMWARE_PROGRESS, "FirmwareProgress"),
+    event(
+        "FIRMWARE_PROGRESS",
+        event_names::FIRMWARE_PROGRESS,
+        "FirmwareProgress",
+    ),
 ];
 
 pub fn events_ts() -> Result<String, Box<dyn Error>> {
@@ -118,8 +146,12 @@ fn event_payload_map_ts() -> String {
     body.push_str("};\n\n");
     body.push_str("export type KnownEventName = keyof EventPayloadMap & EventName;\n");
     body.push_str("export type UnlistedMappedEvent = Exclude<keyof EventPayloadMap, EventName>;\n");
-    body.push_str("export type UnmappedGeneratedEvent = Exclude<EventName, keyof EventPayloadMap>;\n");
-    body.push_str("export type EventPayload<E extends keyof EventPayloadMap> = EventPayloadMap[E];\n\n");
+    body.push_str(
+        "export type UnmappedGeneratedEvent = Exclude<EventName, keyof EventPayloadMap>;\n",
+    );
+    body.push_str(
+        "export type EventPayload<E extends keyof EventPayloadMap> = EventPayloadMap[E];\n\n",
+    );
     body.push_str("const eventMapUsesGeneratedEvents: UnlistedMappedEvent extends never ? true : never = true;\n");
     body.push_str("const eventMapCoversGeneratedEvents: UnmappedGeneratedEvent extends never ? true : never = true;\n\n");
     body.push_str("export { eventMapCoversGeneratedEvents, eventMapUsesGeneratedEvents };\n");

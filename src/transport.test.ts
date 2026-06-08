@@ -68,6 +68,7 @@ describe("buildConnectRequest", () => {
         demo_vehicle_preset: "airplane",
       }),
     ).toEqual({
+      auto_record_on_connect: false,
       transport: {
         kind: "demo",
         vehicle_preset: "airplane",
@@ -81,6 +82,7 @@ describe("buildConnectRequest", () => {
         websocket_url: "ws://127.0.0.1:14560",
       }),
     ).toEqual({
+      auto_record_on_connect: false,
       transport: {
         kind: "websocket",
         url: "ws://127.0.0.1:14560",
@@ -95,6 +97,7 @@ describe("buildConnectRequest", () => {
         port_id: "webserial:1",
       }),
     ).toEqual({
+      auto_record_on_connect: false,
       transport: {
         kind: "web_serial",
         baud: 115200,
@@ -109,6 +112,7 @@ describe("buildConnectRequest", () => {
         address: "AA:BB:CC:DD:EE:FF",
       }),
     ).toEqual({
+      auto_record_on_connect: false,
       transport: {
         kind: "bluetooth_ble",
         address: "AA:BB:CC:DD:EE:FF",

@@ -1,7 +1,13 @@
 import { typedInvoke } from "./lib/ipc/client";
 import type { BluetoothProfile, TransportDescriptor as GeneratedTransportDescriptor } from "./lib/generated/ironwing";
+import type {
+  ConnectRequest as GeneratedConnectRequest,
+  ConnectTransport as GeneratedConnectTransport,
+  DemoVehiclePreset as GeneratedDemoVehiclePreset,
+  DisconnectRequest as GeneratedDisconnectRequest,
+} from "./lib/generated/ironwing-json";
 
-export type DemoVehiclePreset = "quadcopter" | "airplane" | "quadplane";
+export type DemoVehiclePreset = GeneratedDemoVehiclePreset;
 export type { BluetoothProfile };
 
 export type TransportDescriptor = GeneratedTransportDescriptor;
@@ -26,24 +32,11 @@ export type ConnectFormValue = {
   demo_vehicle_preset?: DemoVehiclePreset;
 };
 
-export type ConnectTransport =
-  | { kind: "udp"; bind_addr: string }
-  | { kind: "tcp"; address: string }
-  | { kind: "serial"; port: string; baud: number }
-  | { kind: "bluetooth_ble"; address: string; profile: BluetoothProfile }
-  | { kind: "bluetooth_spp"; address: string }
-  | { kind: "websocket"; url: string }
-  | { kind: "web_serial"; baud: number; port_id: string }
-  | { kind: "web_bluetooth"; device_id?: string; profile: BluetoothProfile }
-  | { kind: "demo"; vehicle_preset: DemoVehiclePreset };
+export type ConnectTransport = GeneratedConnectTransport;
 
-export type ConnectRequest = {
-  transport: ConnectTransport;
-};
+export type ConnectRequest = GeneratedConnectRequest;
 
-export type DisconnectRequest = {
-  session_id?: string;
-};
+export type DisconnectRequest = GeneratedDisconnectRequest;
 
 export async function availableTransportDescriptors(): Promise<TransportDescriptor[]> {
   return typedInvoke("available_transports");
@@ -99,9 +92,9 @@ export function buildConnectRequest(
 ): ConnectRequest {
   switch (descriptor.kind) {
     case "udp":
-      return { transport: { kind: "udp", bind_addr: value.bind_addr ?? "" } };
+      return { transport: { kind: "udp", bind_addr: value.bind_addr ?? "" }, auto_record_on_connect: false };
     case "tcp":
-      return { transport: { kind: "tcp", address: value.address ?? "" } };
+      return { transport: { kind: "tcp", address: value.address ?? "" }, auto_record_on_connect: false };
     case "serial":
       return {
         transport: {
@@ -109,6 +102,7 @@ export function buildConnectRequest(
           port: value.port ?? "",
           baud: value.baud ?? descriptor.default_baud,
         },
+        auto_record_on_connect: false,
       };
     case "bluetooth_ble":
       return {
@@ -117,11 +111,12 @@ export function buildConnectRequest(
           address: value.address ?? "",
           profile: descriptor.profile,
         },
+        auto_record_on_connect: false,
       };
     case "bluetooth_spp":
-      return { transport: { kind: "bluetooth_spp", address: value.address ?? "" } };
+      return { transport: { kind: "bluetooth_spp", address: value.address ?? "" }, auto_record_on_connect: false };
     case "websocket":
-      return { transport: { kind: "websocket", url: value.websocket_url ?? "" } };
+      return { transport: { kind: "websocket", url: value.websocket_url ?? "" }, auto_record_on_connect: false };
     case "web_serial":
       const portId = value.port_id?.trim();
       return {
@@ -130,6 +125,7 @@ export function buildConnectRequest(
           baud: value.baud ?? descriptor.default_baud,
           port_id: portId ?? "",
         },
+        auto_record_on_connect: false,
       };
     case "web_bluetooth":
       return {
@@ -137,6 +133,7 @@ export function buildConnectRequest(
           kind: "web_bluetooth",
           profile: descriptor.profile,
         },
+        auto_record_on_connect: false,
       };
     case "demo":
       return {
@@ -144,6 +141,7 @@ export function buildConnectRequest(
           kind: "demo",
           vehicle_preset: value.demo_vehicle_preset ?? "quadcopter",
         },
+        auto_record_on_connect: false,
       };
   }
 }

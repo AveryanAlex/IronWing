@@ -1,7 +1,6 @@
 use mavkit::Vehicle;
 use mavkit::sim::{DemoProfile, DemoVehicle, DemoVehicleHandle};
 use mavkit::stream::{ChannelBridge, StreamConnection};
-use serde::Deserialize;
 use std::future::Future;
 use std::time::Duration;
 use tauri::Listener;
@@ -11,7 +10,9 @@ use tokio::task::JoinHandle;
 
 use crate::AppState;
 use crate::guided::emit_guided_reset;
-use crate::ipc::DomainProvenance;
+use crate::ipc::{
+    ConnectRequest, ConnectTransport, DemoVehiclePreset, DisconnectRequest, DomainProvenance,
+};
 use crate::recording::auto_record_start_request;
 use ironwing_core::{bluetooth_profile, telemetry, transport::BluetoothProfile, vehicle_config};
 
@@ -49,63 +50,12 @@ pub(crate) enum ActiveLinkTarget {
     Other,
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum DemoVehiclePreset {
-    Quadcopter,
-    Airplane,
-    Quadplane,
-}
-
-impl DemoVehiclePreset {
-    fn profile(self) -> DemoProfile {
-        match self {
-            Self::Quadcopter => DemoProfile::ArduCopter,
-            Self::Airplane => DemoProfile::ArduPlane,
-            Self::Quadplane => DemoProfile::ArduQuadPlane,
-        }
+fn demo_profile(vehicle_preset: DemoVehiclePreset) -> DemoProfile {
+    match vehicle_preset {
+        DemoVehiclePreset::Quadcopter => DemoProfile::ArduCopter,
+        DemoVehiclePreset::Airplane => DemoProfile::ArduPlane,
+        DemoVehiclePreset::Quadplane => DemoProfile::ArduQuadPlane,
     }
-}
-
-#[derive(Deserialize)]
-pub(crate) struct ConnectRequest {
-    transport: LinkEndpoint,
-    #[serde(default)]
-    auto_record_on_connect: bool,
-}
-
-#[derive(Debug, Deserialize)]
-pub(crate) struct DisconnectRequest {
-    #[allow(dead_code)]
-    session_id: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub(crate) enum LinkEndpoint {
-    Udp {
-        bind_addr: String,
-    },
-    Tcp {
-        address: String,
-    },
-    #[cfg(not(target_os = "android"))]
-    Serial {
-        port: String,
-        baud: u32,
-    },
-    BluetoothBle {
-        address: String,
-        #[serde(default)]
-        profile: Option<BluetoothProfile>,
-    },
-    Demo {
-        vehicle_preset: DemoVehiclePreset,
-    },
-    #[cfg(target_os = "android")]
-    BluetoothSpp {
-        address: String,
-    },
 }
 
 async fn connect_via_address(
@@ -192,7 +142,7 @@ async fn connect_demo(vehicle_preset: DemoVehiclePreset) -> Result<ConnectedVehi
     );
 
     let (vehicle, demo_handle) = DemoVehicle::builder()
-        .profile(vehicle_preset.profile())
+        .profile(demo_profile(vehicle_preset))
         .connect(config)
         .await
         .map_err(|error| error.to_string())?;
@@ -313,11 +263,11 @@ pub(crate) async fn connect_link(
     }
 
     match request.transport {
-        LinkEndpoint::Udp { bind_addr } => {
+        ConnectTransport::Udp { bind_addr } => {
             let vehicle = connect_via_address(&state, format!("udpin:{bind_addr}")).await?;
             store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await?;
         }
-        LinkEndpoint::Tcp { address } => {
+        ConnectTransport::Tcp { address } => {
             let mut connected_vehicle =
                 connect_via_address(&state, format!("tcpout:{address}")).await?;
             let vehicle = connected_vehicle.vehicle.clone();
@@ -327,32 +277,56 @@ pub(crate) async fn connect_link(
             store_connected_vehicle(&state, &app, connected_vehicle, ActiveLinkTarget::Other)
                 .await?;
         }
-        #[cfg(not(target_os = "android"))]
-        LinkEndpoint::Serial { port, baud } => {
-            let vehicle = connect_via_address(&state, format!("serial:{port}:{baud}")).await?;
-            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Serial { port })
-                .await?;
+        ConnectTransport::Serial { port, baud } => {
+            #[cfg(not(target_os = "android"))]
+            {
+                let vehicle = connect_via_address(&state, format!("serial:{port}:{baud}")).await?;
+                store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Serial { port })
+                    .await?;
+            }
+            #[cfg(target_os = "android")]
+            {
+                let _ = (port, baud);
+                return Err("Serial transport is not supported on Android.".into());
+            }
         }
-        LinkEndpoint::BluetoothBle { address, profile } => {
+        ConnectTransport::BluetoothBle { address, profile } => {
             let profile = profile.unwrap_or(BluetoothProfile::NordicUart);
             let vehicle =
                 connect_with_abort(&state, async move { connect_ble(&address, profile).await })
                     .await?;
             store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::BluetoothBle).await?;
         }
-        LinkEndpoint::Demo { vehicle_preset } => {
+        ConnectTransport::Demo { vehicle_preset } => {
             let vehicle =
                 connect_with_abort(&state, async move { connect_demo(vehicle_preset).await })
                     .await?;
             store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await?;
         }
-        #[cfg(target_os = "android")]
-        LinkEndpoint::BluetoothSpp { address } => {
-            let spp_app = app.clone();
-            let vehicle =
-                connect_with_abort(&state, async move { connect_spp(&spp_app, &address).await })
+        ConnectTransport::BluetoothSpp { address } => {
+            #[cfg(target_os = "android")]
+            {
+                let spp_app = app.clone();
+                let vehicle =
+                    connect_with_abort(
+                        &state,
+                        async move { connect_spp(&spp_app, &address).await },
+                    )
                     .await?;
-            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await?;
+                store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await?;
+            }
+            #[cfg(not(target_os = "android"))]
+            {
+                let _ = address;
+                return Err("Classic Bluetooth SPP is only supported on Android.".into());
+            }
+        }
+        ConnectTransport::WebSocket { .. }
+        | ConnectTransport::WebSerial { .. }
+        | ConnectTransport::WebBluetooth { .. } => {
+            return Err(
+                "Browser-owned transports are not supported by the native Tauri backend.".into(),
+            );
         }
     }
 
@@ -643,7 +617,7 @@ mod tests {
         }))
         .expect("deserialize connect request");
 
-        assert!(matches!(request.transport, LinkEndpoint::Tcp { .. }));
+        assert!(matches!(request.transport, ConnectTransport::Tcp { .. }));
         assert!(!request.auto_record_on_connect);
     }
 
@@ -656,7 +630,7 @@ mod tests {
 
         assert!(matches!(
             request.transport,
-            LinkEndpoint::Demo {
+            ConnectTransport::Demo {
                 vehicle_preset: DemoVehiclePreset::Quadplane,
             }
         ));
@@ -675,7 +649,7 @@ mod tests {
 
         assert!(matches!(
             request.transport,
-            LinkEndpoint::BluetoothBle {
+            ConnectTransport::BluetoothBle {
                 profile: Some(BluetoothProfile::NordicUart),
                 ..
             }
@@ -685,13 +659,13 @@ mod tests {
     #[test]
     fn recording_auto_on_connect_setting() {
         let disabled = ConnectRequest {
-            transport: LinkEndpoint::Udp {
+            transport: ConnectTransport::Udp {
                 bind_addr: "0.0.0.0:14550".into(),
             },
             auto_record_on_connect: false,
         };
         let enabled = ConnectRequest {
-            transport: LinkEndpoint::Udp {
+            transport: ConnectTransport::Udp {
                 bind_addr: "0.0.0.0:14550".into(),
             },
             auto_record_on_connect: true,
