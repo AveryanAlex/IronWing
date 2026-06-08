@@ -1,7 +1,7 @@
-import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
 import type { FencePlan } from "./fence";
 import { EVENT_NAMES } from "./lib/generated/events";
+import { typedInvoke } from "./lib/ipc/client";
 import type { MissionPlan, WireMissionPlan } from "./lib/mavkit-types";
 import type { RallyPlan } from "./rally";
 import type { SessionEvent } from "./session";
@@ -92,29 +92,29 @@ export function toWireMissionPlan(plan: MissionPlan | WireMissionPlan): WireMiss
 export async function uploadMission(
   plan: import("./lib/mavkit-types").MissionPlan,
 ): Promise<void> {
-  await invoke("mission_upload", { plan: toWireMissionPlan(plan) });
+  await typedInvoke("mission_upload", { plan: toWireMissionPlan(plan) });
 }
 
 export async function downloadMission(): Promise<MissionDownload> {
-  return invoke<MissionDownload>("mission_download");
+  return typedInvoke("mission_download");
 }
 
 export async function validateMission(
   plan: import("./lib/mavkit-types").MissionPlan,
 ): Promise<MissionIssue[]> {
-  return invoke<MissionIssue[]>("mission_validate", { plan: toWireMissionPlan(plan) });
+  return typedInvoke("mission_validate", { plan: toWireMissionPlan(plan) });
 }
 
 export async function clearMission(): Promise<void> {
-  await invoke("mission_clear");
+  await typedInvoke("mission_clear");
 }
 
 export async function setCurrentMissionItem(seq: number): Promise<void> {
-  await invoke("mission_set_current", { seq });
+  await typedInvoke("mission_set_current", { seq });
 }
 
 export async function cancelMissionTransfer(): Promise<void> {
-  await invoke("mission_cancel");
+  await typedInvoke("mission_cancel");
 }
 
 export async function subscribeMissionProgress(

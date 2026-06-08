@@ -1,7 +1,7 @@
-import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type { DomainValue } from "./lib/domain-status";
+import { typedInvoke } from "./lib/ipc/client";
 import type { SessionEvent } from "./session";
 import type { BluetoothProfile } from "./transport";
 import { createLatestScopedValueHandler } from "./lib/scoped-session-events";
@@ -138,19 +138,19 @@ export type BluetoothDevice = {
 };
 
 export async function btRequestPermissions(): Promise<void> {
-  await invoke("bt_request_permissions");
+  await typedInvoke("bt_request_permissions");
 }
 
 export async function btScanBle(timeoutMs?: number, profile?: BluetoothProfile): Promise<BluetoothDevice[]> {
-  return invoke<BluetoothDevice[]>("bt_scan_ble", { timeoutMs, profile });
+  return typedInvoke("bt_scan_ble", { timeoutMs, profile });
 }
 
 export async function btStopScanBle(): Promise<void> {
-  await invoke("bt_stop_scan_ble");
+  await typedInvoke("bt_stop_scan_ble");
 }
 
 export async function btGetBondedDevices(): Promise<BluetoothDevice[]> {
-  return invoke<BluetoothDevice[]>("bt_get_bonded_devices");
+  return typedInvoke("bt_get_bonded_devices");
 }
 
 export async function subscribeTelemetryState(
@@ -165,27 +165,27 @@ export async function subscribeTelemetryState(
 }
 
 export async function armVehicle(force: boolean): Promise<void> {
-  await invoke("arm_vehicle", { force });
+  await typedInvoke("arm_vehicle", { force });
 }
 
 export async function disarmVehicle(force: boolean): Promise<void> {
-  await invoke("disarm_vehicle", { force });
+  await typedInvoke("disarm_vehicle", { force });
 }
 
 export async function setFlightMode(customMode: number): Promise<void> {
-  await invoke("set_flight_mode", { customMode });
+  await typedInvoke("set_flight_mode", { customMode });
 }
 
 export async function getAvailableModes(): Promise<FlightModeEntry[]> {
-  return invoke<FlightModeEntry[]>("get_available_modes");
+  return typedInvoke("get_available_modes");
 }
 
 export async function setTelemetryRate(rateHz: number): Promise<void> {
-  await invoke("set_telemetry_rate", { rateHz });
+  await typedInvoke("set_telemetry_rate", { rateHz });
 }
 
 export async function setMessageRate(messageId: number, rateHz: number): Promise<void> {
-  await invoke("set_message_rate", { messageId, rateHz });
+  await typedInvoke("set_message_rate", { messageId, rateHz });
 }
 
 export type MessageRateInfo = {
@@ -195,5 +195,5 @@ export type MessageRateInfo = {
 };
 
 export async function getAvailableMessageRates(): Promise<MessageRateInfo[]> {
-  return invoke<MessageRateInfo[]>("get_available_message_rates");
+  return typedInvoke("get_available_message_rates");
 }

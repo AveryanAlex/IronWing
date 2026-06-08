@@ -1,4 +1,4 @@
-import { invoke } from "@platform/core";
+import { typedInvoke } from "./lib/ipc/client";
 import { getBrowserStorage } from "./lib/local-storage";
 import { loadSettings, persistSettings } from "./lib/stores/settings";
 import type { OperationFailure, OperationId } from "./session";
@@ -63,15 +63,15 @@ export async function startRecording(path: string): Promise<string> {
 }
 
 export async function startRecordingWithRequest(request: RecordingStartRequest): Promise<string> {
-  return invoke<string>("recording_start", { request });
+  return typedInvoke("recording_start", { request });
 }
 
 export async function stopRecording(): Promise<void> {
-  return invoke<void>("recording_stop");
+  return typedInvoke("recording_stop");
 }
 
 export async function getRecordingStatus(): Promise<RecordingStatus> {
-  return invoke<RecordingStatus>("recording_status");
+  return typedInvoke("recording_status");
 }
 
 export function withPersistedRecordingSettings(
@@ -87,7 +87,7 @@ export function withPersistedRecordingSettings(
 export async function getRecordingSettings(
   storage: StorageLike = getBrowserStorage(),
 ): Promise<RecordingSettingsResult> {
-  const result = await invoke<RecordingSettingsResult>("recording_settings_read");
+  const result = await typedInvoke("recording_settings_read");
   return {
     ...result,
     settings: {
@@ -101,7 +101,7 @@ export async function saveRecordingSettings(
   settings: RecordingSettings,
   storage: StorageLike = getBrowserStorage(),
 ): Promise<RecordingSettingsResult> {
-  const result = await invoke<RecordingSettingsResult>("recording_settings_write", { settings });
+  const result = await typedInvoke("recording_settings_write", { settings });
   const nextSettings = {
     ...result.settings,
     auto_record_on_connect: settings.auto_record_on_connect,

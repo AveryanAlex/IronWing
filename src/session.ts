@@ -1,4 +1,3 @@
-import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
 import type { CalibrationDomain } from "./calibration";
 import type { GuidedDomain } from "./guided";
@@ -7,6 +6,7 @@ import type { HomePosition, MissionState } from "./mission";
 import { EVENT_NAMES } from "./lib/generated/events";
 import { OPERATION_IDS } from "./lib/generated/ironwing";
 import type { OperationFailure, OperationId, ReasonKind, SourceKind } from "./lib/generated/ironwing";
+import { typedInvoke } from "./lib/ipc/client";
 import type { ParamProgress, ParamStore } from "./params";
 import { withPersistedRecordingSettings } from "./recording";
 import type { SensorHealthDomain } from "./sensor-health";
@@ -72,11 +72,11 @@ export type SessionEvent<T> = {
 };
 
 export async function openSessionSnapshot(sourceKind: SourceKind): Promise<OpenSessionSnapshot> {
-  return invoke<OpenSessionSnapshot>("open_session_snapshot", { sourceKind });
+  return typedInvoke("open_session_snapshot", { sourceKind });
 }
 
 export async function ackSessionSnapshot(envelope: SessionEnvelope): Promise<AckSessionSnapshotResult> {
-  return invoke<AckSessionSnapshotResult>("ack_session_snapshot", {
+  return typedInvoke("ack_session_snapshot", {
     sessionId: envelope.session_id,
     seekEpoch: envelope.seek_epoch,
     resetRevision: envelope.reset_revision,
@@ -84,11 +84,11 @@ export async function ackSessionSnapshot(envelope: SessionEnvelope): Promise<Ack
 }
 
 export async function connectSession(request: ConnectRequest): Promise<void> {
-  await invoke("connect_link", { request: withPersistedRecordingSettings(request) });
+  await typedInvoke("connect_link", { request: withPersistedRecordingSettings(request) });
 }
 
 export async function disconnectSession(request?: DisconnectRequest): Promise<void> {
-  await invoke("disconnect_link", { request });
+  await typedInvoke("disconnect_link", { request });
 }
 
 export async function subscribeSessionState(

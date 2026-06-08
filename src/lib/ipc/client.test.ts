@@ -34,7 +34,7 @@ describe("typed IPC client", () => {
 
     await typedInvoke("mission_cancel");
 
-    expect(mocks.invoke).toHaveBeenCalledWith("mission_cancel", undefined);
+    expect(mocks.invoke).toHaveBeenCalledWith("mission_cancel");
   });
 
   it("forwards event names and handlers unchanged", async () => {

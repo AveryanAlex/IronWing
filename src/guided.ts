@@ -1,4 +1,3 @@
-import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type {
@@ -8,6 +7,7 @@ import type {
   GuidedTerminationReason,
 } from "./lib/generated/ironwing";
 import type { DomainValue } from "./lib/domain-status";
+import { typedInvoke } from "./lib/ipc/client";
 import type { SessionEvent } from "./session";
 
 export type GuidedSession = {
@@ -104,19 +104,19 @@ export type UpdateGuidedSessionRequest = {
 };
 
 export async function startGuidedSession(request: StartGuidedSessionRequest): Promise<GuidedCommandResult> {
-  return invoke<GuidedCommandResult>("start_guided_session", { request });
+  return typedInvoke("start_guided_session", { request });
 }
 
 export async function updateGuidedSession(request: UpdateGuidedSessionRequest): Promise<GuidedCommandResult> {
-  return invoke<GuidedCommandResult>("update_guided_session", { request });
+  return typedInvoke("update_guided_session", { request });
 }
 
 export async function stopGuidedSession(): Promise<GuidedCommandResult> {
-  return invoke<GuidedCommandResult>("stop_guided_session");
+  return typedInvoke("stop_guided_session");
 }
 
 export async function guidedTakeoff(altitudeM: number): Promise<void> {
-  await invoke("vehicle_takeoff", { altitudeM });
+  await typedInvoke("vehicle_takeoff", { altitudeM });
 }
 
 export async function subscribeGuidedState(

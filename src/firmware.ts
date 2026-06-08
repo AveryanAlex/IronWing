@@ -1,7 +1,7 @@
-import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type * as Generated from "./lib/generated/ironwing";
+import { typedInvoke } from "./lib/ipc/client";
 
 export type FirmwareInstallUpdatePhase = Generated.SerialFlashPhase;
 export type BootloaderInstallationPhase = Generated.DfuRecoveryPhase;
@@ -58,7 +58,7 @@ export type CatalogEntry = Omit<Generated.CatalogEntry, "image_size"> & {
 export type CatalogTargetSummary = Generated.CatalogTargetSummary;
 
 export async function firmwareInstallPreflight(): Promise<FirmwareInstallPreflightInfo> {
-  return invoke<FirmwareInstallPreflightInfo>("firmware_install_update_preflight");
+  return typedInvoke("firmware_install_update_preflight");
 }
 
 export async function firmwareInstallUpdate(
@@ -67,7 +67,7 @@ export async function firmwareInstallUpdate(
   source: FirmwareInstallSource,
   options?: FirmwareInstallOptions,
 ): Promise<FirmwareInstallResult> {
-  return invoke<FirmwareInstallResult>("firmware_install_update", {
+  return typedInvoke("firmware_install_update", {
     request: { port, baud, source, options: options ?? null },
   });
 }
@@ -75,40 +75,40 @@ export async function firmwareInstallUpdate(
 export async function firmwareInstallReadiness(
   request: FirmwareInstallReadinessRequest,
 ): Promise<FirmwareInstallReadinessResponse> {
-  return invoke<FirmwareInstallReadinessResponse>("firmware_install_update_readiness", { request });
+  return typedInvoke("firmware_install_update_readiness", { request });
 }
 
 export async function firmwareRebootToBootloader(port: string): Promise<FirmwareRebootToBootloaderResult> {
-  return invoke<FirmwareRebootToBootloaderResult>("firmware_reboot_to_bootloader", { port });
+  return typedInvoke("firmware_reboot_to_bootloader", { port });
 }
 
 export async function firmwareDetectBootloaderBoard(port: string): Promise<FirmwareBootloaderBoardInfo> {
-  return invoke<FirmwareBootloaderBoardInfo>("firmware_detect_bootloader_board", { port });
+  return typedInvoke("firmware_detect_bootloader_board", { port });
 }
 
 export async function firmwareBootloaderInstallation(
   device: DfuDeviceInfo,
   source: BootloaderInstallationSource,
 ): Promise<BootloaderInstallationResult> {
-  return invoke<BootloaderInstallationResult>("firmware_bootloader_installation", {
+  return typedInvoke("firmware_bootloader_installation", {
     request: { device, source },
   });
 }
 
 export async function firmwareSessionStatus(): Promise<FirmwareSessionStatus> {
-  return invoke<FirmwareSessionStatus>("firmware_session_status");
+  return typedInvoke("firmware_session_status");
 }
 
 export async function firmwareSessionCancel(): Promise<void> {
-  return invoke<void>("firmware_session_cancel");
+  return typedInvoke("firmware_session_cancel");
 }
 
 export async function firmwareSessionClearCompleted(): Promise<void> {
-  return invoke<void>("firmware_session_clear_completed");
+  return typedInvoke("firmware_session_clear_completed");
 }
 
 export async function firmwareListDfuDevices(): Promise<DfuScanResult> {
-  return invoke<DfuScanResult>("firmware_list_dfu_devices");
+  return typedInvoke("firmware_list_dfu_devices");
 }
 
 export async function subscribeFirmwareProgress(

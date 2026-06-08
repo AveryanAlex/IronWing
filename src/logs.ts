@@ -1,7 +1,7 @@
-import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type * as Generated from "./lib/generated/ironwing";
+import { typedInvoke } from "./lib/ipc/client";
 import type { FlightPathPoint } from "./playback";
 
 type UiWire<T> = T extends bigint
@@ -84,7 +84,7 @@ export type LogExportResult = UiWire<Generated.LogExportResult>;
 
 /** Load only the log summary metadata; bounded queries fetch the actual data. */
 export async function openLog(path: string): Promise<LogSummary> {
-  return invoke<LogSummary>("log_open", { path });
+  return typedInvoke("log_open", { path });
 }
 
 export async function queryLogMessages(
@@ -93,7 +93,7 @@ export async function queryLogMessages(
   endUsec?: number,
   maxPoints?: number,
 ): Promise<LogDataPoint[]> {
-  return invoke<LogDataPoint[]>("log_query", {
+  return typedInvoke("log_query", {
     msgType,
     startUsec: startUsec ?? null,
     endUsec: endUsec ?? null,
@@ -102,61 +102,61 @@ export async function queryLogMessages(
 }
 
 export async function getLogSummary(): Promise<LogSummary | null> {
-  return invoke<LogSummary | null>("log_get_summary");
+  return typedInvoke("log_get_summary");
 }
 
 export async function closeLog(): Promise<void> {
-  return invoke<void>("log_close");
+  return typedInvoke("log_close");
 }
 
 export async function listLogFormatAdapters(): Promise<LogFormatAdapter[]> {
-  return invoke<LogFormatAdapter[]>("log_format_adapters");
+  return typedInvoke("log_format_adapters");
 }
 
 export async function getLogLibraryCatalog(): Promise<LogLibraryCatalog> {
-  return invoke<LogLibraryCatalog>("log_library_list");
+  return typedInvoke("log_library_list");
 }
 
 export async function refreshLogLibrary(): Promise<LogLibraryCatalog> {
-  return invoke<LogLibraryCatalog>("log_library_list");
+  return typedInvoke("log_library_list");
 }
 
 export async function registerLogLibraryEntry(path: string): Promise<LogLibraryEntry> {
-  return invoke<LogLibraryEntry>("log_library_register", { path });
+  return typedInvoke("log_library_register", { path });
 }
 
 export async function registerLogLibraryEntryFromPicker(): Promise<LogLibraryEntry | null> {
-  return invoke<LogLibraryEntry | null>("log_library_register_open_file");
+  return typedInvoke("log_library_register_open_file");
 }
 
 export async function removeLogLibraryEntry(entryId: string): Promise<LogLibraryCatalog> {
-  return invoke<LogLibraryCatalog>("log_library_remove", { entryId });
+  return typedInvoke("log_library_remove", { entryId });
 }
 
 export async function relinkLogLibraryEntry(entryId: string, path: string): Promise<LogLibraryEntry> {
-  return invoke<LogLibraryEntry>("log_library_relink", { entryId, path });
+  return typedInvoke("log_library_relink", { entryId, path });
 }
 
 export async function reindexLogLibraryEntry(entryId: string): Promise<LogLibraryEntry> {
-  return invoke<LogLibraryEntry>("log_library_reindex", { entryId });
+  return typedInvoke("log_library_reindex", { entryId });
 }
 
 export async function cancelLogLibraryOperation(): Promise<boolean> {
-  return invoke<boolean>("log_library_cancel");
+  return typedInvoke("log_library_cancel");
 }
 
 /** Fetch one bounded raw-message page for the active entry and filter slice. */
 export async function queryRawMessages(request: RawMessageQuery): Promise<RawMessagePage> {
-  return invoke<RawMessagePage>("log_raw_messages_query", { request });
+  return typedInvoke("log_raw_messages_query", { request });
 }
 
 /** Fetch bounded chart series for the active entry and selected time window. */
 export async function queryChartSeries(request: ChartSeriesRequest): Promise<ChartSeriesPage> {
-  return invoke<ChartSeriesPage>("log_chart_series_query", { request });
+  return typedInvoke("log_chart_series_query", { request });
 }
 
 export async function queryFlightPath(request: FlightPathQuery): Promise<FlightPathPoint[]> {
-  return invoke<FlightPathPoint[]>("log_get_flight_path", {
+  return typedInvoke("log_get_flight_path", {
     entryId: request.entry_id,
     startUsec: request.start_usec,
     endUsec: request.end_usec,
@@ -165,7 +165,7 @@ export async function queryFlightPath(request: FlightPathQuery): Promise<FlightP
 }
 
 export async function exportLog(request: LogExportRequest): Promise<LogExportResult> {
-  return invoke<LogExportResult>("log_export", { request });
+  return typedInvoke("log_export", { request });
 }
 
 export type FlightSummary = {
@@ -185,7 +185,7 @@ export type FlightSummary = {
 };
 
 export async function getFlightSummary(): Promise<FlightSummary> {
-  return invoke<FlightSummary>("log_get_flight_summary");
+  return typedInvoke("log_get_flight_summary");
 }
 
 export async function exportLogCsv(
@@ -193,7 +193,7 @@ export async function exportLogCsv(
   startUsec?: number,
   endUsec?: number,
 ): Promise<number> {
-  return invoke<number>("log_export_csv", {
+  return typedInvoke("log_export_csv", {
     path,
     startUsec: startUsec ?? null,
     endUsec: endUsec ?? null,

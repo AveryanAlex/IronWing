@@ -1,4 +1,4 @@
-import { invoke } from "@platform/core";
+import { typedInvoke } from "./lib/ipc/client";
 
 export type SerialPortInfo = {
   port_name: string;
@@ -25,12 +25,12 @@ function isUnsupportedCommandError(error: unknown, command: string): boolean {
 }
 
 export async function listSerialPortInventory(): Promise<SerialPortInventoryResult> {
-  return invoke<SerialPortInventoryResult>("list_serial_port_inventory");
+  return typedInvoke("list_serial_port_inventory");
 }
 
 export async function requestWebSerialPort(): Promise<SerialPortInfo | null> {
   try {
-    return await invoke<SerialPortInfo | null>("request_web_serial_port");
+    return await typedInvoke("request_web_serial_port");
   } catch (error) {
     if (isUnsupportedCommandError(error, "request_web_serial_port")) {
       return null;

@@ -1,7 +1,7 @@
-import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type * as Generated from "./lib/generated/ironwing";
+import { typedInvoke } from "./lib/ipc/client";
 import type { LogDiagnostic } from "./logs";
 import type { SessionEvent } from "./session";
 import type { Telemetry, VehicleState } from "./telemetry";
@@ -70,7 +70,7 @@ export type PlaybackSeekResult = UiWire<Generated.PlaybackSeekResult>;
 export async function getFlightPath(
   maxPoints?: number,
 ): Promise<FlightPathPoint[]> {
-  return invoke<FlightPathPoint[]>("log_get_flight_path", {
+  return typedInvoke("log_get_flight_path", {
     maxPoints: maxPoints ?? null,
   });
 }
@@ -78,29 +78,29 @@ export async function getFlightPath(
 export async function getLogTelemetryTrack(
   maxPoints?: number,
 ): Promise<TelemetrySnapshot[]> {
-  return invoke<TelemetrySnapshot[]>("log_get_telemetry_track", {
+  return typedInvoke("log_get_telemetry_track", {
     maxPoints: maxPoints ?? null,
   });
 }
 
 export async function playPlayback(): Promise<PlaybackStateSnapshot> {
-  return invoke<PlaybackStateSnapshot>("playback_play");
+  return typedInvoke("playback_play");
 }
 
 export async function pausePlayback(): Promise<PlaybackStateSnapshot> {
-  return invoke<PlaybackStateSnapshot>("playback_pause");
+  return typedInvoke("playback_pause");
 }
 
 export async function seekPlayback(cursorUsec: number | null): Promise<PlaybackSeekResult> {
-  return invoke<PlaybackSeekResult>("playback_seek", { cursorUsec });
+  return typedInvoke("playback_seek", { cursorUsec });
 }
 
 export async function setPlaybackSpeed(speed: number): Promise<PlaybackStateSnapshot> {
-  return invoke<PlaybackStateSnapshot>("playback_set_speed", { speed });
+  return typedInvoke("playback_set_speed", { speed });
 }
 
 export async function stopPlayback(): Promise<PlaybackStateSnapshot> {
-  return invoke<PlaybackStateSnapshot>("playback_stop");
+  return typedInvoke("playback_stop");
 }
 
 export async function subscribePlaybackState(

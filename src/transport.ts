@@ -1,4 +1,4 @@
-import { invoke } from "@platform/core";
+import { typedInvoke } from "./lib/ipc/client";
 import type { BluetoothProfile, TransportDescriptor as GeneratedTransportDescriptor } from "./lib/generated/ironwing";
 
 export type DemoVehiclePreset = "quadcopter" | "airplane" | "quadplane";
@@ -46,7 +46,7 @@ export type DisconnectRequest = {
 };
 
 export async function availableTransportDescriptors(): Promise<TransportDescriptor[]> {
-  return invoke<TransportDescriptor[]>("available_transports");
+  return typedInvoke("available_transports");
 }
 
 export function describeTransportAvailability(descriptor: TransportDescriptor): string {

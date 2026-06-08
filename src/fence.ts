@@ -1,4 +1,4 @@
-import { invoke } from "@platform/core";
+import { typedInvoke } from "./lib/ipc/client";
 
 export type {
   FencePlan,
@@ -12,13 +12,13 @@ export type {
 import type { FencePlan } from "./lib/mavkit-types";
 
 export async function uploadFence(plan: FencePlan): Promise<void> {
-  await invoke("fence_upload", { plan });
+  await typedInvoke("fence_upload", { plan });
 }
 
 export async function downloadFence(): Promise<FencePlan> {
-  return invoke<FencePlan>("fence_download");
+  return typedInvoke("fence_download");
 }
 
 export async function clearFence(): Promise<void> {
-  await invoke("fence_clear");
+  await typedInvoke("fence_clear");
 }

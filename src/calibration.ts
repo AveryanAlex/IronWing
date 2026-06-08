@@ -1,7 +1,7 @@
-import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type { CalibrationLifecycle, CalibrationState, CalibrationStep } from "./lib/generated/ironwing";
+import { typedInvoke } from "./lib/ipc/client";
 import { createLatestScopedValueHandler } from "./lib/scoped-session-events";
 import type { DomainValue } from "./lib/domain-status";
 import type { MagCalProgress, MagCalReport } from "./sensor-health";
@@ -35,44 +35,44 @@ export async function subscribeCalibrationStateEvent(
 }
 
 export async function calibrateAccel(): Promise<void> {
-  return invoke("calibrate_accel");
+  return typedInvoke("calibrate_accel");
 }
 
 export async function calibrateGyro(): Promise<void> {
-  return invoke("calibrate_gyro");
+  return typedInvoke("calibrate_gyro");
 }
 
 export function calibrateCompassStart(compassMask: number = 0): Promise<void> {
-  return invoke("calibrate_compass_start", { compassMask });
+  return typedInvoke("calibrate_compass_start", { compassMask });
 }
 
 export function calibrateCompassAccept(compassMask: number = 0): Promise<void> {
-  return invoke("calibrate_compass_accept", { compassMask });
+  return typedInvoke("calibrate_compass_accept", { compassMask });
 }
 
 export function calibrateCompassCancel(compassMask: number = 0): Promise<void> {
-  return invoke("calibrate_compass_cancel", { compassMask });
+  return typedInvoke("calibrate_compass_cancel", { compassMask });
 }
 
 export function motorTest(motorInstance: number, throttlePct: number, durationS: number): Promise<void> {
-  return invoke("motor_test", { motorInstance, throttlePct, durationS });
+  return typedInvoke("motor_test", { motorInstance, throttlePct, durationS });
 }
 
 export function setServo(instance: number, pwmUs: number): Promise<void> {
-  return invoke("set_servo", { instance, pwmUs });
+  return typedInvoke("set_servo", { instance, pwmUs });
 }
 
 /**
  * RC overrides are transient; callers must resend at their required control cadence.
  */
 export function rcOverride(channels: RcOverrideChannel[]): Promise<void> {
-  return invoke("rc_override", { channels });
+  return typedInvoke("rc_override", { channels });
 }
 
 export function rebootVehicle(): Promise<void> {
-  return invoke("reboot_vehicle");
+  return typedInvoke("reboot_vehicle");
 }
 
 export function requestPrearmChecks(): Promise<void> {
-  return invoke("request_prearm_checks");
+  return typedInvoke("request_prearm_checks");
 }

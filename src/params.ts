@@ -1,6 +1,6 @@
-import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
 import { EVENT_NAMES } from "./lib/generated/events";
+import { typedInvoke } from "./lib/ipc/client";
 import { createLatestScopedEventHandler } from "./lib/scoped-session-events";
 import type { SessionEvent } from "./session";
 
@@ -78,27 +78,27 @@ export type ParamWriteResult = {
 };
 
 export async function downloadAllParams(): Promise<void> {
-  return invoke<void>("param_download_all");
+  return typedInvoke("param_download_all");
 }
 
 export async function cancelParamDownload(): Promise<void> {
-  return invoke<void>("param_cancel");
+  return typedInvoke("param_cancel");
 }
 
 export async function writeParam(name: string, value: number): Promise<Param> {
-  return invoke<Param>("param_write", { name, value });
+  return typedInvoke("param_write", { name, value });
 }
 
 export async function writeBatchParams(params: [string, number][]): Promise<ParamWriteResult[]> {
-  return invoke<ParamWriteResult[]>("param_write_batch", { params });
+  return typedInvoke("param_write_batch", { params });
 }
 
 export async function parseParamFile(contents: string): Promise<Record<string, number>> {
-  return invoke<Record<string, number>>("param_parse_file", { contents });
+  return typedInvoke("param_parse_file", { contents });
 }
 
 export async function formatParamFile(store: ParamStore): Promise<string> {
-  return invoke<string>("param_format_file", { store });
+  return typedInvoke("param_format_file", { store });
 }
 
 export async function subscribeParamStore(cb: (event: SessionEvent<ParamStore>) => void): Promise<UnlistenFn> {

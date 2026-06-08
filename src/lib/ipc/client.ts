@@ -11,6 +11,9 @@ export async function typedInvoke<C extends keyof InvokeCommandMap>(
   command: C,
   args?: InvokeCommandMap[C]["args"],
 ): Promise<InvokeResult<C>> {
+  if (args === undefined) {
+    return invoke<InvokeResult<C>>(command);
+  }
   return invoke<InvokeResult<C>>(command, args as Record<string, unknown> | undefined);
 }
 
