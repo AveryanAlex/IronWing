@@ -128,6 +128,13 @@ import {
   validateSetServoArgs,
   validateSetTelemetryRateArgs,
 } from "./backend/vehicle";
+import {
+  definePlatformCommandHandlers,
+  hasPlatformCommandHandler,
+  invokePlatformCommand,
+  type PlatformCommandHandlers,
+} from "../../lib/ipc/platform-handlers";
+import type { InvokeResult } from "../../lib/ipc/command-types";
 import type {
   CommandArgs,
   MockCommandBehavior,
@@ -477,411 +484,437 @@ function mockRuntimeCapabilities() {
   };
 }
 
-async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unknown> {
-  switch (cmd) {
-    case "list_serial_port_inventory": {
-      return mockInventoryResult();
-    }
-    case "request_web_serial_port":
-      return null;
-    case "bt_request_permissions":
-    case "bt_stop_scan_ble":
-      return undefined;
-    case "bt_scan_ble":
-      return [
-        { name: "Demo BLE Radio", address: "AA:BB:CC:DD:EE:FF", device_type: "ble", profile: "nordic_uart" },
-      ];
-    case "bt_get_bonded_devices":
-      return [
-        { name: "Demo SPP Radio", address: "11:22:33:44:55:66", device_type: "classic" },
-      ];
-    case "available_transports":
-      return availableTransportDescriptors();
-    case "runtime_capabilities":
-      return mockRuntimeCapabilities();
-    case "open_session_snapshot":
-      return openSessionSnapshotResult(((args?.sourceKind as "live" | "playback" | undefined) ?? "live"));
-    case "ack_session_snapshot":
-      return ackSessionSnapshotResult(args);
-    case "playback_seek": {
-      const { events, ...result } = playbackSeekResult(args);
-      emitMany(events);
-      return result;
-    }
-    case "playback_play": {
-      const { state, events } = playbackPlayResult();
-      emitMany(events);
-      return state;
-    }
-    case "playback_pause": {
-      const { state, events } = playbackPauseResult();
-      emitMany(events);
-      return state;
-    }
-    case "playback_set_speed": {
-      const { state, events } = playbackSetSpeedResult(args);
-      emitMany(events);
-      return state;
-    }
-    case "playback_stop": {
-      if (!mockState.logOpen) {
-        throw new Error("no log open");
-      }
-      if (!mockState.playbackEnvelope) {
-        throw new Error("playback session is not active");
-      }
-      const playbackEnvelope = mockState.playbackEnvelope;
-      mockState.logOpen = false;
-      mockState.playbackEnvelope = null;
-      mockState.pendingPlaybackEnvelope = null;
-      mockState.playbackCursorUsec = null;
-      const idleState = closeMockLog();
-      emitEvent(EVENT_NAMES.PLAYBACK_STATE, { envelope: playbackEnvelope, value: idleState });
-      if (mockState.liveEnvelope && mockState.liveVehicleState) {
-        emitEvent(EVENT_NAMES.SESSION_STATE, liveSessionStreamEvent(mockState.liveVehicleState).payload);
-      }
-      return idleState;
-    }
-    case "log_format_adapters":
-      return getLogFormatAdapters();
-    case "log_library_list":
-      return listLogLibrary();
-    case "log_library_register": {
-      const path = typeof args?.path === "string" ? args.path : null;
-      if (!path) {
-        throw new Error("missing or invalid log_library_register.path");
-      }
-      const { entry, events } = registerLogLibraryEntry(path);
-      emitMany(events);
-      return entry;
-    }
-    case "log_library_register_open_file": {
-      return registerLogLibraryEntryFromPicker().then((result: Awaited<ReturnType<typeof registerLogLibraryEntryFromPicker>>) => {
-        if (!result) {
-          return null;
-        }
-        emitMany(result.events);
-        return result.entry;
-      });
-    }
-    case "log_library_remove": {
-      const entryId = typeof args?.entryId === "string" ? args.entryId : null;
-      if (!entryId) {
-        throw new Error("missing or invalid log_library_remove.entryId");
-      }
-      return removeLogLibraryEntry(entryId);
-    }
-    case "log_library_relink": {
-      const entryId = typeof args?.entryId === "string" ? args.entryId : null;
-      const path = typeof args?.path === "string" ? args.path : null;
-      if (!entryId) {
-        throw new Error("missing or invalid log_library_relink.entryId");
-      }
-      if (!path) {
-        throw new Error("missing or invalid log_library_relink.path");
-      }
-      const { entry, events } = relinkLogLibraryEntry(entryId, path);
-      emitMany(events);
-      return entry;
-    }
-    case "log_library_reindex": {
-      const entryId = typeof args?.entryId === "string" ? args.entryId : null;
-      if (!entryId) {
-        throw new Error("missing or invalid log_library_reindex.entryId");
-      }
-      const { entry, events } = reindexLogLibraryEntry(entryId);
-      emitMany(events);
-      return entry;
-    }
-    case "log_library_cancel":
-      return cancelLogLibraryOperation();
-    case "log_raw_messages_query":
-      return queryRawMessages(args);
-    case "log_chart_series_query":
-      return queryChartSeries(args);
-    case "log_export": {
-      const { events, result } = exportLog(args);
-      emitMany(events);
-      return result;
-    }
-    case "log_get_summary":
-      return getActiveLogSummary();
-    case "log_query":
-      return queryLogMessages(args);
-    case "log_get_flight_path":
-      return getFlightPath(args);
-    case "log_get_telemetry_track":
-      return getTelemetryTrack(args);
-    case "log_get_flight_summary":
-      return getFlightSummary();
-    case "log_export_csv": {
-      const { events, rowsWritten } = exportLogCsv(args);
-      emitMany(events);
-      return rowsWritten;
-    }
-    case "recording_status":
-      return getRecordingStatus();
-    case "recording_settings_read":
-      return getRecordingSettings();
-    case "recording_settings_write":
-      return writeMockRecordingSettings(args?.settings as RecordingSettings);
-    case "recording_start":
-      return startRecording(args);
-    case "recording_stop":
-      stopRecording();
-      return undefined;
-    case "firmware_session_status":
-      return { kind: "idle" };
-    case "firmware_session_clear_completed":
-      return undefined;
-    case "firmware_install_update_preflight":
-      return mockFirmwareInstallPreflightInfo();
-    case "firmware_list_dfu_devices":
-      return mockDfuScanResult();
-    case "firmware_catalog_targets":
-      return defaultFirmwareCatalogTargets();
-    case "firmware_bootloader_catalog_targets":
-      return defaultBootloaderCatalogTargets();
-    case "firmware_catalog_entries": {
-      const { boardId, platform } = validateFirmwareCatalogEntriesArgs(args);
-      return mockFirmwareCatalogEntries(boardId, platform);
-    }
-    case "firmware_install_update_readiness": {
-      const request = validateFirmwareInstallReadinessRequest(args);
-      return mockFirmwareInstallReadinessResponse(request);
-    }
-    case "firmware_reboot_to_bootloader": {
-      const port = validateFirmwarePortArg(args, "firmware_reboot_to_bootloader");
-      return mockFirmwareRebootToBootloaderResult(port);
-    }
-    case "firmware_detect_bootloader_board": {
-      const port = validateFirmwarePortArg(args, "firmware_detect_bootloader_board");
-      return mockFirmwareBootloaderBoardInfo(port);
-    }
-    case "firmware_install_update": {
-      ensureMockLiveWriteAllowed("firmware_install_update");
-      const request = validateFirmwareInstallUpdateArgs(args);
-      return mockFirmwareInstallUpdateResult(request);
-    }
-    case "firmware_bootloader_installation": {
-      ensureMockLiveWriteAllowed("firmware_bootloader_installation");
-      const request = validateBootloaderInstallationArgs(args);
-      return mockBootloaderInstallationResult(request);
-    }
-    case "connect_link":
-      connectLink(args);
-      return undefined;
-    case "log_open":
-      {
-        const { summary, events } = openMockLogWithProgress(args);
-        mockState.logOpen = true;
-        emitMany(events);
-        return summary;
-      }
-    case "set_telemetry_rate":
-      case "firmware_session_cancel":
-      return undefined;
-    case "set_message_rate":
-      ensureMockLiveWriteAllowed("set_message_rate");
-      return undefined;
-    case "get_available_message_rates":
-      return availableMessageRates();
-    case "get_available_modes":
-      return getAvailableModes();
-    case "disconnect_link":
-      cancelPendingMissionOperation();
-      cancelParamOperation();
-      cancelCompassCalibration();
-      {
-        const liveEnvelope = mockState.liveEnvelope;
-        disconnectLink(args);
-        if (liveEnvelope) {
-          emitEvent(EVENT_NAMES.SESSION_STATE, liveDisconnectedSessionPayload(liveEnvelope));
-        }
-      }
-      return undefined;
-    case "set_flight_mode":
-      ensureMockLiveWriteAllowed("set_flight_mode");
-      setFlightMode(args, emitEvent);
-      return undefined;
-    case "set_servo":
-      ensureMockLiveWriteAllowed("set_servo");
-      requireConnectedVehicle();
-      validateSetServoArgs(args);
-      return undefined;
-    case "motor_test":
-      ensureMockLiveWriteAllowed("motor_test");
-      requireConnectedVehicle();
-      validateMotorTestArgs(args);
-      return undefined;
-    case "rc_override":
-      ensureMockLiveWriteAllowed("rc_override");
-      requireConnectedVehicle();
-      validateRcOverrideArgs(args);
-      return undefined;
-    case "arm_vehicle":
-      ensureMockLiveWriteAllowed("arm_vehicle");
-      requireConnectedVehicle();
-      validateArmDisarmArgs(args, "arm_vehicle");
-      syncLiveVehicleArmedState(true, emitEvent);
-      return undefined;
-    case "disarm_vehicle":
-      ensureMockLiveWriteAllowed("disarm_vehicle");
-      requireConnectedVehicle();
-      validateArmDisarmArgs(args, "disarm_vehicle");
-      syncLiveVehicleArmedState(false, emitEvent);
-      return undefined;
-    case "calibrate_accel":
-    case "calibrate_gyro":
-    case "calibrate_compass_accept":
-    case "reboot_vehicle":
-    case "request_prearm_checks": {
-      ensureMockLiveWriteAllowed(cmd as
-        | "calibrate_accel"
-        | "calibrate_gyro"
-        | "calibrate_compass_start"
-        | "calibrate_compass_accept"
-        | "calibrate_compass_cancel"
-        | "reboot_vehicle"
-        | "request_prearm_checks");
-      requireConnectedVehicle();
-      return undefined;
-    }
-    case "calibrate_compass_start":
-      ensureMockLiveWriteAllowed("calibrate_compass_start");
-      requireConnectedVehicle();
-      await runCompassCalibration();
-      return undefined;
-    case "calibrate_compass_cancel":
-      ensureMockLiveWriteAllowed("calibrate_compass_cancel");
-      requireConnectedVehicle();
-      cancelCompassCalibration();
-      return undefined;
-    case "param_download_all":
-      requireConnectedVehicle();
-      return downloadAllParams(emitEvent);
-    case "param_cancel":
-      requireConnectedVehicle();
-      cancelParamOperation();
-      return undefined;
-    case "param_write":
-      ensureMockLiveWriteAllowed("param_write");
-      requireConnectedVehicle();
-      return writeParam(args, emitEvent);
-    case "param_write_batch":
-      ensureMockLiveWriteAllowed("param_write_batch");
-      requireConnectedVehicle();
-      return writeParamBatch(args, emitEvent);
-    case "param_parse_file":
-      return parseParamFile(args);
-    case "param_format_file":
-      return formatParamFile(args);
-    case "vehicle_takeoff":
-      ensureMockLiveWriteAllowed("vehicle_takeoff");
-      vehicleTakeoff(args);
-      return undefined;
-    case "start_guided_session":
-      return startGuidedSession(args, emitEvent);
-    case "update_guided_session":
-      return updateGuidedSession(args, emitEvent);
-    case "stop_guided_session":
-      return stopGuidedSession();
-    case "mission_upload": {
-      ensureMockLiveWriteAllowed("mission_upload");
-      const plan = validateUploadPlanArg(args, "mission_upload.plan");
-      return runMissionTransfer({
-        kind: "upload",
-        direction: "upload",
-        totalItems: plan.items.length,
-        complete: () => {
-          commitMockMissionPlan(plan);
-          return undefined;
-        },
-      });
-    }
-    case "mission_clear":
-      ensureMockLiveWriteAllowed("mission_clear");
-      return runMissionTransfer({
-        kind: "clear",
-        direction: "upload",
-        totalItems: currentMissionState().plan?.items.length ?? 0,
-        complete: () => {
-          clearMockMissionPlan();
-          return undefined;
-        },
-      });
-    case "mission_set_current": {
-      ensureMockLiveWriteAllowed("mission_set_current");
-      requireConnectedVehicle();
-      const seq = validateMissionSetCurrentArgs(args);
-      const plan = currentMissionState().plan;
-      if (plan && seq >= plan.items.length) {
-        throw new Error(`mission_set_current.seq must be less than ${plan.items.length}`);
-      }
+type MockOnlyCommandHandler = (args?: CommandArgs) => Promise<unknown> | unknown;
+type MockOnlyCommandHandlers = Record<string, MockOnlyCommandHandler>;
 
-      setMockMissionCurrentIndex(seq);
-      publishMissionState(currentMissionState());
-      return undefined;
+const mockSerialPortCommandHandlers = definePlatformCommandHandlers({
+  list_serial_port_inventory: () => mockInventoryResult(),
+  request_web_serial_port: () => null,
+});
+
+const mockSessionCommandHandlers = definePlatformCommandHandlers({
+  bt_request_permissions: () => undefined,
+  bt_stop_scan_ble: () => undefined,
+  bt_scan_ble: () => [
+    { name: "Demo BLE Radio", address: "AA:BB:CC:DD:EE:FF", device_type: "ble" as const, profile: "nordic_uart" as const },
+  ],
+  bt_get_bonded_devices: () => [
+    { name: "Demo SPP Radio", address: "11:22:33:44:55:66", device_type: "classic" as const },
+  ],
+  available_transports: () => availableTransportDescriptors(),
+  open_session_snapshot: (args) => openSessionSnapshotResult(((args?.sourceKind as "live" | "playback" | undefined) ?? "live")) as InvokeResult<"open_session_snapshot">,
+  ack_session_snapshot: (args) => ackSessionSnapshotResult(args as CommandArgs) as InvokeResult<"ack_session_snapshot">,
+  connect_link: (args) => {
+    connectLink(args as CommandArgs);
+  },
+  disconnect_link: (args) => {
+    cancelPendingMissionOperation();
+    cancelParamOperation();
+    cancelCompassCalibration();
+    const liveEnvelope = mockState.liveEnvelope;
+    disconnectLink(args as CommandArgs);
+    if (liveEnvelope) {
+      emitEvent(EVENT_NAMES.SESSION_STATE, liveDisconnectedSessionPayload(liveEnvelope));
     }
-    case "mission_cancel":
-      requireConnectedVehicle();
-      cancelPendingMissionOperation();
-      return undefined;
-    case "fence_upload":
-      ensureMockLiveWriteAllowed("fence_upload");
-      requireConnectedVehicle();
-      mockState.liveFencePlan = validateStructuredPlanArg(args, "fence_upload.plan");
-      return undefined;
-    case "fence_clear":
-      ensureMockLiveWriteAllowed("fence_clear");
-      requireConnectedVehicle();
-      mockState.liveFencePlan = { return_point: null, regions: [] };
-      return undefined;
-    case "rally_upload":
-      ensureMockLiveWriteAllowed("rally_upload");
-      requireConnectedVehicle();
-      mockState.liveRallyPlan = validateStructuredPlanArg(args, "rally_upload.plan");
-      return undefined;
-    case "rally_clear":
-      ensureMockLiveWriteAllowed("rally_clear");
-      requireConnectedVehicle();
-      mockState.liveRallyPlan = { points: [] };
-      return undefined;
-    case "mission_download": {
-      ensureMockLiveWriteAllowed("mission_download");
-      const result = missionDownloadResult();
-      return runMissionTransfer({
-        kind: "download",
-        direction: "download",
-        totalItems: result.plan.items.length,
-        complete: () => {
-          applyMockMissionState({
-            ...currentMissionState(),
-            active_op: null,
-          });
-          return result;
-        },
-      });
+  },
+});
+
+const mockPlaybackCommandHandlers = definePlatformCommandHandlers({
+  playback_seek: (args) => {
+    const { events, ...result } = playbackSeekResult(args as CommandArgs);
+    emitMany(events);
+    return result;
+  },
+  playback_play: () => {
+    const { state, events } = playbackPlayResult();
+    emitMany(events);
+    return state;
+  },
+  playback_pause: () => {
+    const { state, events } = playbackPauseResult();
+    emitMany(events);
+    return state;
+  },
+  playback_set_speed: (args) => {
+    const { state, events } = playbackSetSpeedResult(args as CommandArgs);
+    emitMany(events);
+    return state;
+  },
+  playback_stop: () => {
+    if (!mockState.logOpen) {
+      throw new Error("no log open");
     }
-    case "mission_validate":
-      requireConnectedVehicle();
-      return missionValidateResult(args);
-    case "fence_download":
-      ensureMockLiveWriteAllowed("fence_download");
-      return fenceDownloadResult();
-    case "rally_download":
-      ensureMockLiveWriteAllowed("rally_download");
-      return rallyDownloadResult();
-    case "log_close":
-      mockState.logOpen = false;
-      mockState.playbackEnvelope = null;
-      mockState.pendingPlaybackEnvelope = null;
-      mockState.playbackCursorUsec = null;
-      closeMockLog();
-      return undefined;
-    default:
-      throw new Error(`Unmocked command: ${cmd}`);
+    if (!mockState.playbackEnvelope) {
+      throw new Error("playback session is not active");
+    }
+    const playbackEnvelope = mockState.playbackEnvelope;
+    mockState.logOpen = false;
+    mockState.playbackEnvelope = null;
+    mockState.pendingPlaybackEnvelope = null;
+    mockState.playbackCursorUsec = null;
+    const idleState = closeMockLog();
+    emitEvent(EVENT_NAMES.PLAYBACK_STATE, { envelope: playbackEnvelope, value: idleState });
+    if (mockState.liveEnvelope && mockState.liveVehicleState) {
+      emitEvent(EVENT_NAMES.SESSION_STATE, liveSessionStreamEvent(mockState.liveVehicleState).payload);
+    }
+    return idleState;
+  },
+});
+
+const mockLogCommandHandlers = definePlatformCommandHandlers({
+  log_format_adapters: () => getLogFormatAdapters(),
+  log_library_list: () => listLogLibrary(),
+  log_library_register: (args) => {
+    const path = typeof args?.path === "string" ? args.path : null;
+    if (!path) {
+      throw new Error("missing or invalid log_library_register.path");
+    }
+    const { entry, events } = registerLogLibraryEntry(path);
+    emitMany(events);
+    return entry;
+  },
+  log_library_register_open_file: async () => {
+    const result = await registerLogLibraryEntryFromPicker();
+    if (!result) {
+      return null;
+    }
+    emitMany(result.events);
+    return result.entry;
+  },
+  log_library_remove: (args) => {
+    const entryId = typeof args?.entryId === "string" ? args.entryId : null;
+    if (!entryId) {
+      throw new Error("missing or invalid log_library_remove.entryId");
+    }
+    return removeLogLibraryEntry(entryId);
+  },
+  log_library_relink: (args) => {
+    const entryId = typeof args?.entryId === "string" ? args.entryId : null;
+    const path = typeof args?.path === "string" ? args.path : null;
+    if (!entryId) {
+      throw new Error("missing or invalid log_library_relink.entryId");
+    }
+    if (!path) {
+      throw new Error("missing or invalid log_library_relink.path");
+    }
+    const { entry, events } = relinkLogLibraryEntry(entryId, path);
+    emitMany(events);
+    return entry;
+  },
+  log_library_reindex: (args) => {
+    const entryId = typeof args?.entryId === "string" ? args.entryId : null;
+    if (!entryId) {
+      throw new Error("missing or invalid log_library_reindex.entryId");
+    }
+    const { entry, events } = reindexLogLibraryEntry(entryId);
+    emitMany(events);
+    return entry;
+  },
+  log_library_cancel: () => cancelLogLibraryOperation(),
+  log_raw_messages_query: (args) => queryRawMessages(args as CommandArgs),
+  log_chart_series_query: (args) => queryChartSeries(args as CommandArgs),
+  log_export: (args) => {
+    const { events, result } = exportLog(args as CommandArgs);
+    emitMany(events);
+    return result;
+  },
+  log_get_summary: () => getActiveLogSummary(),
+  log_query: (args) => queryLogMessages(args as CommandArgs),
+  log_get_flight_path: (args) => getFlightPath(args as CommandArgs),
+  log_get_telemetry_track: (args) => getTelemetryTrack(args as CommandArgs),
+  log_get_flight_summary: () => getFlightSummary(),
+  log_export_csv: (args) => {
+    const { events, rowsWritten } = exportLogCsv(args as CommandArgs);
+    emitMany(events);
+    return rowsWritten;
+  },
+  log_open: (args) => {
+    const { summary, events } = openMockLogWithProgress(args as CommandArgs);
+    mockState.logOpen = true;
+    emitMany(events);
+    return summary;
+  },
+  log_close: () => {
+    mockState.logOpen = false;
+    mockState.playbackEnvelope = null;
+    mockState.pendingPlaybackEnvelope = null;
+    mockState.playbackCursorUsec = null;
+    closeMockLog();
+  },
+});
+
+const mockRecordingCommandHandlers = definePlatformCommandHandlers({
+  recording_status: () => getRecordingStatus(),
+  recording_settings_read: () => getRecordingSettings(),
+  recording_settings_write: (args) => writeMockRecordingSettings(args?.settings as RecordingSettings),
+  recording_start: (args) => startRecording(args as CommandArgs),
+  recording_stop: () => {
+    stopRecording();
+  },
+});
+
+const mockFirmwareCommandHandlers = definePlatformCommandHandlers({
+  firmware_session_status: () => ({ kind: "idle" as const }),
+  firmware_session_clear_completed: () => undefined,
+  firmware_session_cancel: () => undefined,
+  firmware_install_update_preflight: () => mockFirmwareInstallPreflightInfo(),
+  firmware_list_dfu_devices: () => mockDfuScanResult(),
+  firmware_install_update_readiness: (args) => {
+    const request = validateFirmwareInstallReadinessRequest(args as CommandArgs);
+    return mockFirmwareInstallReadinessResponse(request);
+  },
+  firmware_reboot_to_bootloader: (args) => {
+    const port = validateFirmwarePortArg(args as CommandArgs, "firmware_reboot_to_bootloader");
+    return mockFirmwareRebootToBootloaderResult(port);
+  },
+  firmware_detect_bootloader_board: (args) => {
+    const port = validateFirmwarePortArg(args as CommandArgs, "firmware_detect_bootloader_board");
+    return mockFirmwareBootloaderBoardInfo(port);
+  },
+  firmware_install_update: (args) => {
+    ensureMockLiveWriteAllowed("firmware_install_update");
+    const request = validateFirmwareInstallUpdateArgs(args as CommandArgs);
+    return mockFirmwareInstallUpdateResult(request);
+  },
+  firmware_bootloader_installation: (args) => {
+    ensureMockLiveWriteAllowed("firmware_bootloader_installation");
+    const request = validateBootloaderInstallationArgs(args as CommandArgs);
+    return mockBootloaderInstallationResult(request);
+  },
+});
+
+const mockVehicleControlCommandHandlers = definePlatformCommandHandlers({
+  set_telemetry_rate: () => undefined,
+  set_message_rate: () => {
+    ensureMockLiveWriteAllowed("set_message_rate");
+  },
+  get_available_message_rates: () => availableMessageRates(),
+  get_available_modes: () => getAvailableModes(),
+  set_flight_mode: (args) => {
+    ensureMockLiveWriteAllowed("set_flight_mode");
+    setFlightMode(args as CommandArgs, emitEvent);
+  },
+  set_servo: (args) => {
+    ensureMockLiveWriteAllowed("set_servo");
+    requireConnectedVehicle();
+    validateSetServoArgs(args as CommandArgs);
+  },
+  motor_test: (args) => {
+    ensureMockLiveWriteAllowed("motor_test");
+    requireConnectedVehicle();
+    validateMotorTestArgs(args as CommandArgs);
+  },
+  rc_override: (args) => {
+    ensureMockLiveWriteAllowed("rc_override");
+    requireConnectedVehicle();
+    validateRcOverrideArgs(args as CommandArgs);
+  },
+  arm_vehicle: (args) => {
+    ensureMockLiveWriteAllowed("arm_vehicle");
+    requireConnectedVehicle();
+    validateArmDisarmArgs(args as CommandArgs, "arm_vehicle");
+    syncLiveVehicleArmedState(true, emitEvent);
+  },
+  disarm_vehicle: (args) => {
+    ensureMockLiveWriteAllowed("disarm_vehicle");
+    requireConnectedVehicle();
+    validateArmDisarmArgs(args as CommandArgs, "disarm_vehicle");
+    syncLiveVehicleArmedState(false, emitEvent);
+  },
+  vehicle_takeoff: (args) => {
+    ensureMockLiveWriteAllowed("vehicle_takeoff");
+    vehicleTakeoff(args as CommandArgs);
+  },
+});
+
+const mockSetupActionCommandHandlers = definePlatformCommandHandlers({
+  calibrate_accel: () => {
+    ensureMockLiveWriteAllowed("calibrate_accel");
+    requireConnectedVehicle();
+  },
+  calibrate_gyro: () => {
+    ensureMockLiveWriteAllowed("calibrate_gyro");
+    requireConnectedVehicle();
+  },
+  calibrate_compass_accept: () => {
+    ensureMockLiveWriteAllowed("calibrate_compass_accept");
+    requireConnectedVehicle();
+  },
+  reboot_vehicle: () => {
+    ensureMockLiveWriteAllowed("reboot_vehicle");
+    requireConnectedVehicle();
+  },
+  request_prearm_checks: () => {
+    ensureMockLiveWriteAllowed("request_prearm_checks");
+    requireConnectedVehicle();
+  },
+  calibrate_compass_start: async () => {
+    ensureMockLiveWriteAllowed("calibrate_compass_start");
+    requireConnectedVehicle();
+    await runCompassCalibration();
+  },
+  calibrate_compass_cancel: () => {
+    ensureMockLiveWriteAllowed("calibrate_compass_cancel");
+    requireConnectedVehicle();
+    cancelCompassCalibration();
+  },
+});
+
+const mockParamCommandHandlers = definePlatformCommandHandlers({
+  param_download_all: () => {
+    requireConnectedVehicle();
+    return downloadAllParams(emitEvent);
+  },
+  param_cancel: () => {
+    requireConnectedVehicle();
+    cancelParamOperation();
+  },
+  param_write: (args) => {
+    ensureMockLiveWriteAllowed("param_write");
+    requireConnectedVehicle();
+    return writeParam(args as CommandArgs, emitEvent);
+  },
+  param_write_batch: (args) => {
+    ensureMockLiveWriteAllowed("param_write_batch");
+    requireConnectedVehicle();
+    return writeParamBatch(args as CommandArgs, emitEvent);
+  },
+  param_parse_file: (args) => parseParamFile(args as CommandArgs),
+  param_format_file: (args) => formatParamFile(args as CommandArgs),
+});
+
+const mockGuidedCommandHandlers = definePlatformCommandHandlers({
+  start_guided_session: (args) => startGuidedSession(args as CommandArgs, emitEvent) as InvokeResult<"start_guided_session">,
+  update_guided_session: (args) => updateGuidedSession(args as CommandArgs, emitEvent) as InvokeResult<"update_guided_session">,
+  stop_guided_session: () => stopGuidedSession() as InvokeResult<"stop_guided_session">,
+});
+
+const mockMissionCommandHandlers = definePlatformCommandHandlers({
+  mission_upload: (args) => {
+    ensureMockLiveWriteAllowed("mission_upload");
+    const plan = validateUploadPlanArg(args as CommandArgs, "mission_upload.plan");
+    return runMissionTransfer({
+      kind: "upload",
+      direction: "upload",
+      totalItems: plan.items.length,
+      complete: () => {
+        commitMockMissionPlan(plan);
+      },
+    });
+  },
+  mission_clear: () => {
+    ensureMockLiveWriteAllowed("mission_clear");
+    return runMissionTransfer({
+      kind: "clear",
+      direction: "upload",
+      totalItems: currentMissionState().plan?.items.length ?? 0,
+      complete: () => {
+        clearMockMissionPlan();
+      },
+    });
+  },
+  mission_set_current: (args) => {
+    ensureMockLiveWriteAllowed("mission_set_current");
+    requireConnectedVehicle();
+    const seq = validateMissionSetCurrentArgs(args as CommandArgs);
+    const plan = currentMissionState().plan;
+    if (plan && seq >= plan.items.length) {
+      throw new Error(`mission_set_current.seq must be less than ${plan.items.length}`);
+    }
+
+    setMockMissionCurrentIndex(seq);
+    publishMissionState(currentMissionState());
+  },
+  mission_cancel: () => {
+    requireConnectedVehicle();
+    cancelPendingMissionOperation();
+  },
+  fence_upload: (args) => {
+    ensureMockLiveWriteAllowed("fence_upload");
+    requireConnectedVehicle();
+    mockState.liveFencePlan = validateStructuredPlanArg(args as CommandArgs, "fence_upload.plan");
+  },
+  fence_clear: () => {
+    ensureMockLiveWriteAllowed("fence_clear");
+    requireConnectedVehicle();
+    mockState.liveFencePlan = { return_point: null, regions: [] };
+  },
+  rally_upload: (args) => {
+    ensureMockLiveWriteAllowed("rally_upload");
+    requireConnectedVehicle();
+    mockState.liveRallyPlan = validateStructuredPlanArg(args as CommandArgs, "rally_upload.plan");
+  },
+  rally_clear: () => {
+    ensureMockLiveWriteAllowed("rally_clear");
+    requireConnectedVehicle();
+    mockState.liveRallyPlan = { points: [] };
+  },
+  mission_download: () => {
+    ensureMockLiveWriteAllowed("mission_download");
+    const result = missionDownloadResult();
+    return runMissionTransfer({
+      kind: "download",
+      direction: "download",
+      totalItems: result.plan.items.length,
+      complete: () => {
+        applyMockMissionState({
+          ...currentMissionState(),
+          active_op: null,
+        });
+        return result;
+      },
+    });
+  },
+  mission_validate: (args) => {
+    requireConnectedVehicle();
+    return missionValidateResult(args as CommandArgs);
+  },
+  fence_download: () => {
+    ensureMockLiveWriteAllowed("fence_download");
+    return fenceDownloadResult();
+  },
+  rally_download: () => {
+    ensureMockLiveWriteAllowed("rally_download");
+    return rallyDownloadResult();
+  },
+});
+
+const mockCommandHandlers: PlatformCommandHandlers = Object.assign(
+  {},
+  mockSerialPortCommandHandlers,
+  mockSessionCommandHandlers,
+  mockPlaybackCommandHandlers,
+  mockLogCommandHandlers,
+  mockRecordingCommandHandlers,
+  mockFirmwareCommandHandlers,
+  mockVehicleControlCommandHandlers,
+  mockSetupActionCommandHandlers,
+  mockParamCommandHandlers,
+  mockGuidedCommandHandlers,
+  mockMissionCommandHandlers,
+);
+
+const mockOnlyCommandHandlers: MockOnlyCommandHandlers = {
+  runtime_capabilities: () => mockRuntimeCapabilities(),
+  firmware_catalog_targets: () => defaultFirmwareCatalogTargets(),
+  firmware_bootloader_catalog_targets: () => defaultBootloaderCatalogTargets(),
+  firmware_catalog_entries: (args) => {
+    const { boardId, platform } = validateFirmwareCatalogEntriesArgs(args);
+    return mockFirmwareCatalogEntries(boardId, platform);
+  },
+};
+
+async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unknown> {
+  if (hasPlatformCommandHandler(mockCommandHandlers, cmd)) {
+    return invokePlatformCommand(mockCommandHandlers, cmd as never, args as never);
   }
+
+  const mockOnlyHandler = mockOnlyCommandHandlers[cmd];
+  if (mockOnlyHandler) {
+    return mockOnlyHandler(args);
+  }
+
+  throw new Error(`Unmocked command: ${cmd}`);
 }
 
 async function runBehavior<T>(cmd: string, behavior: MockCommandBehavior): Promise<T> {

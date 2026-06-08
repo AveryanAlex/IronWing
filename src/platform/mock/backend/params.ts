@@ -352,7 +352,7 @@ export async function writeParam(args: CommandArgs, emitEvent: (event: string, p
     throw new Error("param_write did not persist the requested value");
   }
 
-  return cloneParamStore(mockState.liveParamStore).params[name];
+  return result;
 }
 
 export function liveParamStoreStreamEvent(paramStore: MockParamStoreState): MockPlatformEvent {

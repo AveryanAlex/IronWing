@@ -1348,9 +1348,9 @@ describe("mock setup/calibration/arming backend parity", () => {
         await vi.advanceTimersByTimeAsync(25);
         await expect(writePromise).resolves.toEqual({
             name: "ARMING_CHECK",
-            value: 0,
-            param_type: "uint8",
-            index: 0,
+            requested_value: 0,
+            confirmed_value: 0,
+            success: true,
         });
 
         const live = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });

@@ -24,9 +24,11 @@ import type { StatusMessage } from "../../../statustext";
 import type { SupportDomain } from "../../../support";
 import type { FlightModeEntry, TelemetryDomain } from "../../../telemetry";
 import type { TransportDescriptor } from "../../../transport";
+import type { InvokeCommandMap } from "../../../lib/ipc/command-types";
 import type { MockLogSeedPreset } from "./logs";
 
 export type CommandArgs = Record<string, unknown> | undefined;
+export type MockCommandName = keyof InvokeCommandMap;
 
 export type { SessionConnection, SessionEnvelope, TransportDescriptor };
 
@@ -113,10 +115,10 @@ export type MockPlatformEvent = {
   payload: unknown;
 };
 
-export type MockCommandBehavior =
+export type MockCommandBehavior<C extends MockCommandName = MockCommandName> =
   | {
     type: "resolve";
-    result?: unknown;
+    result?: InvokeCommandMap[C]["result"];
     emit?: MockPlatformEvent[];
     delayMs?: number;
   }
@@ -132,7 +134,7 @@ export type MockCommandBehavior =
 
 export type MockInvocation = {
   cmd: string;
-  args: CommandArgs;
+  args: CommandArgs | InvokeCommandMap[MockCommandName]["args"];
 };
 
 export type DeferredInvocation = {
