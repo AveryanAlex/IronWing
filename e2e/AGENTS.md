@@ -10,7 +10,7 @@ Browser E2E is a UI lane: tests interact only through rendered controls, links, 
 
 | Task | Location | Notes |
 |------|----------|-------|
-| Playwright config | `../playwright.config.ts` | Runs `build:web` unless `IRONWING_E2E_SKIP_BUILD=1`, previews `IRONWING_PLATFORM=web`, artifacts, retries, workers |
+| Playwright config | `../playwright.config.ts` | Runs `build:web` unless `IRONWING_E2E_SKIP_BUILD=1`, serves `dist/web`, artifacts, retries, workers |
 | Specs | `specs/*.spec.ts` | One short, readable spec file per workspace by default |
 | Test fixture | `support/test.ts` | Exports Playwright `test`, `expect`, and the app page object |
 | App/page objects | `support/app.ts`, `support/pages/*` | Thin app composition plus one focused page object per surface |
@@ -20,7 +20,7 @@ Browser E2E is a UI lane: tests interact only through rendered controls, links, 
 ## Workflow
 
 - Run with `pnpm run e2e:browser` or `pnpm run e2e:browser:headed`.
-- Playwright runs `pnpm run build:web`, starts a local preview server for the `dist/web` bundle, then runs the browser suite against that server. CI downloads the build job's `dist/web` artifact and sets `IRONWING_E2E_SKIP_BUILD=1` so this lane only previews the prebuilt bundle.
+- Playwright runs `pnpm run build:web`, starts `../scripts/e2e-serve.mjs` for the `dist/web` bundle, then runs the browser suite against that server. CI downloads the build job's `dist/web` artifact and sets `IRONWING_E2E_SKIP_BUILD=1` so this lane only serves the prebuilt bundle.
 - Specs connect by selecting `Demo` in the connection transport UI, choosing a demo preset, and pressing Connect. Wait for real connected state and telemetry emitted through the Web/WASM adapter.
 - Local runs stay on `workers: 1`; CI uses limited parallelism to reduce wall-clock time without fully parallelizing every browser interaction.
 - Failure artifacts (trace, screenshot, video) are enabled via Playwright config.

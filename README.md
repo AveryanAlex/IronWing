@@ -118,14 +118,14 @@ Browser-based E2E tests run against the production frontend bundle with `IRONWIN
 ### How it works
 
 1. By default, Playwright runs `pnpm run build:web`, which builds the browser Web/WASM bundle in `dist/web`.
-2. Playwright starts a local Vite preview server for the built app. Set `IRONWING_E2E_SKIP_BUILD=1` to reuse an existing `dist/web` bundle without rebuilding.
+2. Playwright starts the local static E2E server for the built app. Set `IRONWING_E2E_SKIP_BUILD=1` to reuse an existing `dist/web` bundle without rebuilding.
 3. Specs select the Demo transport in the rendered connection UI and connect to `mavkit::sim::DemoVehicle`.
 4. Specs drive the app through real browser interactions and assert visible state changes. They do not patch app internals, dispatch fake platform events, or use command overrides.
 
 ### Quick start
 
 ```bash
-# One-shot: build the frontend bundle, start a local preview, run Playwright
+# One-shot: build the frontend bundle, start the local static server, run Playwright
 pnpm run e2e:browser
 ```
 
@@ -136,7 +136,7 @@ pnpm run e2e:browser:headed   # Run tests with a visible browser window
 pnpm run e2e                  # Run all browser and native E2E lanes sequentially
 ```
 
-`pnpm run e2e:browser` uses Playwright's built-in `webServer` support to run `build:web` unless `IRONWING_E2E_SKIP_BUILD=1`, start a preview server, run the browser suite, and clean up afterward. CI downloads the `dist/web` artifact from the build job and sets that skip flag so the browser E2E lane never rebuilds the web bundle.
+`pnpm run e2e:browser` uses Playwright's built-in `webServer` support to run `build:web` unless `IRONWING_E2E_SKIP_BUILD=1`, serve `dist/web` with `scripts/e2e-serve.mjs`, run the browser suite, and clean up afterward. CI downloads the `dist/web` artifact from the build job and sets that skip flag so the browser E2E lane never rebuilds the web bundle.
 
 ### Current test scope
 

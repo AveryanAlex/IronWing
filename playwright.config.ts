@@ -7,17 +7,17 @@ const PLAYWRIGHT_PORT = Number(process.env.E2E_PORT) || 4173;
 const PLAYWRIGHT_BASE_URL = `http://${PLAYWRIGHT_HOST}:${PLAYWRIGHT_PORT}`;
 const PNPM_COMMAND = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
 const PLAYWRIGHT_BUILD_PREFIX = process.env.IRONWING_E2E_SKIP_BUILD === "1" ? "" : `${PNPM_COMMAND} run build:web && `;
-const PLAYWRIGHT_PREVIEW_COMMAND = [
-  PNPM_COMMAND,
-  "exec",
-  "vite",
-  "preview",
+const PLAYWRIGHT_SERVE_COMMAND = [
+  "node",
+  "scripts/e2e-serve.mjs",
   "--host",
   PLAYWRIGHT_HOST,
   "--port",
   String(PLAYWRIGHT_PORT),
+  "--root",
+  "dist/web",
 ].join(" ");
-const PLAYWRIGHT_WEB_SERVER_COMMAND = `${PLAYWRIGHT_BUILD_PREFIX}${PLAYWRIGHT_PREVIEW_COMMAND}`;
+const PLAYWRIGHT_WEB_SERVER_COMMAND = `${PLAYWRIGHT_BUILD_PREFIX}${PLAYWRIGHT_SERVE_COMMAND}`;
 
 export default defineConfig({
   testDir: "./e2e/specs",

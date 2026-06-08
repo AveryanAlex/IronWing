@@ -4,7 +4,7 @@
 
 `scripts/` contains thin Node entrypoints for package scripts plus the shared `scripts/workflow/` orchestration library. Keep target-specific command shape in the entrypoints and put reusable process, environment, port, SITL, Tauri, and WASM behavior in `workflow/` modules.
 
-SvelteKit's Vite CLI is now the web/WASM default: `pnpm exec vite` serves the pure web platform and `pnpm exec vite build` writes `dist/web`. Tauri and remote UI flows must opt into their platform explicitly through env helpers; browser E2E runs `build:web` by default and previews the same `dist/web` bundle, while CI can set `IRONWING_E2E_SKIP_BUILD=1` after downloading the build artifact.
+SvelteKit's Vite CLI is now the web/WASM default: `pnpm exec vite` serves the pure web platform and `pnpm exec vite build` writes `dist/web`. Tauri and remote UI flows must opt into their platform explicitly through env helpers; browser E2E runs `build:web` by default and serves the same `dist/web` bundle with `e2e-serve.mjs`, while CI can set `IRONWING_E2E_SKIP_BUILD=1` after downloading the build artifact.
 
 ## Where To Look
 
@@ -19,7 +19,8 @@ SvelteKit's Vite CLI is now the web/WASM default: `pnpm exec vite` serves the pu
 | Desktop build | `desktop-build.mjs` | Tauri build with explicit Tauri frontend env |
 | Android build | `android-build.mjs` | Tauri Android APK build with explicit Tauri frontend env |
 | Web build | `web-build.mjs` | Web build wrapper; Vite builds the WASM module |
-| Browser E2E launcher | `e2e-run.mjs` | Reserves a preview port, then runs Playwright |
+| Browser E2E launcher | `e2e-run.mjs` | Reserves a static-server port, then runs Playwright |
+| Browser E2E static server | `e2e-serve.mjs` | Serves `dist/web` without SvelteKit/Vite preview state |
 | Native E2E launcher | `e2e-native.mjs` | Debug Tauri build + SITL + WebDriverIO smoke lane |
 | Standalone SITL WS bridge | `sitl-ws.mjs` | Tool command for manual TCP→WebSocket bridging |
 | WASM build implementation | `wasm-web-build.mjs` | Internal `wasm-pack` build/cleanup command used by Vite |
