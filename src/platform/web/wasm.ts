@@ -11,6 +11,7 @@ import type { FlightPathPoint, TelemetrySnapshot } from "../../playback";
 import type { MessageRateInfo } from "../../telemetry";
 import type { TransportDescriptor } from "../../transport";
 import type { IronwingWasmRuntime } from "./generated/ironwing_wasm";
+import * as wasmFacade from "./generated/ironwing_wasm_facade";
 
 type IronwingWasmModule = typeof import("./generated/ironwing_wasm.js");
 
@@ -198,137 +199,137 @@ export async function wasmWebUsbBootloaderInstallation(options: {
 
 export async function wasmParamDownloadAll(): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.paramDownloadAll();
+  return wasmFacade.wasmParamDownloadAll(runtime);
 }
 
 export async function wasmParamWrite(name: string, value: number): Promise<ParamWriteResult> {
   const runtime = await ensureWasmRuntime();
-  return runtime.paramWrite(name, value) as Promise<ParamWriteResult>;
+  return wasmFacade.wasmParamWrite(runtime, { name, value });
 }
 
 export async function wasmParamWriteBatch(params: [string, number][]): Promise<ParamWriteResult[]> {
   const runtime = await ensureWasmRuntime();
-  return runtime.paramWriteBatch(params) as Promise<ParamWriteResult[]>;
+  return wasmFacade.wasmParamWriteBatch(runtime, { params });
 }
 
 export async function wasmParamCancel(): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.paramCancel();
+  return wasmFacade.wasmParamCancel(runtime);
 }
 
 export async function wasmParamParseFile(contents: string): Promise<Record<string, number>> {
   const runtime = await ensureWasmRuntime();
-  return runtime.paramParseFile(contents) as Record<string, number>;
+  return wasmFacade.wasmParamParseFile(runtime, { contents });
 }
 
 export async function wasmParamFormatFile(store: ParamStore): Promise<string> {
   const runtime = await ensureWasmRuntime();
-  return runtime.paramFormatFile(store);
+  return wasmFacade.wasmParamFormatFile(runtime, { store });
 }
 
 export async function wasmMissionValidate(plan: WireMissionPlan): Promise<MissionIssue[]> {
   const runtime = await ensureWasmRuntime();
-  return runtime.missionValidate(plan) as MissionIssue[];
+  return wasmFacade.wasmMissionValidate(runtime, { plan });
 }
 
 export async function wasmMissionUpload(plan: WireMissionPlan): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.missionUpload(plan);
+  return wasmFacade.wasmMissionUpload(runtime, { plan });
 }
 
 export async function wasmMissionDownload(): Promise<MissionDownload> {
   const runtime = await ensureWasmRuntime();
-  return runtime.missionDownload() as Promise<MissionDownload>;
+  return wasmFacade.wasmMissionDownload(runtime);
 }
 
 export async function wasmMissionClear(): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.missionClear();
+  return wasmFacade.wasmMissionClear(runtime);
 }
 
 export async function wasmMissionSetCurrent(seq: number): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.missionSetCurrent(seq);
+  return wasmFacade.wasmMissionSetCurrent(runtime, { seq });
 }
 
 export async function wasmMissionCancel(): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.missionCancel();
+  return wasmFacade.wasmMissionCancel(runtime);
 }
 
 export async function wasmFenceUpload(plan: FencePlan): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.fenceUpload(plan);
+  return wasmFacade.wasmFenceUpload(runtime, { plan });
 }
 
 export async function wasmFenceDownload(): Promise<FencePlan> {
   const runtime = await ensureWasmRuntime();
-  return runtime.fenceDownload() as Promise<FencePlan>;
+  return wasmFacade.wasmFenceDownload(runtime);
 }
 
 export async function wasmFenceClear(): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.fenceClear();
+  return wasmFacade.wasmFenceClear(runtime);
 }
 
 export async function wasmRallyUpload(plan: RallyPlan): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.rallyUpload(plan);
+  return wasmFacade.wasmRallyUpload(runtime, { plan });
 }
 
 export async function wasmRallyDownload(): Promise<RallyPlan> {
   const runtime = await ensureWasmRuntime();
-  return runtime.rallyDownload() as Promise<RallyPlan>;
+  return wasmFacade.wasmRallyDownload(runtime);
 }
 
 export async function wasmRallyClear(): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.rallyClear();
+  return wasmFacade.wasmRallyClear(runtime);
 }
 
 export async function wasmStartGuidedSession(request: StartGuidedSessionRequest): Promise<GuidedCommandResult> {
   const runtime = await ensureWasmRuntime();
-  return runtime.startGuidedSession(request) as Promise<GuidedCommandResult>;
+  return wasmFacade.wasmStartGuidedSession(runtime, { request });
 }
 
 export async function wasmUpdateGuidedSession(request: UpdateGuidedSessionRequest): Promise<GuidedCommandResult> {
   const runtime = await ensureWasmRuntime();
-  return runtime.updateGuidedSession(request) as Promise<GuidedCommandResult>;
+  return wasmFacade.wasmUpdateGuidedSession(runtime, { request });
 }
 
 export async function wasmStopGuidedSession(): Promise<GuidedCommandResult> {
   const runtime = await ensureWasmRuntime();
-  return runtime.stopGuidedSession() as GuidedCommandResult;
+  return wasmFacade.wasmStopGuidedSession(runtime);
 }
 
 export async function wasmCalibrateAccel(): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.calibrateAccel();
+  return wasmFacade.wasmCalibrateAccel(runtime);
 }
 
 export async function wasmCalibrateGyro(): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.calibrateGyro();
+  return wasmFacade.wasmCalibrateGyro(runtime);
 }
 
 export async function wasmCalibrateCompassStart(compassMask: number): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.calibrateCompassStart(compassMask);
+  return wasmFacade.wasmCalibrateCompassStart(runtime, { compassMask });
 }
 
 export async function wasmCalibrateCompassAccept(compassMask: number): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.calibrateCompassAccept(compassMask);
+  return wasmFacade.wasmCalibrateCompassAccept(runtime, { compassMask });
 }
 
 export async function wasmCalibrateCompassCancel(compassMask: number): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.calibrateCompassCancel(compassMask);
+  return wasmFacade.wasmCalibrateCompassCancel(runtime, { compassMask });
 }
 
 export async function wasmRebootVehicle(): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.rebootVehicle();
+  return wasmFacade.wasmRebootVehicle(runtime);
 }
 
 export async function wasmRebootToBootloader(): Promise<void> {
@@ -343,20 +344,20 @@ export async function wasmDisconnectLink(): Promise<void> {
 
 export async function wasmMotorTest(motorInstance: number, throttlePct: number, durationS: number): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.motorTest(motorInstance, throttlePct, durationS);
+  return wasmFacade.wasmMotorTest(runtime, { motorInstance, throttlePct, durationS });
 }
 
 export async function wasmSetServo(instance: number, pwmUs: number): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.setServo(instance, pwmUs);
+  return wasmFacade.wasmSetServo(runtime, { instance, pwmUs });
 }
 
 export async function wasmRcOverride(channels: RcOverrideChannel[]): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.rcOverride(channels);
+  return wasmFacade.wasmRcOverride(runtime, { channels });
 }
 
 export async function wasmRequestPrearmChecks(): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return runtime.requestPrearmChecks();
+  return wasmFacade.wasmRequestPrearmChecks(runtime);
 }

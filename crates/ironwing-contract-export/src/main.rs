@@ -25,6 +25,8 @@ fn run() -> Result<(), Box<dyn Error>> {
     let check = env::args().skip(1).any(|arg| arg == "--check");
     let output_dir = generated_dir()?;
     let files = generated_files()?;
+    let wasm_facade_path = generated_wasm_facade_path()?;
+    let wasm_facade = generated_wasm_facade()?;
 
     if check {
         let mut changed = Vec::new();
@@ -34,6 +36,10 @@ fn run() -> Result<(), Box<dyn Error>> {
             if current != *content {
                 changed.push(path);
             }
+        }
+        let current_wasm_facade = fs::read_to_string(&wasm_facade_path).unwrap_or_default();
+        if current_wasm_facade != wasm_facade {
+            changed.push(wasm_facade_path);
         }
 
         if changed.is_empty() {
@@ -54,6 +60,10 @@ fn run() -> Result<(), Box<dyn Error>> {
     for (name, content) in files {
         fs::write(output_dir.join(name), content)?;
     }
+    if let Some(parent) = wasm_facade_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(&wasm_facade_path, wasm_facade)?;
     println!("wrote generated contract files to {}", output_dir.display());
 
     Ok(())
@@ -66,6 +76,15 @@ fn generated_dir() -> Result<PathBuf, Box<dyn Error>> {
         .and_then(|path| path.parent())
         .ok_or("failed to resolve workspace root from exporter manifest directory")?;
     Ok(workspace_root.join("src/lib/generated"))
+}
+
+fn generated_wasm_facade_path() -> Result<PathBuf, Box<dyn Error>> {
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let workspace_root = manifest_dir
+        .parent()
+        .and_then(|path| path.parent())
+        .ok_or("failed to resolve workspace root from exporter manifest directory")?;
+    Ok(workspace_root.join("src/platform/web/generated/ironwing_wasm_facade.ts"))
 }
 
 fn generated_files() -> Result<Vec<(&'static str, String)>, Box<dyn Error>> {
@@ -345,6 +364,10 @@ fn generated_events() -> Result<String, Box<dyn Error>> {
 
 fn generated_commands() -> Result<String, Box<dyn Error>> {
     Ok(with_header(commands::command_names_ts()?))
+}
+
+fn generated_wasm_facade() -> Result<String, Box<dyn Error>> {
+    Ok(with_header(commands::wasm_facade_ts()?))
 }
 
 fn generated_ironwing_json() -> String {

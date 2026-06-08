@@ -26,6 +26,11 @@ pub struct CommandSpec {
     pub platforms: &'static [PlatformSupport],
 }
 
+struct WasmFacadeSpec {
+    command_name: &'static str,
+    arg_fields: &'static [&'static str],
+}
+
 const fn command(
     name: &'static str,
     args_ts: &'static str,
@@ -52,6 +57,50 @@ pub const NATIVE_REMOTE_MOCK: &[PlatformSupport] = &[
     PlatformSupport::Mock,
 ];
 pub const WEB_MOCK: &[PlatformSupport] = &[PlatformSupport::Web, PlatformSupport::Mock];
+
+const fn wasm_facade_command(
+    command_name: &'static str,
+    arg_fields: &'static [&'static str],
+) -> WasmFacadeSpec {
+    WasmFacadeSpec {
+        command_name,
+        arg_fields,
+    }
+}
+
+const WASM_FACADE_COMMANDS: &[WasmFacadeSpec] = &[
+    wasm_facade_command("calibrate_accel", &[]),
+    wasm_facade_command("calibrate_compass_accept", &["compassMask"]),
+    wasm_facade_command("calibrate_compass_cancel", &["compassMask"]),
+    wasm_facade_command("calibrate_compass_start", &["compassMask"]),
+    wasm_facade_command("calibrate_gyro", &[]),
+    wasm_facade_command("fence_clear", &[]),
+    wasm_facade_command("fence_download", &[]),
+    wasm_facade_command("fence_upload", &["plan"]),
+    wasm_facade_command("mission_cancel", &[]),
+    wasm_facade_command("mission_clear", &[]),
+    wasm_facade_command("mission_download", &[]),
+    wasm_facade_command("mission_set_current", &["seq"]),
+    wasm_facade_command("mission_upload", &["plan"]),
+    wasm_facade_command("mission_validate", &["plan"]),
+    wasm_facade_command("motor_test", &["motorInstance", "throttlePct", "durationS"]),
+    wasm_facade_command("param_cancel", &[]),
+    wasm_facade_command("param_download_all", &[]),
+    wasm_facade_command("param_format_file", &["store"]),
+    wasm_facade_command("param_parse_file", &["contents"]),
+    wasm_facade_command("param_write", &["name", "value"]),
+    wasm_facade_command("param_write_batch", &["params"]),
+    wasm_facade_command("rally_clear", &[]),
+    wasm_facade_command("rally_download", &[]),
+    wasm_facade_command("rally_upload", &["plan"]),
+    wasm_facade_command("rc_override", &["channels"]),
+    wasm_facade_command("reboot_vehicle", &[]),
+    wasm_facade_command("request_prearm_checks", &[]),
+    wasm_facade_command("set_servo", &["instance", "pwmUs"]),
+    wasm_facade_command("start_guided_session", &["request"]),
+    wasm_facade_command("stop_guided_session", &[]),
+    wasm_facade_command("update_guided_session", &["request"]),
+];
 
 pub const COMMAND_NAMES: &[&str] = &[
     "ack_session_snapshot",
@@ -590,6 +639,25 @@ pub fn command_names_ts() -> Result<String, Box<dyn Error>> {
     Ok(body)
 }
 
+pub fn wasm_facade_ts() -> Result<String, Box<dyn Error>> {
+    ensure_specs_match_command_names()?;
+    ensure_wasm_facade_specs_match_commands()?;
+
+    let mut body = String::from(
+        "import type { IronwingWasmRuntime } from \"./ironwing_wasm\";\n\
+import type { InvokeCommandMap } from \"../../../lib/generated/commands\";\n\n\
+type CommandArgs<C extends keyof InvokeCommandMap> = InvokeCommandMap[C][\"args\"];\n\
+type CommandResult<C extends keyof InvokeCommandMap> = InvokeCommandMap[C][\"result\"];\n",
+    );
+
+    for spec in WASM_FACADE_COMMANDS {
+        body.push('\n');
+        write_wasm_facade_function(&mut body, spec);
+    }
+
+    Ok(body)
+}
+
 fn command_map_ts() -> Result<String, Box<dyn Error>> {
     let mut body = String::new();
     body.push_str("export type NoArgs = undefined;\n\n");
@@ -710,6 +778,65 @@ fn platforms_ts(platforms: &[PlatformSupport]) -> Result<String, Box<dyn Error>>
     Ok(format!("{} as const", serde_json::to_string(&names)?))
 }
 
+fn write_wasm_facade_function(body: &mut String, spec: &WasmFacadeSpec) {
+    let function_name = format!("wasm{}", snake_to_pascal_case(spec.command_name));
+    let method_name = snake_to_camel_case(spec.command_name);
+    let command_type = format!("CommandResult<\"{}\">", spec.command_name);
+
+    body.push_str("export async function ");
+    body.push_str(&function_name);
+    body.push_str("(runtime: IronwingWasmRuntime");
+    if !spec.arg_fields.is_empty() {
+        body.push_str(", args: CommandArgs<\"");
+        body.push_str(spec.command_name);
+        body.push_str("\">");
+    }
+    body.push_str("): Promise<");
+    body.push_str(&command_type);
+    body.push_str("> {\n");
+    body.push_str("  return await runtime.");
+    body.push_str(&method_name);
+    body.push('(');
+    for (index, field) in spec.arg_fields.iter().enumerate() {
+        if index > 0 {
+            body.push_str(", ");
+        }
+        body.push_str("args.");
+        body.push_str(field);
+    }
+    body.push_str(") as ");
+    body.push_str(&command_type);
+    body.push_str(";\n}\n");
+}
+
+fn snake_to_camel_case(value: &str) -> String {
+    let mut output = String::new();
+    for (index, part) in value.split('_').enumerate() {
+        if index == 0 {
+            output.push_str(part);
+        } else {
+            push_pascal_part(&mut output, part);
+        }
+    }
+    output
+}
+
+fn snake_to_pascal_case(value: &str) -> String {
+    let mut output = String::new();
+    for part in value.split('_') {
+        push_pascal_part(&mut output, part);
+    }
+    output
+}
+
+fn push_pascal_part(output: &mut String, part: &str) {
+    let mut chars = part.chars();
+    if let Some(first) = chars.next() {
+        output.extend(first.to_uppercase());
+        output.push_str(chars.as_str());
+    }
+}
+
 fn ensure_specs_match_command_names() -> Result<(), Box<dyn Error>> {
     for platforms in [ALL_PLATFORMS, NATIVE_REMOTE_MOCK, WEB_MOCK] {
         if platforms.is_empty() {
@@ -731,6 +858,34 @@ fn ensure_specs_match_command_names() -> Result<(), Box<dyn Error>> {
             return Err(format!(
                 "command spec at index {index} is {}, expected {name}",
                 spec.name
+            )
+            .into());
+        }
+    }
+
+    Ok(())
+}
+
+fn ensure_wasm_facade_specs_match_commands() -> Result<(), Box<dyn Error>> {
+    for spec in WASM_FACADE_COMMANDS {
+        let command = COMMAND_SPECS
+            .iter()
+            .find(|command| command.name == spec.command_name)
+            .ok_or_else(|| {
+                format!(
+                    "WASM facade command {} is not in command specs",
+                    spec.command_name
+                )
+            })?;
+
+        if !command
+            .platforms
+            .iter()
+            .any(|platform| matches!(platform, PlatformSupport::Web))
+        {
+            return Err(format!(
+                "WASM facade command {} is not supported on web",
+                spec.command_name
             )
             .into());
         }
