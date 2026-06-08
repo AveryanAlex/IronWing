@@ -73,6 +73,7 @@ const COMMAND_NAMES: &[&str] = &[
     "param_cancel",
     "param_download_all",
     "param_format_file",
+    "param_parse_file",
     "param_write",
     "param_write_batch",
     "playback_pause",
