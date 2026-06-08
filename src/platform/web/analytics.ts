@@ -1,4 +1,5 @@
 import { init, trackEvent, type AptabaseOptions } from "@aptabase/web";
+import { isTruthyEnvFlag } from "../shared/analytics-env";
 
 type PlatformAnalyticsProps = Record<string, string | number>;
 
@@ -70,9 +71,5 @@ function aptabaseOptions(env: PlatformAnalyticsEnv): AptabaseOptions | undefined
 }
 
 function isDisabled(env: PlatformAnalyticsEnv): boolean {
-  return isTruthy(env.VITE_IRONWING_APTABASE_DISABLED);
-}
-
-function isTruthy(value: string | undefined): boolean {
-  return value === "1" || value === "true" || value === "TRUE" || value === "yes" || value === "YES";
+  return isTruthyEnvFlag(env.VITE_IRONWING_APTABASE_DISABLED);
 }

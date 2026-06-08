@@ -1,4 +1,5 @@
 import { invoke } from "./core";
+import { isTruthyEnvFlag } from "../shared/analytics-env";
 
 type PlatformAnalyticsProps = Record<string, string | number>;
 
@@ -42,6 +43,5 @@ function status() {
 }
 
 function isDisabled(env: PlatformAnalyticsEnv): boolean {
-  const value = env.VITE_IRONWING_APTABASE_DISABLED;
-  return value === "1" || value === "true" || value === "TRUE" || value === "yes" || value === "YES";
+  return isTruthyEnvFlag(env.VITE_IRONWING_APTABASE_DISABLED);
 }

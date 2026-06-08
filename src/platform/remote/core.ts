@@ -1,5 +1,7 @@
 const DEFAULT_REMOTE_BRIDGE_URL = "http://127.0.0.1:14242";
 
+export { openBrowserUrl as openUrl } from "../shared/open-url";
+
 function remoteBridgeUrl() {
   return (import.meta.env.VITE_IRONWING_REMOTE_UI_URL ?? DEFAULT_REMOTE_BRIDGE_URL).replace(/\/$/, "");
 }
@@ -21,10 +23,6 @@ export async function invoke<T>(cmd: string, args?: Record<string, unknown>): Pr
   }
 
   return result.value;
-}
-
-export async function openUrl(url: string): Promise<void> {
-  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 export function remoteEventUrl() {

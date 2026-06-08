@@ -1,4 +1,4 @@
-export type AnalyticsEdition = "native" | "web" | "mock" | "remote";
+export type AnalyticsEdition = "native" | "web" | "mock" | "remote" | "unavailable";
 
 export type AnalyticsProperty = string | number;
 

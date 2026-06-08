@@ -1,1 +1,1 @@
-export const fetch: typeof globalThis.fetch = globalThis.fetch.bind(globalThis);
+export { platformFetch as fetch } from "../shared/fetch";
