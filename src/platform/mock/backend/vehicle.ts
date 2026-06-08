@@ -271,7 +271,7 @@ export function syncLiveVehicleArmedState(armed: boolean, emitEvent: (event: str
   emitGuidedStateIfLiveActive(emitEvent);
 }
 
-export function liveSessionStreamEvent(vehicleState: MockLiveVehicleState): MockPlatformEvent {
+export function liveSessionStreamEvent(vehicleState: MockLiveVehicleState): MockPlatformEvent<typeof EVENT_NAMES.SESSION_STATE> {
   return {
     event: EVENT_NAMES.SESSION_STATE,
     payload: {
@@ -283,7 +283,7 @@ export function liveSessionStreamEvent(vehicleState: MockLiveVehicleState): Mock
         value: {
           status: "active",
           connection: { kind: "connected" },
-          vehicle_state: vehicleState,
+          vehicle_state: { ...vehicleState, firmware_version: vehicleState.firmware_version ?? null },
           home_position: structuredClone(mockState.liveMissionHome),
         },
       },

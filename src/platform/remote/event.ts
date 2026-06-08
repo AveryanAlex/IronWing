@@ -1,13 +1,16 @@
 import { remoteEventUrl } from "./core";
+import type { EventPayload, EventPayloadMap } from "../../lib/ipc/event-types";
 
 export type UnlistenFn = () => void;
 
 type RemoteEventMessage = {
-  event: string;
-  payload: unknown;
-};
+  [E in keyof EventPayloadMap]: {
+    event: E;
+    payload: EventPayload<E>;
+  };
+}[keyof EventPayloadMap];
 
-const listeners = new Map<string, Set<(payload: unknown) => void>>();
+const listeners = new Map<string, Set<(payload: EventPayload<keyof EventPayloadMap>) => void>>();
 let eventSource: EventSource | null = null;
 
 function ensureEventSource() {
@@ -24,7 +27,7 @@ function ensureEventSource() {
     }
 
     for (const handler of handlers) {
-      handler(parsed.payload);
+      handler(parsed.payload as EventPayload<keyof EventPayloadMap>);
     }
   });
   eventSource.onerror = () => {
@@ -33,13 +36,21 @@ function ensureEventSource() {
   return eventSource;
 }
 
+export async function listen<E extends keyof EventPayloadMap>(
+  event: E,
+  handler: (event: { payload: EventPayload<E> }) => void,
+): Promise<UnlistenFn>;
+export async function listen<T>(
+  event: string,
+  handler: (event: { payload: T }) => void,
+): Promise<UnlistenFn>;
 export async function listen<T>(
   event: string,
   handler: (event: { payload: T }) => void,
 ): Promise<UnlistenFn> {
   ensureEventSource();
-  const wrapped = (payload: unknown) => handler({ payload: payload as T });
-  const handlers = listeners.get(event) ?? new Set<(payload: unknown) => void>();
+  const wrapped = (payload: EventPayload<keyof EventPayloadMap>) => handler({ payload: payload as T });
+  const handlers = listeners.get(event) ?? new Set<(payload: EventPayload<keyof EventPayloadMap>) => void>();
   handlers.add(wrapped);
   listeners.set(event, handlers);
 

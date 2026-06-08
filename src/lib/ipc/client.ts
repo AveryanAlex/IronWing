@@ -21,5 +21,5 @@ export async function typedListen<E extends keyof EventPayloadMap>(
   eventName: E,
   handler: (event: { payload: EventPayload<E> }) => void,
 ): Promise<UnlistenFn> {
-  return listen<EventPayload<E>>(eventName, handler);
+  return listen(eventName, handler);
 }

@@ -27,6 +27,7 @@ import type {
   LogLibraryCatalog,
   LogLibraryEntry,
   LogLibraryEntryStatus,
+  LogProgress,
   LogMetadata,
   RawMessageQuery,
 } from "../../../logs";
@@ -466,6 +467,7 @@ async function emitPlaybackFrame(): Promise<void> {
               system_id: 0,
               component_id: 0,
               heartbeat_received: false,
+              firmware_version: null,
             }
           : null,
         home_position: null,
@@ -688,7 +690,7 @@ function detectFormat(name: string): LogFormat | null {
   return null;
 }
 
-function startOperation(operationId: string): string {
+function startOperation(operationId: LogProgress["operation_id"]): LogProgress["operation_id"] {
   if (activeOperation) {
     throw new Error("another log operation is already active");
   }
@@ -704,8 +706,8 @@ function clearOperation(): void {
 }
 
 function emitProgress(
-  phase: string,
-  operationId: string,
+  phase: LogProgress["phase"],
+  operationId: LogProgress["operation_id"],
   options: { entryId?: string; completedItems?: number; totalItems?: number; percent?: number; message?: string },
 ): void {
   emitWebEvent(EVENT_NAMES.LOG_PROGRESS, {

@@ -134,6 +134,7 @@ import {
   invokePlatformCommand,
   type PlatformCommandHandlers,
 } from "../../lib/ipc/platform-handlers";
+import type { EventPayload, EventPayloadMap } from "../../lib/ipc/event-types";
 import type { InvokeResult } from "../../lib/ipc/command-types";
 import type {
   CommandArgs,
@@ -175,6 +176,8 @@ function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
 
+function emitEvent<E extends keyof EventPayloadMap>(event: E, payload: EventPayload<E>): void;
+function emitEvent(event: string, payload: unknown): void;
 function emitEvent(event: string, payload: unknown) {
   eventTarget.dispatchEvent(new CustomEvent(event, { detail: payload }));
 }
@@ -327,7 +330,7 @@ async function runCompassCalibration() {
     { compass_id: 1, completion_pct: 15, status: "waiting_to_start", attempt: 1 },
     { compass_id: 1, completion_pct: 55, status: "running_step_one", attempt: 1 },
     { compass_id: 1, completion_pct: 100, status: "success", attempt: 1 },
-  ];
+  ] satisfies EventPayload<typeof EVENT_NAMES.COMPASS_CAL_PROGRESS>[];
 
   calibration.task = (async () => {
     try {
@@ -954,6 +957,8 @@ export async function invokeMockCommand<T>(cmd: string, args?: CommandArgs): Pro
   return await defaultCommandResult(cmd, args) as T;
 }
 
+export function listenMockEvent<E extends keyof EventPayloadMap>(event: E, handler: (payload: EventPayload<E>) => void): () => void;
+export function listenMockEvent<T>(event: string, handler: (payload: T) => void): () => void;
 export function listenMockEvent<T>(event: string, handler: (payload: T) => void): () => void {
   const listener: EventListener = ((customEvent: CustomEvent<T>) => {
     handler(customEvent.detail);

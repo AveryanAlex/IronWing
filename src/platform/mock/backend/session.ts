@@ -146,7 +146,7 @@ export function openSessionSnapshotResult(sourceKind: "live" | "playback") {
 }
 
 export function playbackStreamEvents(envelope: SessionEnvelope): MockPlatformEvent[] {
-    return [
+    const events = [
         {
             event: EVENT_NAMES.SESSION_STATE,
             payload: {
@@ -189,6 +189,7 @@ export function playbackStreamEvents(envelope: SessionEnvelope): MockPlatformEve
             ...playbackStateEvent(envelope),
         },
     ];
+    return events as MockPlatformEvent[];
 }
 
 function requireActivePlaybackEnvelope(): SessionEnvelope {

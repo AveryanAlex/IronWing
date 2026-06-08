@@ -1,4 +1,5 @@
 import { emitWebEvent } from "./event";
+import type { EventPayload, EventPayloadMap } from "../../lib/ipc/event-types";
 import type { RcOverrideChannel } from "../../calibration";
 import type { BootloaderInstallationResult, BootloaderInstallationSource, DfuDeviceInfo, FirmwareBootloaderBoardInfo, FirmwareInstallOptions, FirmwareInstallResult, FirmwareInstallSource } from "../../firmware";
 import type { StartGuidedSessionRequest, UpdateGuidedSessionRequest, GuidedCommandResult } from "../../guided";
@@ -33,7 +34,9 @@ export async function ensureWasmModule(): Promise<IronwingWasmModule> {
 
 export async function ensureWasmRuntime(): Promise<IronwingWasmRuntime> {
   await ensureWasmModule();
-  runtime ??= new wasmModule!.IronwingWasmRuntime((event: string, payload: unknown) => emitWebEvent(event, payload));
+  runtime ??= new wasmModule!.IronwingWasmRuntime((event: string, payload: unknown) => {
+    emitWebEvent(event as keyof EventPayloadMap, payload as EventPayload<keyof EventPayloadMap>);
+  });
   return runtime;
 }
 

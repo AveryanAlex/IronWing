@@ -24,6 +24,7 @@ import type { StatusMessage } from "../../../statustext";
 import type { SupportDomain } from "../../../support";
 import type { FlightModeEntry, TelemetryDomain } from "../../../telemetry";
 import type { TransportDescriptor } from "../../../transport";
+import type { EventPayload, EventPayloadMap } from "../../../lib/ipc/event-types";
 import type { InvokeCommandMap } from "../../../lib/ipc/command-types";
 import type { MockLogSeedPreset } from "./logs";
 
@@ -110,10 +111,12 @@ export type MockBackendState = {
   };
 };
 
-export type MockPlatformEvent = {
-  event: string;
-  payload: unknown;
-};
+export type MockPlatformEvent<E extends keyof EventPayloadMap = keyof EventPayloadMap> = {
+  [K in E]: {
+    event: K;
+    payload: EventPayload<K>;
+  };
+}[E];
 
 export type MockCommandBehavior<C extends MockCommandName = MockCommandName> =
   | {
@@ -148,7 +151,7 @@ export type MockPlatformController = {
   clearCommandBehavior: (cmd: string) => void;
   resolveDeferred: (cmd: string, result?: unknown, emit?: MockPlatformEvent[]) => boolean;
   rejectDeferred: (cmd: string, error: string, emit?: MockPlatformEvent[]) => boolean;
-  emit: (event: string, payload: unknown) => void;
+  emit: <E extends keyof EventPayloadMap>(event: E, payload: EventPayload<E>) => void;
   emitLiveSessionState: (vehicleState: MockLiveVehicleState) => void;
   emitMissionState: (missionState: MockMissionState) => void;
   emitMissionProgress: (missionProgress: MockMissionProgressState) => void;
