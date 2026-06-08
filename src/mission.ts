@@ -1,5 +1,7 @@
 import type { FencePlan } from "./fence";
 import { EVENT_NAMES } from "./lib/generated/events";
+import type * as IronWingJson from "./lib/generated/ironwing-json";
+import type * as MavkitJson from "./lib/generated/mavkit-json";
 import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 import type { MissionPlan, WireMissionPlan } from "./lib/mavkit-types";
 import type { RallyPlan } from "./rally";
@@ -38,37 +40,17 @@ export type MissionIssue = {
   severity: "error" | "warning";
 };
 
-export type TransferDirection = "upload" | "download";
-export type TransferPhase =
-  | "idle"
-  | "request_count"
-  | "transfer_items"
-  | "await_ack"
-  | "completed"
-  | "failed"
-  | "cancelled";
+export type TransferProgress = MavkitJson.TransferProgress;
 
-export type TransferProgress = {
-  direction: TransferDirection;
-  mission_type: MissionType;
-  phase: TransferPhase;
-  completed_items: number;
-  total_items: number;
-  retries_used: number;
-};
+export type SyncState = IronWingJson.MissionState["sync"];
 
-export type SyncState = "unknown" | "current" | "stale";
+export type MissionOperationKind = NonNullable<IronWingJson.MissionState["active_op"]>;
 
-export type MissionOperationKind = "upload" | "download" | "clear";
-
-export type MissionState = {
+export type MissionState = Omit<IronWingJson.MissionState, "plan"> & {
   plan: MissionPlan | null;
-  current_index: number | null;
-  sync: SyncState;
-  active_op: MissionOperationKind | null;
 };
 
-export type MissionDownload = {
+export type MissionDownload = Omit<IronWingJson.MissionDownload, "plan" | "home"> & {
   plan: import("./lib/mavkit-types").MissionPlan;
   home: import("./lib/mavkit-types").HomePosition | null;
 };

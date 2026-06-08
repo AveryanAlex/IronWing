@@ -10,7 +10,7 @@ import {
     calcMotThrustExpo,
 } from "../../data/battery-presets";
 import type { ParamMeta, ParamMetadataMap } from "../../param-metadata";
-import type { Param, ParamStore } from "../../params";
+import { isNonNullParam, type NonNullParam, type ParamStore } from "../../params";
 import type { StagedParameterEdit } from "../stores/params-staged-edits";
 import {
     buildParameterItemModel,
@@ -350,7 +350,7 @@ function buildRecommendation(
     stagedEdits: Record<string, StagedParameterEdit>,
 ): ParameterWorkflowRecommendation | null {
     const param = paramStore?.params[definition.name];
-    if (!param) {
+    if (!param || !isNonNullParam(param)) {
         return null;
     }
 
@@ -386,7 +386,7 @@ function buildRecommendation(
     };
 }
 
-function createProposedParam(param: Param, proposedValue: number): Param {
+function createProposedParam(param: NonNullParam, proposedValue: number): NonNullParam {
     return {
         ...param,
         value: proposedValue,

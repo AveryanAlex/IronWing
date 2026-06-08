@@ -1,7 +1,7 @@
 <script lang="ts">
 import type uPlot from "uplot";
 
-import type { ChartSeries, ChartSeriesRequest, LogLibraryEntry } from "../../../logs";
+import { isNonNullChartPoint, type ChartSeries, type ChartSeriesRequest, type LogLibraryEntry, type NonNullChartSeries } from "../../../logs";
 import type { LogsChartState, LogsExportState } from "../../../lib/stores/logs-workspace";
 import UPlotChart from "../../../components/charts/UPlotChart.svelte";
 import { Banner, Card, EmptyState, Eyebrow, HelperText, MonoValue, Panel, StatusPill } from "../../../components/ui";
@@ -69,7 +69,9 @@ let effectiveEndUsec = $derived(
     ?? effectiveStartUsec,
 );
 let syncedCursorUsec = $derived(chartState.hoveredCursorUsec ?? playbackCursorUsec ?? effectiveStartUsec);
-let series = $derived(chartState.page?.series ?? []);
+let series = $derived.by(() => (chartState.page?.series ?? [])
+  .map(toRenderableSeries)
+  .filter((nextSeries): nextSeries is NonNullChartSeries => nextSeries != null));
 let shadedRange = $derived(chartState.selectedRange ?? draftRange);
 let hasRenderableSeries = $derived(series.some((nextSeries) => nextSeries.points.length > 0));
 let exportReady = $derived(
@@ -112,14 +114,19 @@ function toUsec(clientX: number, left: number, width: number): number | null {
   return Math.round(effectiveStartUsec + (effectiveEndUsec - effectiveStartUsec) * ratio);
 }
 
-function toAlignedData(nextSeries: ChartSeries): uPlot.AlignedData {
+function toRenderableSeries(nextSeries: ChartSeries): NonNullChartSeries | null {
+  const points = nextSeries.points.filter(isNonNullChartPoint);
+  return points.length > 0 ? { ...nextSeries, points } : null;
+}
+
+function toAlignedData(nextSeries: NonNullChartSeries): uPlot.AlignedData {
   return [
     nextSeries.points.map((point) => point.timestamp_usec),
     nextSeries.points.map((point) => point.value),
   ];
 }
 
-function createChartOptions(nextSeries: ChartSeries): Omit<uPlot.Options, "width" | "height"> {
+function createChartOptions(nextSeries: NonNullChartSeries): Omit<uPlot.Options, "width" | "height"> {
   return {
     scales: {
       x: {
@@ -162,7 +169,7 @@ function createChartOptions(nextSeries: ChartSeries): Omit<uPlot.Options, "width
   };
 }
 
-function summarizeSeries(nextSeries: ChartSeries) {
+function summarizeSeries(nextSeries: NonNullChartSeries) {
   const values = nextSeries.points.map((point) => point.value);
   const minValue = values.length > 0 ? Math.min(...values) : 0;
   const maxValue = values.length > 0 ? Math.max(...values) : 1;

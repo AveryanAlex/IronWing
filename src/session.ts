@@ -4,6 +4,7 @@ import type { DomainValue } from "./lib/domain-status";
 import type { HomePosition, MissionState } from "./mission";
 import { EVENT_NAMES } from "./lib/generated/events";
 import { OPERATION_IDS } from "./lib/generated/ironwing";
+import type * as GeneratedJson from "./lib/generated/ironwing-json";
 import type { OperationFailure, OperationId, ReasonKind, SourceKind } from "./lib/generated/ironwing";
 import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 import type { ParamProgress, ParamStore } from "./params";
@@ -17,18 +18,9 @@ import type { VehicleState, TelemetryState } from "./telemetry";
 export { OPERATION_IDS };
 export type { OperationFailure, OperationId, ReasonKind, SourceKind };
 
-export type SessionEnvelope = {
-  session_id: string;
-  source_kind: SourceKind;
-  seek_epoch: number;
-  reset_revision: number;
-};
+export type SessionEnvelope = GeneratedJson.SessionEnvelope;
 
-export type SessionConnection =
-  | { kind: "connecting" }
-  | { kind: "connected" }
-  | { kind: "disconnected" }
-  | { kind: "error"; error: string };
+export type SessionConnection = GeneratedJson.SessionConnection;
 
 export type SessionState = {
   status: "pending" | "active";
@@ -39,9 +31,7 @@ export type SessionState = {
 
 export type SessionDomain = DomainValue<SessionState>;
 
-export type PlaybackSnapshot = {
-  cursor_usec: number | null;
-};
+export type PlaybackSnapshot = GeneratedJson.PlaybackSnapshot;
 
 export type OpenSessionSnapshot = {
   envelope: SessionEnvelope;
@@ -58,12 +48,7 @@ export type OpenSessionSnapshot = {
   playback: PlaybackSnapshot;
 };
 
-export type AckSessionSnapshotResult =
-  | { result: "accepted"; envelope?: SessionEnvelope }
-  | {
-      result: "rejected";
-      failure: OperationFailure & { operation_id: "ack_session_snapshot" };
-    };
+export type AckSessionSnapshotResult = GeneratedJson.AckSessionSnapshotResult;
 
 export type SessionEvent<T> = {
   envelope: SessionEnvelope;

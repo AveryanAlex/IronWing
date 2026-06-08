@@ -1,21 +1,19 @@
 import { EVENT_NAMES } from "./lib/generated/events";
+import type * as GeneratedJson from "./lib/generated/mavkit-json";
 import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 import { createLatestScopedEventHandler } from "./lib/scoped-session-events";
 import type { SessionEvent } from "./session";
 
-export type ParamType = "uint8" | "int8" | "uint16" | "int16" | "uint32" | "int32" | "real32";
+export type ParamType = GeneratedJson.Param["param_type"];
 
-export type Param = {
-  name: string;
-  value: number;
-  param_type: ParamType;
-  index: number;
-};
+export type Param = GeneratedJson.Param;
+export type NonNullParam = Omit<Param, "value"> & { value: number };
 
-export type ParamStore = {
-  params: Record<string, Param>;
-  expected_count: number;
-};
+export function isNonNullParam(param: Param): param is NonNullParam {
+  return param.value !== null;
+}
+
+export type ParamStore = GeneratedJson.ParamStore;
 
 export type DownloadingProgress = {
   received: number;
@@ -29,20 +27,15 @@ export type WritingProgress = {
 };
 
 /** Matches mavkit's `ParamOperationProgress` externally-tagged serde enum. */
-export type ParamProgress =
-  | "completed"
-  | "failed"
-  | "cancelled"
-  | { downloading: DownloadingProgress }
-  | { writing: WritingProgress };
+export type ParamProgress = GeneratedJson.ParamProgress;
 
 /** Extract the phase name from a progress value. */
 export function paramProgressPhase(
   p: ParamProgress,
 ): "downloading" | "writing" | "completed" | "failed" | "cancelled" {
   if (typeof p === "string") return p;
-  if ("downloading" in p) return "downloading";
-  if ("writing" in p) return "writing";
+  if ("downloading" in p && p.downloading) return "downloading";
+  if ("writing" in p && p.writing) return "writing";
   // TypeScript exhaustiveness: this branch is unreachable given the closed union.
   // An explicit guard above ensures a new variant doesn't silently fall through.
   throw new Error("unrecognised ParamProgress variant");
@@ -60,8 +53,9 @@ export function paramProgressCounts(
   p: ParamProgress,
 ): { received: number; expected: number | null } | null {
   if (typeof p === "string") return null;
-  if ("downloading" in p) return { received: p.downloading.received, expected: p.downloading.expected };
-  return { received: p.writing.index, expected: p.writing.total };
+  if ("downloading" in p && p.downloading) return { received: p.downloading.received, expected: p.downloading.expected };
+  if ("writing" in p && p.writing) return { received: p.writing.index, expected: p.writing.total };
+  throw new Error("unrecognised ParamProgress variant");
 }
 
 /** True when a transfer is actively running (downloading or writing). */
@@ -69,12 +63,7 @@ export function isParamTransferActive(p: ParamProgress): boolean {
   return typeof p !== "string";
 }
 
-export type ParamWriteResult = {
-  name: string;
-  requested_value: number;
-  confirmed_value: number;
-  success: boolean;
-};
+export type ParamWriteResult = GeneratedJson.ParamWriteResult;
 
 export async function downloadAllParams(): Promise<void> {
   return typedInvoke("param_download_all");

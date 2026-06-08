@@ -886,7 +886,7 @@ function resolveApplyProgress(
     };
   }
 
-  if ("writing" in progress) {
+  if ("writing" in progress && progress.writing) {
     return {
       completed: progress.writing.index,
       total: progress.writing.total,
@@ -976,7 +976,7 @@ function reconcileBatchWriteResults(
       continue;
     }
 
-    if (result.success === true) {
+    if (result.success === true && result.confirmed_value !== null) {
       successes.push({ name: result.name, confirmedValue: result.confirmed_value });
       continue;
     }
@@ -1005,10 +1005,10 @@ function normalizeWriteResult(value: unknown): ParamWriteResult | null {
   if (typeof entry.name !== "string" || entry.name.trim().length === 0) {
     return null;
   }
-  if (typeof entry.requested_value !== "number" || !Number.isFinite(entry.requested_value)) {
+  if (entry.requested_value !== null && (typeof entry.requested_value !== "number" || !Number.isFinite(entry.requested_value))) {
     return null;
   }
-  if (typeof entry.confirmed_value !== "number" || !Number.isFinite(entry.confirmed_value)) {
+  if (entry.confirmed_value !== null && (typeof entry.confirmed_value !== "number" || !Number.isFinite(entry.confirmed_value))) {
     return null;
   }
   if (typeof entry.success !== "boolean") {
@@ -1023,7 +1023,11 @@ function normalizeWriteResult(value: unknown): ParamWriteResult | null {
   };
 }
 
-function formatWriteFailureMessage(requestedValue: number, confirmedValue: number): string {
+function formatWriteFailureMessage(requestedValue: number, confirmedValue: number | null): string {
+  if (confirmedValue === null) {
+    return "The vehicle did not report a confirmed parameter value.";
+  }
+
   if (confirmedValue !== requestedValue) {
     return `Vehicle kept ${formatParamValue(confirmedValue)} instead of ${formatParamValue(requestedValue)}.`;
   }

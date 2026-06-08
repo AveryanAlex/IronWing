@@ -1,23 +1,14 @@
 import { EVENT_NAMES } from "./lib/generated/events";
 import type * as Generated from "./lib/generated/ironwing";
+import type * as GeneratedJson from "./lib/generated/ironwing-json";
 import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 import type { FlightPathPoint } from "./playback";
-
-type UiWire<T> = T extends bigint
-  ? number
-  : T extends string | number | boolean | null | undefined
-    ? T
-    : T extends Array<infer Item>
-      ? UiWire<Item>[]
-      : T extends object
-        ? { [K in keyof T]: UiWire<T[K]> }
-        : T;
 
 export type LogType = Generated.LogFormat;
 
 export type LogFormat = Generated.LogFormat;
 
-export type LogFormatAdapter = UiWire<Generated.LogFormatAdapter>;
+export type LogFormatAdapter = GeneratedJson.LogFormatAdapter;
 
 export type LogSummary = {
   file_name: string;
@@ -34,43 +25,50 @@ export type LogDataPoint = {
   fields: Record<string, number>;
 };
 
-export type ReferencedFileFingerprint = UiWire<Generated.ReferencedFileFingerprint>;
-export type ReferencedFileStatus = UiWire<Generated.ReferencedFileStatus>;
-export type ReferencedLogFile = UiWire<Generated.ReferencedLogFile>;
+export type ReferencedFileFingerprint = GeneratedJson.ReferencedFileFingerprint;
+export type ReferencedFileStatus = GeneratedJson.ReferencedFileStatus;
+export type ReferencedLogFile = GeneratedJson.ReferencedLogFile;
 export type LogDiagnosticSeverity = Generated.LogDiagnosticSeverity;
 export type LogDiagnosticSource = Generated.LogDiagnosticSource;
-export type LogDiagnostic = UiWire<Generated.LogDiagnostic>;
-export type LogMetadata = UiWire<Generated.LogMetadata>;
-export type LogIndexReference = UiWire<Generated.LogIndexReference>;
+export type LogDiagnostic = GeneratedJson.LogDiagnostic;
+export type LogMetadata = GeneratedJson.LogMetadata;
+export type LogIndexReference = GeneratedJson.LogIndexReference;
 export type LogLibraryEntryStatus = Generated.LogLibraryEntryStatus;
-export type LogLibraryEntry = UiWire<Generated.LogLibraryEntry>;
-export type AppDataLogLibraryStorageLocation = Extract<UiWire<Generated.LogLibraryStorageLocation>, { kind: "app_data" }>;
-export type BrowserLogLibraryStorageLocation = Extract<UiWire<Generated.LogLibraryStorageLocation>, { kind: "browser_storage" }>;
-export type LogLibraryStorageLocation = UiWire<Generated.LogLibraryStorageLocation>;
-export type LogLibraryCatalog = UiWire<Generated.LogLibraryCatalog>;
-export type LogCatalogMigrationError = UiWire<Generated.LogCatalogMigrationError>;
+export type LogLibraryEntry = GeneratedJson.LogLibraryEntry;
+export type AppDataLogLibraryStorageLocation = Extract<GeneratedJson.LogLibraryStorageLocation, { kind: "app_data" }>;
+export type BrowserLogLibraryStorageLocation = Extract<GeneratedJson.LogLibraryStorageLocation, { kind: "browser_storage" }>;
+export type LogLibraryStorageLocation = GeneratedJson.LogLibraryStorageLocation;
+export type LogLibraryCatalog = GeneratedJson.LogLibraryCatalog;
+export type LogCatalogMigrationError = GeneratedJson.LogCatalogMigrationError;
 export type LogLoadPhase = Generated.LogOperationPhase;
-export type LogProgress = UiWire<Generated.LogOperationProgress>;
+export type LogProgress = GeneratedJson.LogProgress;
 
-export type RawMessageQuery = UiWire<Generated.RawMessageQuery>;
+export type RawMessageQuery = GeneratedJson.RawMessageQuery;
 
 export type JsonFieldValue = string | number | boolean | null | JsonFieldValue[] | { [key: string]: JsonFieldValue };
 
-export type RawMessageFieldFilter = UiWire<Generated.RawMessageFieldFilter>;
-export type RawMessageRecord = Omit<UiWire<Generated.RawMessageRecord>, "fields" | "detail"> & {
+export type RawMessageFieldFilter = GeneratedJson.RawMessageFieldFilter;
+export type RawMessageRecord = Omit<GeneratedJson.RawMessageRecord, "fields" | "detail"> & {
   fields: Record<string, JsonFieldValue>;
   detail: JsonFieldValue | null;
 };
-export type RawMessagePage = Omit<UiWire<Generated.RawMessagePage>, "items"> & {
+export type RawMessagePage = Omit<GeneratedJson.RawMessagePage, "items"> & {
   items: RawMessageRecord[];
 };
-export type ChartSeriesSelector = UiWire<Generated.ChartSeriesSelector>;
-export type ChartSeriesRequest = UiWire<Generated.ChartSeriesRequest>;
-export type ChartPoint = Omit<UiWire<Generated.ChartPoint>, "value"> & { value: number };
-export type ChartSeries = Omit<UiWire<Generated.ChartSeries>, "points"> & { points: ChartPoint[] };
-export type ChartSeriesPage = Omit<UiWire<Generated.ChartSeriesPage>, "series"> & { series: ChartSeries[] };
+export type ChartSeriesSelector = GeneratedJson.ChartSeriesSelector;
+export type ChartSeriesRequest = GeneratedJson.ChartSeriesRequest;
+export type ChartPoint = GeneratedJson.ChartPoint;
+export type NonNullChartPoint = Omit<GeneratedJson.ChartPoint, "value"> & { value: number };
+export type ChartSeries = GeneratedJson.ChartSeries;
+export type NonNullChartSeries = Omit<GeneratedJson.ChartSeries, "points"> & { points: NonNullChartPoint[] };
+export type ChartSeriesPage = GeneratedJson.ChartSeriesPage;
+
+export function isNonNullChartPoint(point: GeneratedJson.ChartPoint): point is NonNullChartPoint {
+  return point.value !== null;
+}
+
 export type LogExportFormat = Generated.LogExportFormat;
-export type LogExportRequest = UiWire<Generated.LogExportRequest>;
+export type LogExportRequest = GeneratedJson.LogExportRequest;
 
 export type FlightPathQuery = {
   entry_id: string;
@@ -79,7 +77,7 @@ export type FlightPathQuery = {
   max_points: number | null;
 };
 
-export type LogExportResult = UiWire<Generated.LogExportResult>;
+export type LogExportResult = GeneratedJson.LogExportResult;
 
 /** Load only the log summary metadata; bounded queries fetch the actual data. */
 export async function openLog(path: string): Promise<LogSummary> {

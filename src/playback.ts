@@ -1,19 +1,10 @@
 import { EVENT_NAMES } from "./lib/generated/events";
 import type * as Generated from "./lib/generated/ironwing";
+import type * as GeneratedJson from "./lib/generated/ironwing-json";
 import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 import type { LogDiagnostic } from "./logs";
 import type { SessionEvent } from "./session";
 import type { Telemetry, VehicleState } from "./telemetry";
-
-type UiWire<T> = T extends bigint
-  ? number
-  : T extends string | number | boolean | null | undefined
-    ? T
-    : T extends Array<infer Item>
-      ? UiWire<Item>[]
-      : T extends object
-        ? { [K in keyof T]: UiWire<T[K]> }
-        : T;
 
 export type FlightPathPoint = {
   timestamp_usec: number;
@@ -56,7 +47,7 @@ export type TelemetrySnapshot = {
 
 export type ReplayStatus = Generated.ReplayStatus;
 
-export type ReplayState = Omit<UiWire<Generated.PlaybackState>, "available_speeds" | "diagnostic" | "speed"> & {
+export type ReplayState = Omit<GeneratedJson.PlaybackState, "available_speeds" | "diagnostic" | "speed"> & {
   speed: number;
   available_speeds: number[];
   diagnostic: LogDiagnostic | null;
@@ -64,7 +55,7 @@ export type ReplayState = Omit<UiWire<Generated.PlaybackState>, "available_speed
 
 export type PlaybackStateSnapshot = ReplayState;
 
-export type PlaybackSeekResult = UiWire<Generated.PlaybackSeekResult>;
+export type PlaybackSeekResult = GeneratedJson.PlaybackSeekResult;
 
 export async function getFlightPath(
   maxPoints?: number,

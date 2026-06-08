@@ -3,6 +3,7 @@ import { mockState, requireLiveEnvelope, resetGuided } from "./runtime";
 import { applyMockMissionState } from "./mission";
 import { applyMockParamState } from "./params";
 import { EVENT_NAMES } from "../../../lib/generated/events";
+import type { EventPayload } from "../../../lib/ipc/event-types";
 import { MESSAGE_RATE_CATALOG, MESSAGE_RATE_LIMITS, TELEMETRY_RATE_LIMITS } from "../../../lib/generated/ironwing";
 import type {
   CommandArgs,
@@ -283,7 +284,7 @@ export function liveSessionStreamEvent(vehicleState: MockLiveVehicleState): Mock
         value: {
           status: "active",
           connection: { kind: "connected" },
-          vehicle_state: { ...vehicleState, firmware_version: vehicleState.firmware_version ?? null },
+          vehicle_state: { ...vehicleState, firmware_version: vehicleState.firmware_version ?? null } as NonNullable<EventPayload<typeof EVENT_NAMES.SESSION_STATE>["value"]["value"]>["vehicle_state"],
           home_position: structuredClone(mockState.liveMissionHome),
         },
       },

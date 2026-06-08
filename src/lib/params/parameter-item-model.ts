@@ -1,5 +1,5 @@
 import type { ParamMeta, ParamMetadataMap } from "../../param-metadata";
-import type { Param, ParamStore } from "../../params";
+import { isNonNullParam, type NonNullParam, type ParamStore } from "../../params";
 
 export type ParameterItemModel = {
   name: string;
@@ -27,6 +27,7 @@ export function buildParameterItemModels(
   }
 
   return Object.values(paramStore.params ?? {})
+    .filter(isNonNullParam)
     .sort((left, right) => left.index - right.index || left.name.localeCompare(right.name))
     .map((param) => buildParameterItemModel(param, metadata));
 }
@@ -39,7 +40,7 @@ export function buildParameterItemIndex(
 }
 
 export function buildParameterItemModel(
-  param: Param,
+  param: NonNullParam,
   metadata: ParamMetadataMap | null,
 ): ParameterItemModel {
   const meta = metadata?.get(param.name);

@@ -1,5 +1,6 @@
 import { EVENT_NAMES } from "./lib/generated/events";
 import type * as Generated from "./lib/generated/ironwing";
+import type * as GeneratedJson from "./lib/generated/ironwing-json";
 import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 
 export type FirmwareInstallUpdatePhase = Generated.SerialFlashPhase;
@@ -8,53 +9,47 @@ export type BootloaderInstallationPhase = Generated.DfuRecoveryPhase;
 export type FirmwareInstallUpdateOutcome = Generated.SerialFlashOutcome;
 export type BootloaderInstallationOutcome = Generated.DfuRecoveryOutcome;
 export type FirmwareSessionPath = Generated.FirmwareSessionPath;
-export type FirmwareOutcome = Generated.FirmwareOutcome;
-export type FirmwareSessionStatus = Generated.FirmwareSessionStatus;
+export type FirmwareOutcome = GeneratedJson.FirmwareOutcome;
+export type FirmwareSessionStatus = GeneratedJson.FirmwareSessionStatus;
 
-export type FirmwareProgress = Omit<Generated.FirmwareProgress, "bytes_written" | "bytes_total" | "pct"> & {
-  bytes_written: number;
-  bytes_total: number;
-  pct: number;
-};
+export type FirmwareProgress = GeneratedJson.FirmwareProgress;
 
-export type PortInfo = Generated.PortInfo;
-export type DfuDeviceInfo = Generated.DfuDeviceInfo;
-export type DfuScanResult = Exclude<Generated.DfuScanResult, { kind: "unsupported" }> | {
+export type PortInfo = GeneratedJson.PortInfo;
+export type DfuDeviceInfo = GeneratedJson.DfuDeviceInfo;
+export type DfuScanResult = Exclude<GeneratedJson.DfuScanResult, { kind: "unsupported" }> | {
   kind: "unsupported";
   reason?: string;
 };
 
-export type FirmwareInstallPreflightInfo = Omit<Generated.SerialPreflightInfo, "available_ports"> & {
+export type FirmwareInstallPreflightInfo = Omit<GeneratedJson.SerialPreflightInfo, "available_ports"> & {
   available_ports: PortInfo[];
 };
 
-export type FirmwareInstallSource = Generated.SerialFlashSource;
-export type FirmwareInstallOptions = Generated.SerialFlashOptions;
-export type FirmwareInstallUpdateSource = Generated.SerialFlashSource;
-export type FirmwareInstallUpdateOptions = Generated.SerialFlashOptions;
+export type FirmwareInstallSource = GeneratedJson.SerialFlashSource;
+export type FirmwareInstallOptions = GeneratedJson.SerialFlashOptions;
+export type FirmwareInstallUpdateSource = GeneratedJson.SerialFlashSource;
+export type FirmwareInstallUpdateOptions = GeneratedJson.SerialFlashOptions;
 
-export type FirmwareInstallReadinessRequest = Omit<Generated.SerialReadinessRequest, "options"> & {
+export type FirmwareInstallReadinessRequest = Omit<GeneratedJson.SerialReadinessRequest, "options"> & {
   options?: FirmwareInstallOptions | null;
 };
 export type FirmwareInstallReadinessBlockedReason = Generated.SerialReadinessBlockedReason;
 export type FirmwareInstallReadiness = Generated.SerialReadiness;
 export type FirmwareInstallBootloaderStatus = Generated.FirmwareInstallBootloaderStatus;
-export type FirmwareInstallReadinessResponse = Generated.SerialReadinessResponse;
-export type FirmwareRebootToBootloaderResult = Generated.FirmwareRebootToBootloaderResult;
-export type FirmwareBootloaderBoardInfo = Generated.FirmwareBootloaderBoardInfo;
+export type FirmwareInstallReadinessResponse = GeneratedJson.SerialReadinessResponse;
+export type FirmwareRebootToBootloaderResult = GeneratedJson.FirmwareRebootToBootloaderResult;
+export type FirmwareBootloaderBoardInfo = GeneratedJson.FirmwareBootloaderBoardInfo;
 
-export type BootloaderInstallationSource = Generated.DfuRecoverySource;
-export type FirmwareInstallResult = Generated.SerialFlowResult;
-export type FirmwareInstallUpdateResult = Generated.SerialFlowResult;
-export type BootloaderInstallationResult = Exclude<Generated.DfuRecoveryResult, { result: "platform_unsupported" }> | {
+export type BootloaderInstallationSource = GeneratedJson.DfuRecoverySource;
+export type FirmwareInstallResult = GeneratedJson.SerialFlowResult;
+export type FirmwareInstallUpdateResult = GeneratedJson.SerialFlowResult;
+export type BootloaderInstallationResult = Exclude<GeneratedJson.DfuRecoveryResult, { result: "platform_unsupported" }> | {
   result: "platform_unsupported";
   reason?: string;
 };
 
-export type CatalogEntry = Omit<Generated.CatalogEntry, "image_size"> & {
-  image_size: number;
-};
-export type CatalogTargetSummary = Generated.CatalogTargetSummary;
+export type CatalogEntry = GeneratedJson.CatalogEntry;
+export type CatalogTargetSummary = GeneratedJson.CatalogTargetSummary;
 
 export async function firmwareInstallPreflight(): Promise<FirmwareInstallPreflightInfo> {
   return typedInvoke("firmware_install_update_preflight");
