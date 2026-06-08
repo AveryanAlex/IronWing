@@ -1,7 +1,6 @@
-import { listen, type UnlistenFn } from "@platform/event";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type * as Generated from "./lib/generated/ironwing";
-import { typedInvoke } from "./lib/ipc/client";
+import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 
 export type FirmwareInstallUpdatePhase = Generated.SerialFlashPhase;
 export type BootloaderInstallationPhase = Generated.DfuRecoveryPhase;
@@ -114,5 +113,5 @@ export async function firmwareListDfuDevices(): Promise<DfuScanResult> {
 export async function subscribeFirmwareProgress(
   cb: (progress: FirmwareProgress) => void,
 ): Promise<UnlistenFn> {
-  return listen<FirmwareProgress>(EVENT_NAMES.FIRMWARE_PROGRESS, (event) => cb(event.payload));
+  return typedListen(EVENT_NAMES.FIRMWARE_PROGRESS, (event) => cb(event.payload));
 }

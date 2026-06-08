@@ -1,7 +1,6 @@
-import { listen, type UnlistenFn } from "@platform/event";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type * as Generated from "./lib/generated/ironwing";
-import { typedInvoke } from "./lib/ipc/client";
+import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 import type { LogDiagnostic } from "./logs";
 import type { SessionEvent } from "./session";
 import type { Telemetry, VehicleState } from "./telemetry";
@@ -106,7 +105,7 @@ export async function stopPlayback(): Promise<PlaybackStateSnapshot> {
 export async function subscribePlaybackState(
   cb: (event: SessionEvent<PlaybackStateSnapshot>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<PlaybackStateSnapshot>>(EVENT_NAMES.PLAYBACK_STATE, (event) => cb(event.payload));
+  return typedListen(EVENT_NAMES.PLAYBACK_STATE, (event) => cb(event.payload));
 }
 
 function lerpOpt(

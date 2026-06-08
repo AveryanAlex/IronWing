@@ -1,7 +1,6 @@
-import { listen, type UnlistenFn } from "@platform/event";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type { DomainValue } from "./lib/domain-status";
-import { typedInvoke } from "./lib/ipc/client";
+import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 import type { SessionEvent } from "./session";
 import type { BluetoothProfile } from "./transport";
 import { createLatestScopedValueHandler } from "./lib/scoped-session-events";
@@ -158,7 +157,7 @@ export async function subscribeTelemetryState(
 ): Promise<UnlistenFn> {
   const handleEvent = createLatestScopedValueHandler(cb);
 
-  return listen<SessionEvent<TelemetryDomain>>(
+  return typedListen(
     EVENT_NAMES.TELEMETRY_STATE,
     (event) => handleEvent(event.payload),
   );

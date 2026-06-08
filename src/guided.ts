@@ -1,4 +1,3 @@
-import { listen, type UnlistenFn } from "@platform/event";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type {
   GuidedBlockingReason,
@@ -7,7 +6,7 @@ import type {
   GuidedTerminationReason,
 } from "./lib/generated/ironwing";
 import type { DomainValue } from "./lib/domain-status";
-import { typedInvoke } from "./lib/ipc/client";
+import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 import type { SessionEvent } from "./session";
 
 export type GuidedSession = {
@@ -122,5 +121,5 @@ export async function guidedTakeoff(altitudeM: number): Promise<void> {
 export async function subscribeGuidedState(
   cb: (event: SessionEvent<GuidedDomain>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<GuidedDomain>>(EVENT_NAMES.GUIDED_STATE, (event) => cb(event.payload));
+  return typedListen(EVENT_NAMES.GUIDED_STATE, (event) => cb(event.payload));
 }

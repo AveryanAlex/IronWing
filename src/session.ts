@@ -1,4 +1,3 @@
-import { listen, type UnlistenFn } from "@platform/event";
 import type { CalibrationDomain } from "./calibration";
 import type { GuidedDomain } from "./guided";
 import type { DomainValue } from "./lib/domain-status";
@@ -6,7 +5,7 @@ import type { HomePosition, MissionState } from "./mission";
 import { EVENT_NAMES } from "./lib/generated/events";
 import { OPERATION_IDS } from "./lib/generated/ironwing";
 import type { OperationFailure, OperationId, ReasonKind, SourceKind } from "./lib/generated/ironwing";
-import { typedInvoke } from "./lib/ipc/client";
+import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 import type { ParamProgress, ParamStore } from "./params";
 import { withPersistedRecordingSettings } from "./recording";
 import type { SensorHealthDomain } from "./sensor-health";
@@ -94,13 +93,13 @@ export async function disconnectSession(request?: DisconnectRequest): Promise<vo
 export async function subscribeSessionState(
   cb: (event: SessionEvent<SessionDomain>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<SessionDomain>>(EVENT_NAMES.SESSION_STATE, (event) => cb(event.payload));
+  return typedListen(EVENT_NAMES.SESSION_STATE, (event) => cb(event.payload));
 }
 
 export async function subscribeTelemetryState(
   cb: (event: SessionEvent<DomainValue<TelemetryState>>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<DomainValue<TelemetryState>>>(
+  return typedListen(
     EVENT_NAMES.TELEMETRY_STATE,
     (event) => cb(event.payload),
   );
@@ -109,13 +108,13 @@ export async function subscribeTelemetryState(
 export async function subscribeSupportState(
   cb: (event: SessionEvent<SupportDomain>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<SupportDomain>>(EVENT_NAMES.SUPPORT_STATE, (event) => cb(event.payload));
+  return typedListen(EVENT_NAMES.SUPPORT_STATE, (event) => cb(event.payload));
 }
 
 export async function subscribeStatusTextState(
   cb: (event: SessionEvent<StatusTextDomain>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<StatusTextDomain>>(EVENT_NAMES.STATUS_TEXT_STATE, (event) => cb(event.payload));
+  return typedListen(EVENT_NAMES.STATUS_TEXT_STATE, (event) => cb(event.payload));
 }
 
 /**

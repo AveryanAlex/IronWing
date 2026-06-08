@@ -1,5 +1,5 @@
-import { listen, type UnlistenFn } from "@platform/event";
 import { EVENT_NAMES } from "./lib/generated/events";
+import { typedListen, type UnlistenFn } from "./lib/ipc/client";
 import type {
   MagCalProgress,
   MagCalReport,
@@ -35,19 +35,19 @@ export async function subscribeSensorHealthState(
   cb: (domain: SensorHealthDomain) => void,
 ): Promise<UnlistenFn> {
   const handleEvent = createLatestScopedValueHandler(cb);
-  return listen<SessionEvent<SensorHealthDomain>>(EVENT_NAMES.SENSOR_HEALTH_STATE, (event) => handleEvent(event.payload));
+  return typedListen(EVENT_NAMES.SENSOR_HEALTH_STATE, (event) => handleEvent(event.payload));
 }
 
 export async function subscribeSensorHealthStateEvent(
   cb: (event: SessionEvent<SensorHealthDomain>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<SensorHealthDomain>>(EVENT_NAMES.SENSOR_HEALTH_STATE, (event) => cb(event.payload));
+  return typedListen(EVENT_NAMES.SENSOR_HEALTH_STATE, (event) => cb(event.payload));
 }
 
 export async function subscribeCompassCalProgress(cb: (progress: MagCalProgress) => void): Promise<UnlistenFn> {
-  return listen<MagCalProgress>(EVENT_NAMES.COMPASS_CAL_PROGRESS, (event) => cb(event.payload));
+  return typedListen(EVENT_NAMES.COMPASS_CAL_PROGRESS, (event) => cb(event.payload));
 }
 
 export async function subscribeCompassCalReport(cb: (report: MagCalReport) => void): Promise<UnlistenFn> {
-  return listen<MagCalReport>(EVENT_NAMES.COMPASS_CAL_REPORT, (event) => cb(event.payload));
+  return typedListen(EVENT_NAMES.COMPASS_CAL_REPORT, (event) => cb(event.payload));
 }

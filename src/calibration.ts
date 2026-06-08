@@ -1,7 +1,6 @@
-import { listen, type UnlistenFn } from "@platform/event";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type { CalibrationLifecycle, CalibrationState, CalibrationStep } from "./lib/generated/ironwing";
-import { typedInvoke } from "./lib/ipc/client";
+import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 import { createLatestScopedValueHandler } from "./lib/scoped-session-events";
 import type { DomainValue } from "./lib/domain-status";
 import type { MagCalProgress, MagCalReport } from "./sensor-health";
@@ -25,13 +24,13 @@ export async function subscribeCalibrationState(
   cb: (domain: CalibrationDomain) => void,
 ): Promise<UnlistenFn> {
   const handleEvent = createLatestScopedValueHandler(cb);
-  return listen<SessionEvent<CalibrationDomain>>(EVENT_NAMES.CALIBRATION_STATE, (event) => handleEvent(event.payload));
+  return typedListen(EVENT_NAMES.CALIBRATION_STATE, (event) => handleEvent(event.payload));
 }
 
 export async function subscribeCalibrationStateEvent(
   cb: (event: SessionEvent<CalibrationDomain>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<CalibrationDomain>>(EVENT_NAMES.CALIBRATION_STATE, (event) => cb(event.payload));
+  return typedListen(EVENT_NAMES.CALIBRATION_STATE, (event) => cb(event.payload));
 }
 
 export async function calibrateAccel(): Promise<void> {

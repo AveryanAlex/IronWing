@@ -1,7 +1,6 @@
-import { listen, type UnlistenFn } from "@platform/event";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type * as Generated from "./lib/generated/ironwing";
-import { typedInvoke } from "./lib/ipc/client";
+import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 import type { FlightPathPoint } from "./playback";
 
 type UiWire<T> = T extends bigint
@@ -201,5 +200,5 @@ export async function exportLogCsv(
 }
 
 export async function subscribeLogProgress(cb: (progress: LogProgress) => void): Promise<UnlistenFn> {
-  return listen<LogProgress>(EVENT_NAMES.LOG_PROGRESS, (event) => cb(event.payload));
+  return typedListen(EVENT_NAMES.LOG_PROGRESS, (event) => cb(event.payload));
 }

@@ -1,7 +1,6 @@
-import { listen, type UnlistenFn } from "@platform/event";
 import type { FencePlan } from "./fence";
 import { EVENT_NAMES } from "./lib/generated/events";
-import { typedInvoke } from "./lib/ipc/client";
+import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 import type { MissionPlan, WireMissionPlan } from "./lib/mavkit-types";
 import type { RallyPlan } from "./rally";
 import type { SessionEvent } from "./session";
@@ -120,7 +119,7 @@ export async function cancelMissionTransfer(): Promise<void> {
 export async function subscribeMissionProgress(
   cb: (event: SessionEvent<TransferProgress>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<TransferProgress>>(
+  return typedListen(
     EVENT_NAMES.MISSION_PROGRESS,
     (event) => cb(event.payload),
   );
@@ -129,7 +128,7 @@ export async function subscribeMissionProgress(
 export async function subscribeMissionState(
   cb: (event: SessionEvent<MissionState>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<MissionState>>(EVENT_NAMES.MISSION_STATE, (event) =>
+  return typedListen(EVENT_NAMES.MISSION_STATE, (event) =>
     cb(event.payload),
   );
 }
