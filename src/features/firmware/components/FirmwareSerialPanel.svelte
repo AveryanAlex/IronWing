@@ -1422,8 +1422,8 @@ $effect(() => {
           <p class="m-0 font-semibold">Firmware install/update in progress</p>
           <p class="m-0 mt-1">{workspaceState.progress?.phase_label ?? workspaceState.sessionPhase ?? "working"}</p>
           {#if workspaceState.progress}
-            <Progress class="mt-3" value={workspaceState.progress.pct} variant="accent" testId={firmwareWorkspaceTestIds.serialProgress} />
-            <p class="m-0 mt-2 text-xs text-text-secondary">{workspaceState.progress.bytes_written} / {workspaceState.progress.bytes_total} bytes · {Math.round(workspaceState.progress.pct)}%</p>
+            <Progress class="mt-3" value={workspaceState.progress.pct ?? undefined} variant="accent" testId={firmwareWorkspaceTestIds.serialProgress} />
+            <p class="m-0 mt-2 text-xs text-text-secondary">{workspaceState.progress.bytes_written} / {workspaceState.progress.bytes_total} bytes{#if workspaceState.progress.pct != null} · {Math.round(workspaceState.progress.pct)}%{/if}</p>
           {/if}
         </div>
       {/if}

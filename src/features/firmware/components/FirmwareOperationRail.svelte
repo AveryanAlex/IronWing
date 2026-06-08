@@ -48,9 +48,9 @@ let statusLabel = $derived(state.isActive ? `Running · ${state.sessionPhase ?? 
         <p class="m-0 font-semibold">{pathLabel()}</p>
         <p class="m-0 mt-1">{state.progress?.phase_label ?? state.sessionPhase ?? "working"}</p>
         {#if state.progress}
-          <Progress class="mt-3" value={state.progress.pct} variant={state.activePath === "bootloader_installation" ? "warning" : "accent"} />
+          <Progress class="mt-3" value={state.progress.pct ?? undefined} variant={state.activePath === "bootloader_installation" ? "warning" : "accent"} />
           <p class="m-0 mt-2 text-xs text-text-secondary">
-            {state.progress.bytes_written} / {state.progress.bytes_total} bytes · {Math.round(state.progress.pct)}%
+            {state.progress.bytes_written} / {state.progress.bytes_total} bytes{#if state.progress.pct != null} · {Math.round(state.progress.pct)}%{/if}
           </p>
         {/if}
       </div>

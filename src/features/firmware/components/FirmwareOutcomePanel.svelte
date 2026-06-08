@@ -254,7 +254,7 @@ let bannerSeverity = $derived<BannerSeverity>(outcomeCopy?.tone ?? "warning");
     <InfoBlock class="mt-4" density="comfortable" title="Live firmware session" tone="info">
       <p class="m-0 mt-1">
         {state.progress?.phase_label ?? state.sessionPhase ?? "Working"}
-        {#if state.progress}
+        {#if state.progress?.pct != null}
           · {Math.round(state.progress.pct)}%
         {/if}
       </p>
