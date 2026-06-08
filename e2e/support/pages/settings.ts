@@ -58,6 +58,25 @@ export class SettingsWorkspacePage {
     return { before, after };
   }
 
+  async disableSyntheticVisionPreference(): Promise<{ before: boolean; after: boolean }> {
+    const toggle = this.syntheticVisionToggle();
+    await expect(toggle).toBeVisible({ timeout: 10_000 });
+
+    const before = await this.switchChecked(toggle);
+    if (before) {
+      await toggle.click();
+    }
+
+    await expect(toggle).toHaveAttribute("aria-checked", "false", { timeout: 10_000 });
+    await expect(this.page.getByText("Disabled").first()).toBeVisible();
+    await expect
+      .poll(() => this.page.evaluate(() => localStorage.getItem("ironwing.hud.svs_enabled")), { timeout: 10_000 })
+      .toBe("false");
+    await this.auditLayout("settings synthetic vision disabled");
+
+    return { before, after: false };
+  }
+
   private telemetryRateSlider(): Locator {
     return this.page.getByRole("slider").first();
   }

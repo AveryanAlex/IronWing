@@ -193,6 +193,10 @@ async function collectVisibleHorizontalLayoutOffenders(page: Page): Promise<Layo
         return false;
       }
 
+      function isNestedSvgElement(element: Element): boolean {
+        return element instanceof SVGElement && element.ownerSVGElement != null;
+      }
+
       function addOffender(offender: LayoutOffender): void {
         if (offenders.length < maxOffenders) {
           offenders.push(offender);
@@ -201,7 +205,7 @@ async function collectVisibleHorizontalLayoutOffenders(page: Page): Promise<Layo
 
       const elements = [root, ...Array.from(root.querySelectorAll("*"))];
       for (const element of elements) {
-        if (!isVisible(element) || hasAllowedHorizontalScroll(element)) {
+        if (isNestedSvgElement(element) || !isVisible(element) || hasAllowedHorizontalScroll(element)) {
           continue;
         }
 
