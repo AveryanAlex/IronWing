@@ -151,7 +151,7 @@ describe("mission-plan-io: parsePlanFile", () => {
             command: {
                 Other: {
                     command: 4242,
-                    frame: "Global",
+                    frame: "global",
                     param1: 1,
                     param2: 2,
                     param3: 3,
@@ -572,7 +572,7 @@ describe("mission-plan-io: exportPlanFile", () => {
         const raw = missionFixture.items[2] as {
             command: { Other: { frame: unknown } };
         };
-        raw.command.Other.frame = "Global";
+        raw.command.Other.frame = "global";
 
         const exported = exportPlanFile({
             mission: missionFixture,
@@ -623,7 +623,7 @@ describe("mission-plan-io: exportPlanFile", () => {
                         command: {
                             Do: {
                                 ChangeSpeed: {
-                                    speed_type: "Groundspeed",
+                                    speed_type: "groundspeed",
                                     speed_mps: 18,
                                     throttle_pct: 60,
                                 },
@@ -636,7 +636,7 @@ describe("mission-plan-io: exportPlanFile", () => {
                         command: {
                             Other: {
                                 command: 4242,
-                                frame: "GlobalRelativeAlt",
+                                frame: "global_relative_alt",
                                 param1: 1,
                                 param2: 2,
                                 param3: 3,
@@ -958,16 +958,16 @@ describe("mission-plan-io: exportPlanFile domain exclusion", () => {
 
 describe("mission-plan-io: frame helpers", () => {
     it("maps QGC numeric frames to typed MissionFrame values and back", () => {
-        expect(missionFrameFromNumeric(0)).toBe("Global");
-        expect(missionFrameFromNumeric(3)).toBe("GlobalRelativeAlt");
-        expect(missionFrameFromNumeric(10)).toBe("GlobalTerrainAlt");
-        expect(missionFrameFromNumeric(2)).toBe("Mission");
-        expect(missionFrameFromNumeric(99)).toEqual({ Other: 99 });
+        expect(missionFrameFromNumeric(0)).toBe("global");
+        expect(missionFrameFromNumeric(3)).toBe("global_relative_alt");
+        expect(missionFrameFromNumeric(10)).toBe("global_terrain_alt");
+        expect(missionFrameFromNumeric(2)).toBe("mission");
+        expect(missionFrameFromNumeric(99)).toEqual({ other: 99 });
 
-        expect(missionFrameToNumeric("Global")).toBe(0);
-        expect(missionFrameToNumeric("GlobalRelativeAlt")).toBe(3);
-        expect(missionFrameToNumeric("GlobalTerrainAlt")).toBe(10);
-        expect(missionFrameToNumeric("Mission")).toBe(2);
-        expect(missionFrameToNumeric({ Other: 77 })).toBe(77);
+        expect(missionFrameToNumeric("global")).toBe(0);
+        expect(missionFrameToNumeric("global_relative_alt")).toBe(3);
+        expect(missionFrameToNumeric("global_terrain_alt")).toBe(10);
+        expect(missionFrameToNumeric("mission")).toBe(2);
+        expect(missionFrameToNumeric({ other: 77 })).toBe(77);
     });
 });

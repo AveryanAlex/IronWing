@@ -1,4 +1,5 @@
 import { currentGuidedSourceKind, mockState, requireLiveEnvelope } from "./runtime";
+import { EVENT_NAMES } from "../../../lib/generated/events";
 import type { CommandArgs, MockGuidedBlockingReason, MockGuidedStateValue, MockPlatformEvent } from "./types";
 
 type MockGuidedGotoSession = { kind: "goto"; latitude_deg: number; longitude_deg: number; altitude_msl_m: number };
@@ -244,12 +245,12 @@ export function emitGuidedStateIfLiveActive(emitEvent: (event: string, payload: 
     return;
   }
 
-  emitEvent("guided://state", { envelope: mockState.liveEnvelope, value: liveGuidedDomain("stream") });
+  emitEvent(EVENT_NAMES.GUIDED_STATE, { envelope: mockState.liveEnvelope, value: liveGuidedDomain("stream") });
 }
 
 export function liveGuidedStreamEvent(guidedState: MockGuidedStateValue): MockPlatformEvent {
   return {
-    event: "guided://state",
+    event: EVENT_NAMES.GUIDED_STATE,
     payload: {
       envelope: requireLiveEnvelope(),
       value: {

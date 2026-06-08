@@ -1,22 +1,19 @@
 import { listen, type UnlistenFn } from "@platform/event";
+import { EVENT_NAMES } from "./lib/generated/events";
+import type {
+  MagCalProgress,
+  MagCalReport,
+  MagCalStatus,
+  SensorHealthState as SensorStatus,
+  SensorHealthSummary,
+} from "./lib/generated/ironwing";
 import { createLatestScopedValueHandler } from "./lib/scoped-session-events";
 import type { DomainValue } from "./lib/domain-status";
 import type { SessionEvent } from "./session";
 
-export type SensorStatus = "healthy" | "unhealthy" | "disabled" | "not_present";
+export type { MagCalProgress, MagCalReport, MagCalStatus, SensorStatus };
 
-export type SensorHealthState = {
-  gyro: SensorStatus;
-  accel: SensorStatus;
-  mag: SensorStatus;
-  baro: SensorStatus;
-  gps: SensorStatus;
-  airspeed: SensorStatus;
-  rc_receiver: SensorStatus;
-  battery: SensorStatus;
-  terrain: SensorStatus;
-  geofence: SensorStatus;
-};
+export type SensorHealthState = SensorHealthSummary;
 
 export type SensorHealth = SensorHealthState;
 
@@ -34,42 +31,23 @@ export function isPreArmGood(health: SensorHealthState): boolean {
   return SENSOR_KEYS.every((k) => health[k] !== "unhealthy");
 }
 
-export type MagCalStatus = "not_started" | "waiting_to_start" | "running_step_one" | "running_step_two" | "success" | "failed" | "bad_orientation" | "bad_radius";
-
-export type MagCalProgress = {
-  compass_id: number;
-  completion_pct: number;
-  status: MagCalStatus;
-  attempt: number;
-};
-
-export type MagCalReport = {
-  compass_id: number;
-  status: MagCalStatus;
-  fitness: number;
-  ofs_x: number;
-  ofs_y: number;
-  ofs_z: number;
-  autosaved: boolean;
-};
-
 export async function subscribeSensorHealthState(
   cb: (domain: SensorHealthDomain) => void,
 ): Promise<UnlistenFn> {
   const handleEvent = createLatestScopedValueHandler(cb);
-  return listen<SessionEvent<SensorHealthDomain>>("sensor_health://state", (event) => handleEvent(event.payload));
+  return listen<SessionEvent<SensorHealthDomain>>(EVENT_NAMES.SENSOR_HEALTH_STATE, (event) => handleEvent(event.payload));
 }
 
 export async function subscribeSensorHealthStateEvent(
   cb: (event: SessionEvent<SensorHealthDomain>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<SensorHealthDomain>>("sensor_health://state", (event) => cb(event.payload));
+  return listen<SessionEvent<SensorHealthDomain>>(EVENT_NAMES.SENSOR_HEALTH_STATE, (event) => cb(event.payload));
 }
 
 export async function subscribeCompassCalProgress(cb: (progress: MagCalProgress) => void): Promise<UnlistenFn> {
-  return listen<MagCalProgress>("compass://cal_progress", (event) => cb(event.payload));
+  return listen<MagCalProgress>(EVENT_NAMES.COMPASS_CAL_PROGRESS, (event) => cb(event.payload));
 }
 
 export async function subscribeCompassCalReport(cb: (report: MagCalReport) => void): Promise<UnlistenFn> {
-  return listen<MagCalReport>("compass://cal_report", (event) => cb(event.payload));
+  return listen<MagCalReport>(EVENT_NAMES.COMPASS_CAL_REPORT, (event) => cb(event.payload));
 }

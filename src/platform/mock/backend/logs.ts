@@ -14,6 +14,7 @@ import type {
 } from "../../../logs";
 import type { FlightPathPoint, PlaybackStateSnapshot, TelemetrySnapshot } from "../../../playback";
 import type { RecordingSettings, RecordingStatus } from "../../../recording";
+import { EVENT_NAMES } from "../../../lib/generated/events";
 import type { CommandArgs, MockPlatformEvent } from "./types";
 
 export type MockLogSeedPreset =
@@ -1337,7 +1338,7 @@ export function playbackTelemetryDomain() {
 
 export function playbackStateEvent(envelope: { session_id: string; source_kind: "live" | "playback"; seek_epoch: number; reset_revision: number; }) {
   return {
-    event: "playback://state",
+    event: EVENT_NAMES.PLAYBACK_STATE,
     payload: {
       envelope,
       value: getReplayState(),
@@ -1346,7 +1347,7 @@ export function playbackStateEvent(envelope: { session_id: string; source_kind: 
 }
 
 export function emitProgressEvent(progress: LogProgress): MockPlatformEvent {
-  return { event: "log://progress", payload: clone(progress) };
+  return { event: EVENT_NAMES.LOG_PROGRESS, payload: clone(progress) };
 }
 
 function normalizeText(value: string | null | undefined): string | null {

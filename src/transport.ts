@@ -1,85 +1,20 @@
 import { invoke } from "@platform/core";
+import type { BluetoothProfile, TransportDescriptor as GeneratedTransportDescriptor } from "./lib/generated/ironwing";
 
 export type DemoVehiclePreset = "quadcopter" | "airplane" | "quadplane";
-export type BluetoothProfile = "nordic_uart";
+export type { BluetoothProfile };
 
-export type TransportType =
-  | "udp"
-  | "tcp"
-  | "serial"
-  | "bluetooth_ble"
-  | "bluetooth_spp"
-  | "websocket"
-  | "web_serial"
-  | "web_bluetooth"
-  | "demo";
-
-type TransportDescriptorBase = {
-  kind: TransportType;
-  label: string;
-  available: boolean;
-  discovery_error?: string;
-};
-
-export type UdpTransportDescriptor = TransportDescriptorBase & {
-  kind: "udp";
-  validation: { bind_addr_required: true };
-};
-
-export type TcpTransportDescriptor = TransportDescriptorBase & {
-  kind: "tcp";
-  validation: { address_required: true };
-};
-
-export type SerialTransportDescriptor = TransportDescriptorBase & {
-  kind: "serial";
-  validation: { port_required: true; baud_required: true };
-  default_baud: number;
-};
-
-export type BluetoothBleTransportDescriptor = TransportDescriptorBase & {
-  kind: "bluetooth_ble";
-  validation: { address_required: true };
-  profile: BluetoothProfile;
-};
-
-export type BluetoothSppTransportDescriptor = TransportDescriptorBase & {
-  kind: "bluetooth_spp";
-  validation: { address_required: true };
-};
-
-export type WebSocketTransportDescriptor = TransportDescriptorBase & {
-  kind: "websocket";
-  validation: { url_required: true };
-};
-
-export type WebSerialTransportDescriptor = TransportDescriptorBase & {
-  kind: "web_serial";
-  validation: { chooser_required: true; baud_required: true };
-  default_baud: number;
-};
-
-export type WebBluetoothTransportDescriptor = TransportDescriptorBase & {
-  kind: "web_bluetooth";
-  validation: { chooser_required: true };
-  profile: BluetoothProfile;
-};
-
-export type DemoTransportDescriptor = TransportDescriptorBase & {
-  kind: "demo";
-  validation: {};
-};
-
-export type TransportDescriptor =
-  | UdpTransportDescriptor
-  | TcpTransportDescriptor
-  | SerialTransportDescriptor
-  | BluetoothBleTransportDescriptor
-  | BluetoothSppTransportDescriptor
-  | WebSocketTransportDescriptor
-  | WebSerialTransportDescriptor
-  | WebBluetoothTransportDescriptor
-  | DemoTransportDescriptor;
+export type TransportDescriptor = GeneratedTransportDescriptor;
+export type TransportType = TransportDescriptor["kind"];
+export type UdpTransportDescriptor = Extract<TransportDescriptor, { kind: "udp" }>;
+export type TcpTransportDescriptor = Extract<TransportDescriptor, { kind: "tcp" }>;
+export type SerialTransportDescriptor = Extract<TransportDescriptor, { kind: "serial" }>;
+export type BluetoothBleTransportDescriptor = Extract<TransportDescriptor, { kind: "bluetooth_ble" }>;
+export type BluetoothSppTransportDescriptor = Extract<TransportDescriptor, { kind: "bluetooth_spp" }>;
+export type WebSocketTransportDescriptor = Extract<TransportDescriptor, { kind: "websocket" }>;
+export type WebSerialTransportDescriptor = Extract<TransportDescriptor, { kind: "web_serial" }>;
+export type WebBluetoothTransportDescriptor = Extract<TransportDescriptor, { kind: "web_bluetooth" }>;
+export type DemoTransportDescriptor = Extract<TransportDescriptor, { kind: "demo" }>;
 
 export type ConnectFormValue = {
   bind_addr?: string;

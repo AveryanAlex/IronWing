@@ -1,5 +1,6 @@
 import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
+import { EVENT_NAMES } from "./lib/generated/events";
 import type { DomainValue } from "./lib/domain-status";
 import type { SessionEvent } from "./session";
 import type { BluetoothProfile } from "./transport";
@@ -158,7 +159,7 @@ export async function subscribeTelemetryState(
   const handleEvent = createLatestScopedValueHandler(cb);
 
   return listen<SessionEvent<TelemetryDomain>>(
-    "telemetry://state",
+    EVENT_NAMES.TELEMETRY_STATE,
     (event) => handleEvent(event.payload),
   );
 }

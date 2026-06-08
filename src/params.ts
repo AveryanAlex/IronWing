@@ -1,5 +1,6 @@
 import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
+import { EVENT_NAMES } from "./lib/generated/events";
 import { createLatestScopedEventHandler } from "./lib/scoped-session-events";
 import type { SessionEvent } from "./session";
 
@@ -103,11 +104,11 @@ export async function formatParamFile(store: ParamStore): Promise<string> {
 export async function subscribeParamStore(cb: (event: SessionEvent<ParamStore>) => void): Promise<UnlistenFn> {
   const handleEvent = createLatestScopedEventHandler(cb);
 
-  return listen<SessionEvent<ParamStore>>("param://store", (event) => handleEvent(event.payload));
+  return listen<SessionEvent<ParamStore>>(EVENT_NAMES.PARAM_STORE, (event) => handleEvent(event.payload));
 }
 
 export async function subscribeParamProgress(cb: (event: SessionEvent<ParamProgress>) => void): Promise<UnlistenFn> {
   const handleEvent = createLatestScopedEventHandler(cb);
 
-  return listen<SessionEvent<ParamProgress>>("param://progress", (event) => handleEvent(event.payload));
+  return listen<SessionEvent<ParamProgress>>(EVENT_NAMES.PARAM_PROGRESS, (event) => handleEvent(event.payload));
 }

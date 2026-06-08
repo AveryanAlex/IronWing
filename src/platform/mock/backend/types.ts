@@ -19,60 +19,16 @@ import type { LogLibraryCatalog, LogProgress } from "../../../logs";
 import type { PlaybackStateSnapshot } from "../../../playback";
 import type { RecordingSettings, RecordingStatus } from "../../../recording";
 import type { SensorHealthDomain } from "../../../sensor-health";
+import type { SessionConnection, SessionEnvelope } from "../../../session";
 import type { StatusMessage } from "../../../statustext";
 import type { SupportDomain } from "../../../support";
 import type { FlightModeEntry, TelemetryDomain } from "../../../telemetry";
+import type { TransportDescriptor } from "../../../transport";
 import type { MockLogSeedPreset } from "./logs";
 
 export type CommandArgs = Record<string, unknown> | undefined;
 
-export type SessionEnvelope = {
-  session_id: string;
-  source_kind: "live" | "playback";
-  seek_epoch: number;
-  reset_revision: number;
-};
-
-export type SessionConnection =
-  | { kind: "connecting" }
-  | { kind: "connected" }
-  | { kind: "disconnected" }
-  | { kind: "error"; error: string };
-
-export type TransportDescriptor =
-  | {
-    kind: "udp";
-    label: string;
-    available: boolean;
-    validation: { bind_addr_required: boolean };
-  }
-  | {
-    kind: "tcp";
-    label: string;
-    available: boolean;
-    validation: { address_required: boolean };
-  }
-  | {
-    kind: "serial";
-    label: string;
-    available: boolean;
-    validation: { port_required: boolean; baud_required: boolean };
-    default_baud: number;
-  }
-  | {
-    kind: "bluetooth_ble";
-    label: string;
-    available: boolean;
-    validation: { address_required: boolean };
-    profile: "nordic_uart";
-  }
-  | {
-    kind: "bluetooth_spp";
-    label: string;
-    available: boolean;
-    validation: { address_required: boolean };
-  }
-  ;
+export type { SessionConnection, SessionEnvelope, TransportDescriptor };
 
 export type MockLiveVehicleState = {
   armed: boolean;

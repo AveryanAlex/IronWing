@@ -10,6 +10,7 @@ type SelectSize = "sm" | "default" | "lg";
 type NativeSelectOption = {
   value: string;
   label: string;
+  title?: string;
   disabled?: boolean;
 };
 
@@ -56,7 +57,7 @@ let selectClass = $derived(
 );
 </script>
 
-<div class="relative w-full" data-ui-native-select-shell>
+<div class="relative w-full" data-ui-native-select-shell data-layout-scroll-x="allowed">
   {#if multiple}
     <select
       {...rest}
@@ -71,7 +72,7 @@ let selectClass = $derived(
         <option value="" disabled>{placeholder}</option>
       {/if}
       {#each options ?? [] as option (option.value)}
-        <option value={option.value} disabled={option.disabled}>{option.label}</option>
+        <option value={option.value} disabled={option.disabled} title={option.title}>{option.label}</option>
       {/each}
       {@render children?.()}
     </select>
@@ -88,7 +89,7 @@ let selectClass = $derived(
         <option value="" disabled>{placeholder}</option>
       {/if}
       {#each options ?? [] as option (option.value)}
-        <option value={option.value} disabled={option.disabled}>{option.label}</option>
+        <option value={option.value} disabled={option.disabled} title={option.title}>{option.label}</option>
       {/each}
       {@render children?.()}
     </select>

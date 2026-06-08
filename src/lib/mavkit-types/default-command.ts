@@ -26,25 +26,25 @@ function defaultNavCommand(variant: string, position?: GeoPoint3d): NavCommand {
         case "SplineWaypoint":
             return { SplineWaypoint: { position: pos(position), hold_time_s: 0 } };
         case "ArcWaypoint":
-            return { ArcWaypoint: { position: pos(position), arc_angle_deg: 0, direction: "Clockwise" } };
+            return { ArcWaypoint: { position: pos(position), arc_angle_deg: 0, direction: "clockwise" } };
         case "Takeoff":
             return { Takeoff: { position: pos(position), pitch_deg: 0 } };
         case "Land":
             return { Land: { position: pos(position), abort_alt_m: 0 } };
         case "LoiterUnlimited":
-            return { LoiterUnlimited: { position: pos(position), radius_m: 0, direction: "Clockwise" } };
+            return { LoiterUnlimited: { position: pos(position), radius_m: 0, direction: "clockwise" } };
         case "LoiterTurns":
             return {
-                LoiterTurns: { position: pos(position), turns: 0, radius_m: 0, direction: "Clockwise", exit_xtrack: false },
+                LoiterTurns: { position: pos(position), turns: 0, radius_m: 0, direction: "clockwise", exit_xtrack: false },
             };
         case "LoiterTime":
-            return { LoiterTime: { position: pos(position), time_s: 0, direction: "Clockwise", exit_xtrack: false } };
+            return { LoiterTime: { position: pos(position), time_s: 0, direction: "clockwise", exit_xtrack: false } };
         case "LoiterToAlt":
             return {
-                LoiterToAlt: { position: pos(position), radius_m: 0, direction: "Clockwise", exit_xtrack: false },
+                LoiterToAlt: { position: pos(position), radius_m: 0, direction: "clockwise", exit_xtrack: false },
             };
         case "ContinueAndChangeAlt":
-            return { ContinueAndChangeAlt: { position: pos(position), action: "Neutral" } };
+            return { ContinueAndChangeAlt: { position: pos(position), action: "neutral" } };
         case "VtolTakeoff":
             return { VtolTakeoff: { position: pos(position) } };
         case "VtolLand":
@@ -84,7 +84,7 @@ function defaultDoCommand(variant: string, position?: GeoPoint3d): DoCommand {
         case "PauseContinue":
             return { PauseContinue: { pause: false } };
         case "ChangeSpeed":
-            return { ChangeSpeed: { speed_type: "Airspeed", speed_mps: 0, throttle_pct: 0 } };
+            return { ChangeSpeed: { speed_type: "airspeed", speed_mps: 0, throttle_pct: 0 } };
         case "SetReverse":
             return { SetReverse: { reverse: false } };
         case "SetHome":
@@ -134,15 +134,15 @@ function defaultDoCommand(variant: string, position?: GeoPoint3d): DoCommand {
         case "RepeatRelay":
             return { RepeatRelay: { number: 0, count: 0, cycle_time_s: 0 } };
         case "FenceEnable":
-            return { FenceEnable: { action: "Disable" } };
+            return { FenceEnable: { action: "disable" } };
         case "Parachute":
-            return { Parachute: { action: "Disable" } };
+            return { Parachute: { action: "disable" } };
         case "Gripper":
-            return { Gripper: { number: 0, action: "Release" } };
+            return { Gripper: { number: 0, action: "release" } };
         case "Sprayer":
             return { Sprayer: { enabled: false } };
         case "Winch":
-            return { Winch: { number: 0, action: "Relax", release_length_m: 0, release_rate_mps: 0 } };
+            return { Winch: { number: 0, action: "relax", release_length_m: 0, release_rate_mps: 0 } };
         case "EngineControl":
             return { EngineControl: { start: false, cold_start: false, height_delay_m: 0, allow_disarmed: false } };
         case "InvertedFlight":
@@ -172,7 +172,7 @@ function defaultConditionCommand(variant: string): ConditionCommand {
         case "Distance":
             return { Distance: { distance_m: 0 } };
         case "Yaw":
-            return { Yaw: { angle_deg: 0, turn_rate_dps: 0, direction: "Clockwise", relative: false } };
+            return { Yaw: { angle_deg: 0, turn_rate_dps: 0, direction: "clockwise", relative: false } };
         default:
             console.warn(`defaultConditionCommand: unknown variant "${variant}", falling back to Delay`);
             return { Delay: { delay_s: 0 } };

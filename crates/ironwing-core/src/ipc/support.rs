@@ -1,5 +1,6 @@
 use crate::ipc::{DomainProvenance, DomainValue};
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SupportState {
     pub can_request_prearm_checks: bool,

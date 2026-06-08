@@ -57,7 +57,7 @@ function loiterUnlimited(index: number, lat: number, lon: number): TypedDraftIte
       LoiterUnlimited: {
         position: defaultGeoPoint3d(lat, lon, 30),
         radius_m: 50,
-        direction: "Clockwise",
+        direction: "clockwise",
       },
     },
   });
@@ -70,7 +70,7 @@ function loiterTurns(index: number, lat: number, lon: number, radius_m: number, 
         position: defaultGeoPoint3d(lat, lon, 30),
         turns,
         radius_m,
-        direction: "Clockwise",
+        direction: "clockwise",
         exit_xtrack: false,
       },
     },

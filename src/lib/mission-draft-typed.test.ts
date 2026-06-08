@@ -67,7 +67,7 @@ function makeOtherItem(): MissionItem {
         command: {
             Other: {
                 command: 9999,
-                frame: { Other: 0 },
+                frame: { other: 0 },
                 param1: 1,
                 param2: 2,
                 param3: 3,

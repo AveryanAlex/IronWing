@@ -2,6 +2,7 @@ use serde_json::Value;
 
 use crate::ipc::{DomainProvenance, DomainValue};
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct TelemetryFlight {
     pub altitude_m: Option<f64>,
@@ -11,6 +12,7 @@ pub struct TelemetryFlight {
     pub airspeed_mps: Option<f64>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct TelemetryNavigation {
     pub latitude_deg: Option<f64>,
@@ -22,6 +24,7 @@ pub struct TelemetryNavigation {
     pub xtrack_error_m: Option<f64>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct TelemetryAttitude {
     pub roll_deg: Option<f64>,
@@ -29,6 +32,7 @@ pub struct TelemetryAttitude {
     pub yaw_deg: Option<f64>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct TelemetryPower {
     pub battery_pct: Option<f64>,
@@ -39,6 +43,7 @@ pub struct TelemetryPower {
     pub battery_time_remaining_s: Option<f64>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct TelemetryGps {
     pub fix_type: Option<String>,
@@ -46,12 +51,14 @@ pub struct TelemetryGps {
     pub hdop: Option<f64>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct TelemetryTerrain {
     pub terrain_height_m: Option<f64>,
     pub height_above_terrain_m: Option<f64>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct TelemetryRadio {
     pub rc_channels: Option<Vec<f64>>,
@@ -59,6 +66,7 @@ pub struct TelemetryRadio {
     pub servo_outputs: Option<Vec<f64>>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct TelemetryState {
     pub flight: TelemetryFlight,

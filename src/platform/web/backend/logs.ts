@@ -34,6 +34,7 @@ import type {
 import type { ReplayState, TelemetrySnapshot } from "../../../playback";
 import type { SessionEnvelope } from "../../../session";
 import type { TelemetryState } from "../../../telemetry";
+import { EVENT_NAMES } from "../../../lib/generated/events";
 
 export const EMPTY_WEB_LOG_LIBRARY: LogLibraryCatalog = createEmptyBrowserLogLibraryCatalog();
 
@@ -460,7 +461,7 @@ async function emitPlaybackFrame(): Promise<void> {
   const envelope = playback.envelope ?? playbackEnvelope();
   playback.envelope = envelope;
   const telemetry = await wasmLogTelemetryAt(log.sourcePath, log.format, log.bytes, playback.state.cursor_usec);
-  emitWebEvent("session://state", {
+  emitWebEvent(EVENT_NAMES.SESSION_STATE, {
     envelope,
     value: {
       available: true,
@@ -486,7 +487,7 @@ async function emitPlaybackFrame(): Promise<void> {
       },
     },
   });
-  emitWebEvent("telemetry://state", {
+  emitWebEvent(EVENT_NAMES.TELEMETRY_STATE, {
     envelope,
     value: { available: true, complete: true, provenance: "playback", value: telemetryStateFromSnapshot(telemetry) },
   });
@@ -496,7 +497,7 @@ async function emitPlaybackFrame(): Promise<void> {
 function emitPlaybackState(): void {
   const envelope = playback.envelope ?? playbackEnvelope();
   playback.envelope = envelope;
-  emitWebEvent("playback://state", { envelope, value: playback.state });
+  emitWebEvent(EVENT_NAMES.PLAYBACK_STATE, { envelope, value: playback.state });
 }
 
 function clearPlaybackTimer(): void {
@@ -722,7 +723,7 @@ function emitProgress(
   operationId: string,
   options: { entryId?: string; completedItems?: number; totalItems?: number; percent?: number; message?: string },
 ): void {
-  emitWebEvent("log://progress", {
+  emitWebEvent(EVENT_NAMES.LOG_PROGRESS, {
     operation_id: operationId,
     phase,
     completed_items: options.completedItems ?? 0,

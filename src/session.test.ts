@@ -2,64 +2,17 @@ import { describe, expect, it } from "vitest";
 import { OPERATION_IDS, type AckSessionSnapshotResult, type OperationFailure } from "./session";
 
 describe("session contract", () => {
-  it("keeps TypeScript operation ids aligned with the Rust IPC contract", () => {
-    expect(OPERATION_IDS).toEqual([
+  it("exposes operation ids generated from the Rust IPC contract", () => {
+    expect(new Set(OPERATION_IDS).size).toBe(OPERATION_IDS.length);
+    expect(OPERATION_IDS).toEqual(expect.arrayContaining([
       "open_session_snapshot",
       "ack_session_snapshot",
-      "arm_vehicle",
-      "disarm_vehicle",
-      "set_flight_mode",
-      "vehicle_takeoff",
-      "start_guided_session",
-      "update_guided_session",
-      "stop_guided_session",
-      "set_message_rate",
-      "mission_upload",
-      "mission_download",
-      "mission_clear",
-      "fence_upload",
-      "fence_download",
-      "fence_clear",
-      "rally_upload",
-      "rally_download",
-      "rally_clear",
-      "mission_set_current",
-      "calibrate_accel",
-      "calibrate_gyro",
-      "param_write",
-      "param_write_batch",
-      "reboot_vehicle",
-      "motor_test",
-      "set_servo",
-      "rc_override",
-      "calibrate_compass_start",
-      "calibrate_compass_accept",
-      "calibrate_compass_cancel",
-      "request_prearm_checks",
-      "log_open",
-      "log_library_list",
-      "log_library_register",
-      "log_library_relink",
-      "log_library_remove",
-      "log_library_reindex",
-      "log_library_cancel",
-      "log_raw_messages_query",
-      "log_chart_series_query",
-      "log_export",
-      "replay_open",
-      "replay_play",
-      "replay_pause",
-      "replay_seek",
-      "replay_set_speed",
-      "replay_stop",
-      "recording_start",
-      "recording_stop",
-      "recording_status",
-      "recording_settings_read",
-      "recording_settings_write",
+      "mission_cancel",
+      "param_download_all",
+      "param_cancel",
       "firmware_install_update",
       "firmware_bootloader_installation",
-    ]);
+    ]));
   });
 
   it("preserves typed ack rejection reasons and operation identity", () => {

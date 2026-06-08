@@ -1,5 +1,6 @@
 use crate::transport::TransportDescriptor;
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Capability {
@@ -26,6 +27,7 @@ impl Capability {
     }
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct RuntimeCapabilities {
     pub transports: Vec<TransportDescriptor>,

@@ -12,6 +12,7 @@ use crate::ipc::{
     status_text::StatusTextSnapshot, support::SupportSnapshot, telemetry::TelemetrySnapshot,
 };
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SessionStatus {
@@ -19,6 +20,7 @@ pub enum SessionStatus {
     Active,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SessionConnection {
@@ -28,6 +30,7 @@ pub enum SessionConnection {
     Error { error: String },
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct VehicleState {
     pub armed: bool,
@@ -42,6 +45,7 @@ pub struct VehicleState {
     pub heartbeat_received: bool,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SessionSnapshot {
     pub status: SessionStatus,
@@ -64,6 +68,7 @@ pub fn session_connection_from_link_state(link_state: &LinkState) -> SessionConn
     }
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct OpenSessionSnapshot {
     pub envelope: SessionEnvelope,
@@ -80,6 +85,7 @@ pub struct OpenSessionSnapshot {
     pub playback: PlaybackSnapshot,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub enum AckSessionSnapshotResult {

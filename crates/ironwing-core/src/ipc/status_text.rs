@@ -2,6 +2,7 @@ use serde_json::Value;
 
 use crate::ipc::{DomainProvenance, DomainValue};
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct StatusTextEntry {
     pub sequence: u64,
@@ -10,6 +11,7 @@ pub struct StatusTextEntry {
     pub timestamp_usec: Option<u64>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct StatusTextState {
     pub entries: Vec<StatusTextEntry>,

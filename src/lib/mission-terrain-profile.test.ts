@@ -246,7 +246,7 @@ describe("computeTerrainProfile", () => {
       { latitude_deg: 47, longitude_deg: 8, altitude_m: 100, frame: "msl", index: null, isHome: true },
       {
         latitude_deg: 47.001, longitude_deg: 8.001, altitude_m: 130, frame: "msl", index: 0, isHome: false,
-        isArc: true, arcAngleDeg: 90, arcDirection: "Clockwise",
+        isArc: true, arcAngleDeg: 90, arcDirection: "clockwise",
       },
       { latitude_deg: 47.002, longitude_deg: 8.002, altitude_m: 150, frame: "msl", index: 1, isHome: false },
     ];

@@ -4,15 +4,18 @@ import {
     defaultGeoPoint3d,
     geoPoint3dAltitude,
     type GeoPoint3d,
+    type LoiterDirection,
     type MissionCommand,
     type MissionFrame,
     type MissionItem,
+    type YawDirection,
     withCommandField,
 } from "../mavkit-types";
 import {
     ALT_CHANGE_ACTIONS,
     FENCE_ACTIONS,
     GRIPPER_ACTIONS,
+    LOITER_DIRECTIONS,
     PARACHUTE_ACTIONS,
     SPEED_TYPES,
     WINCH_ACTIONS,
@@ -114,13 +117,17 @@ function enumToIndex<TValue extends string>(value: unknown, values: readonly TVa
     return index >= 0 ? index : 0;
 }
 
-function directionFromSignedMagnitude(value: number): "Clockwise" | "CounterClockwise" {
-    return value < 0 ? "CounterClockwise" : "Clockwise";
+function directionFromSignedMagnitude(value: number): LoiterDirection {
+    return value < 0 ? "counter_clockwise" : "clockwise";
 }
 
 function encodeSignedMagnitude(magnitude: number, direction: unknown): number {
     const absMagnitude = Math.abs(magnitude);
-    return direction === "CounterClockwise" ? -absMagnitude : absMagnitude;
+    return direction === "counter_clockwise" ? -absMagnitude : absMagnitude;
+}
+
+function yawDirectionFromSignedValue(value: number): YawDirection {
+    return value < 0 ? "counter_clockwise" : "clockwise";
 }
 
 function setParam(params: QgcParams, slot: QgcSlot, value: number): void {
@@ -150,24 +157,24 @@ function normalizeParams(params: number[] | undefined): QgcParams {
 export function missionFrameFromNumeric(frame: number): MissionFrame {
     switch (frame) {
         case MAV_FRAME_GLOBAL:
-            return "Global";
+            return "global";
         case MAV_FRAME_GLOBAL_RELATIVE_ALT:
-            return "GlobalRelativeAlt";
+            return "global_relative_alt";
         case MAV_FRAME_GLOBAL_TERRAIN_ALT:
-            return "GlobalTerrainAlt";
+            return "global_terrain_alt";
         case MAV_FRAME_MISSION:
-            return "Mission";
+            return "mission";
         default:
-            return { Other: frame };
+            return { other: frame };
     }
 }
 
 export function missionFrameToNumeric(frame: MissionFrame): number {
-    if (frame === "Global") return MAV_FRAME_GLOBAL;
-    if (frame === "GlobalRelativeAlt") return MAV_FRAME_GLOBAL_RELATIVE_ALT;
-    if (frame === "GlobalTerrainAlt") return MAV_FRAME_GLOBAL_TERRAIN_ALT;
-    if (frame === "Mission") return MAV_FRAME_MISSION;
-    return frame.Other;
+    if (frame === "global") return MAV_FRAME_GLOBAL;
+    if (frame === "global_relative_alt") return MAV_FRAME_GLOBAL_RELATIVE_ALT;
+    if (frame === "global_terrain_alt") return MAV_FRAME_GLOBAL_TERRAIN_ALT;
+    if (frame === "mission") return MAV_FRAME_MISSION;
+    return frame.other;
 }
 
 export function parseSimpleItem(item: QgcSimpleItem, index: number, warnings: string[], label = `Mission item ${index + 1}`): MissionItem {
@@ -257,16 +264,16 @@ function parsePositionFromParams(
 export function exportMissionItem(item: MissionItem, index: number, warnings: string[]): QgcSimpleItem {
     const context = `Mission item ${index + 1}`;
 
-    if ("Other" in item.command) {
+    if ("Other" in item.command && item.command.Other) {
         const params = normalizeParams([]);
         const raw = item.command.Other;
-        params[0] = raw.param1;
-        params[1] = raw.param2;
-        params[2] = raw.param3;
-        params[3] = raw.param4;
+        params[0] = numberOrZero(raw.param1);
+        params[1] = numberOrZero(raw.param2);
+        params[2] = numberOrZero(raw.param3);
+        params[3] = numberOrZero(raw.param4);
         params[4] = raw.x;
         params[5] = raw.y;
-        params[6] = raw.z;
+        params[6] = numberOrZero(raw.z);
         warnings.push(`${context} exports Other.x and Other.y as float degrees because QGC .plan params[4] and params[5] are degree floats, not degE7 wire integers.`);
         return {
             type: "SimpleItem",
@@ -300,20 +307,20 @@ export function exportMissionItem(item: MissionItem, index: number, warnings: st
         const position = commandPosition(item.command);
         if (position) {
             const altitude = geoPoint3dAltitude(position);
-            if ("Msl" in position) {
+            if ("Msl" in position && position.Msl) {
                 frame = MAV_FRAME_GLOBAL;
-                params[4] = position.Msl.latitude_deg;
-                params[5] = position.Msl.longitude_deg;
+                params[4] = numberOrZero(position.Msl.latitude_deg);
+                params[5] = numberOrZero(position.Msl.longitude_deg);
                 params[6] = altitude.value;
-            } else if ("RelHome" in position) {
+            } else if ("RelHome" in position && position.RelHome) {
                 frame = MAV_FRAME_GLOBAL_RELATIVE_ALT;
-                params[4] = position.RelHome.latitude_deg;
-                params[5] = position.RelHome.longitude_deg;
+                params[4] = numberOrZero(position.RelHome.latitude_deg);
+                params[5] = numberOrZero(position.RelHome.longitude_deg);
                 params[6] = altitude.value;
-            } else {
+            } else if ("Terrain" in position && position.Terrain) {
                 frame = MAV_FRAME_GLOBAL_TERRAIN_ALT;
-                params[4] = position.Terrain.latitude_deg;
-                params[5] = position.Terrain.longitude_deg;
+                params[4] = numberOrZero(position.Terrain.latitude_deg);
+                params[5] = numberOrZero(position.Terrain.longitude_deg);
                 params[6] = altitude.value;
             }
         } else {
@@ -345,7 +352,7 @@ export function exportMissionItem(item: MissionItem, index: number, warnings: st
 }
 
 function resolveMissionCommandEntry(command: MissionCommand): CatalogEntry | null {
-    if ("Nav" in command) {
+    if ("Nav" in command && command.Nav) {
         if (typeof command.Nav === "string") {
             const id = variantToCommandId("Nav", command.Nav);
             return id === undefined ? null : { category: "Nav", variant: command.Nav, id, label: command.Nav };
@@ -355,7 +362,7 @@ function resolveMissionCommandEntry(command: MissionCommand): CatalogEntry | nul
         return id === undefined ? null : { category: "Nav", variant, id, label: variant };
     }
 
-    if ("Do" in command) {
+    if ("Do" in command && command.Do) {
         if (typeof command.Do === "string") {
             const id = variantToCommandId("Do", command.Do);
             return id === undefined ? null : { category: "Do", variant: command.Do, id, label: command.Do };
@@ -365,7 +372,7 @@ function resolveMissionCommandEntry(command: MissionCommand): CatalogEntry | nul
         return id === undefined ? null : { category: "Do", variant, id, label: variant };
     }
 
-    if ("Condition" in command) {
+    if ("Condition" in command && command.Condition) {
         const variant = Object.keys(command.Condition)[0];
         const id = variantToCommandId("Condition", variant);
         return id === undefined ? null : { category: "Condition", variant, id, label: variant };
@@ -379,22 +386,22 @@ function commandVariantPayload(
     category: CatalogEntry["category"],
     variant: string,
 ): Record<string, unknown> | null {
-    if (category === "Nav" && "Nav" in command) {
+    if (category === "Nav" && "Nav" in command && command.Nav) {
         if (typeof command.Nav === "string") {
             return command.Nav === variant ? {} : null;
         }
-        return (command.Nav as Record<string, Record<string, unknown>>)[variant] ?? null;
+        return (command.Nav as unknown as Record<string, Record<string, unknown>>)[variant] ?? null;
     }
 
-    if (category === "Do" && "Do" in command) {
+    if (category === "Do" && "Do" in command && command.Do) {
         if (typeof command.Do === "string") {
             return command.Do === variant ? {} : null;
         }
-        return (command.Do as Record<string, Record<string, unknown>>)[variant] ?? null;
+        return (command.Do as unknown as Record<string, Record<string, unknown>>)[variant] ?? null;
     }
 
-    if (category === "Condition" && "Condition" in command) {
-        return (command.Condition as Record<string, Record<string, unknown>>)[variant] ?? null;
+    if (category === "Condition" && "Condition" in command && command.Condition) {
+        return (command.Condition as unknown as Record<string, Record<string, unknown>>)[variant] ?? null;
     }
 
     return null;
@@ -417,7 +424,7 @@ const COMMAND_CODEC_BY_KEY: Record<string, CommandCodec> = {
     ]),
     "Nav:ArcWaypoint": genericCodec(true, [
         numberField("arc_angle_deg", "param1"),
-        enumIndexField("direction", "param2", ["Clockwise", "CounterClockwise"]),
+        enumIndexField("direction", "param2", LOITER_DIRECTIONS),
     ]),
     "Nav:Takeoff": genericCodec(true, [
         numberField("pitch_deg", "param1"),
@@ -715,7 +722,7 @@ const COMMAND_CODEC_BY_KEY: Record<string, CommandCodec> = {
             let command = defaultCommand("Condition", "Yaw");
             command = withCommandField(command, "angle_deg", params[0]);
             command = withCommandField(command, "turn_rate_dps", params[1]);
-            command = withCommandField(command, "direction", params[2] < 0 ? "CounterClockwise" : "Clockwise");
+            command = withCommandField(command, "direction", yawDirectionFromSignedValue(params[2]));
             command = withCommandField(command, "relative", Math.abs(params[3]) > 0.5);
             return command;
         },
@@ -723,7 +730,7 @@ const COMMAND_CODEC_BY_KEY: Record<string, CommandCodec> = {
             const data = commandVariantPayload(command, "Condition", "Yaw") ?? {};
             params[0] = numberOrZero(data.angle_deg);
             params[1] = numberOrZero(data.turn_rate_dps);
-            params[2] = data.direction === "CounterClockwise" ? -1 : 1;
+            params[2] = data.direction === "counter_clockwise" ? -1 : 1;
             params[3] = data.relative ? 1 : 0;
         },
     },

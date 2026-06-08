@@ -2,6 +2,8 @@ import { emitGuidedStateIfLiveActive, liveGuidedStreamEvent, reconcileGuidedAfte
 import { mockState, requireLiveEnvelope, resetGuided } from "./runtime";
 import { applyMockMissionState } from "./mission";
 import { applyMockParamState } from "./params";
+import { EVENT_NAMES } from "../../../lib/generated/events";
+import { MESSAGE_RATE_CATALOG, MESSAGE_RATE_LIMITS, TELEMETRY_RATE_LIMITS } from "../../../lib/generated/ironwing";
 import type {
   CommandArgs,
   MockLiveVehicleState,
@@ -42,26 +44,9 @@ function requireFiniteNumber(value: unknown, label: string): number {
   return value;
 }
 
-export const MOCK_MESSAGE_RATE_CATALOG = [
-  { id: 33, name: "Global Position", default_rate_hz: 4.0 },
-  { id: 30, name: "Attitude", default_rate_hz: 4.0 },
-  { id: 24, name: "GPS Raw", default_rate_hz: 2.0 },
-  { id: 1, name: "System Status", default_rate_hz: 1.0 },
-  { id: 65, name: "RC Channels", default_rate_hz: 2.0 },
-  { id: 36, name: "Servo Output", default_rate_hz: 2.0 },
-  { id: 74, name: "VFR HUD", default_rate_hz: 4.0 },
-  { id: 62, name: "Nav Controller", default_rate_hz: 2.0 },
-] as const;
-
-export const MOCK_MESSAGE_RATE_LIMITS = {
-  min: 0.1,
-  max: 50.0,
-} as const;
-
-export const MOCK_TELEMETRY_RATE_LIMITS = {
-  min: 1,
-  max: 20,
-} as const;
+export const MOCK_MESSAGE_RATE_CATALOG = MESSAGE_RATE_CATALOG;
+export const MOCK_MESSAGE_RATE_LIMITS = MESSAGE_RATE_LIMITS;
+export const MOCK_TELEMETRY_RATE_LIMITS = TELEMETRY_RATE_LIMITS;
 
 export function availableMessageRates() {
   return MOCK_MESSAGE_RATE_CATALOG.map((entry) => ({ ...entry }));
@@ -253,10 +238,10 @@ export function disconnectLink(args: CommandArgs) {
 
 export function emitLiveSessionState(vehicleState: MockLiveVehicleState, emitEvent: (event: string, payload: unknown) => void) {
   applyMockLiveVehicleState(vehicleState);
-  emitEvent("session://state", liveSessionStreamEvent(vehicleState).payload);
+  emitEvent(EVENT_NAMES.SESSION_STATE, liveSessionStreamEvent(vehicleState).payload);
   const reconciledGuided = reconcileGuidedAfterLiveVehicleUpdate();
   if (reconciledGuided) {
-    emitEvent("guided://state", liveGuidedStreamEvent(reconciledGuided).payload);
+    emitEvent(EVENT_NAMES.GUIDED_STATE, liveGuidedStreamEvent(reconciledGuided).payload);
   }
 }
 
@@ -270,16 +255,16 @@ export function syncLiveVehicleArmedState(armed: boolean, emitEvent: (event: str
     return;
   }
 
-  emitEvent("session://state", liveSessionStreamEvent(mockState.liveVehicleState).payload);
+  emitEvent(EVENT_NAMES.SESSION_STATE, liveSessionStreamEvent(mockState.liveVehicleState).payload);
   if (mockState.liveTelemetryDomain) {
-    emitEvent("telemetry://state", {
+    emitEvent(EVENT_NAMES.TELEMETRY_STATE, {
       envelope: requireLiveEnvelope(),
       value: structuredClone(mockState.liveTelemetryDomain),
     });
   }
   const reconciledGuided = reconcileGuidedAfterLiveVehicleUpdate();
   if (reconciledGuided) {
-    emitEvent("guided://state", liveGuidedStreamEvent(reconciledGuided).payload);
+    emitEvent(EVENT_NAMES.GUIDED_STATE, liveGuidedStreamEvent(reconciledGuided).payload);
     return;
   }
 
@@ -288,7 +273,7 @@ export function syncLiveVehicleArmedState(armed: boolean, emitEvent: (event: str
 
 export function liveSessionStreamEvent(vehicleState: MockLiveVehicleState): MockPlatformEvent {
   return {
-    event: "session://state",
+    event: EVENT_NAMES.SESSION_STATE,
     payload: {
       envelope: requireLiveEnvelope(),
       value: {
@@ -368,16 +353,16 @@ export function setFlightMode(args: CommandArgs, emitEvent: (event: string, payl
     return;
   }
 
-  emitEvent("session://state", liveSessionStreamEvent(mockState.liveVehicleState).payload);
+  emitEvent(EVENT_NAMES.SESSION_STATE, liveSessionStreamEvent(mockState.liveVehicleState).payload);
   if (mockState.liveTelemetryDomain) {
-    emitEvent("telemetry://state", {
+    emitEvent(EVENT_NAMES.TELEMETRY_STATE, {
       envelope: requireLiveEnvelope(),
       value: structuredClone(mockState.liveTelemetryDomain),
     });
   }
   const reconciledGuided = reconcileGuidedAfterLiveVehicleUpdate();
   if (reconciledGuided) {
-    emitEvent("guided://state", liveGuidedStreamEvent(reconciledGuided).payload);
+    emitEvent(EVENT_NAMES.GUIDED_STATE, liveGuidedStreamEvent(reconciledGuided).payload);
     return;
   }
 

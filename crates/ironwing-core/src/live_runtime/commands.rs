@@ -388,9 +388,11 @@ pub async fn request_prearm_checks(vehicle: &mavkit::Vehicle) -> LiveCommandResu
 }
 
 pub fn message_rate_interval_usec(rate_hz: f32) -> LiveCommandResult<i32> {
-    if !(0.1..=50.0).contains(&rate_hz) {
+    if !(crate::telemetry::MIN_MESSAGE_RATE_HZ..=crate::telemetry::MAX_MESSAGE_RATE_HZ)
+        .contains(&rate_hz)
+    {
         return Err(LiveCommandError::invalid_input(
-            "rate_hz must be between 0.1 and 50.0",
+            crate::telemetry::MESSAGE_RATE_RANGE_ERROR,
         ));
     }
 

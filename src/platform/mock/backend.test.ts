@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChartSeriesPage, LogExportResult, LogLibraryCatalog, LogProgress, RawMessagePage } from "../../logs";
 import type { MissionState, TransferProgress } from "../../mission";
@@ -18,60 +17,9 @@ import type {
     PortInfo,
 } from "../../firmware";
 import type { SerialPortInventoryResult } from "../../serial-ports";
+import { MESSAGE_RATE_CATALOG, MESSAGE_RATE_LIMITS, TELEMETRY_RATE_LIMITS } from "../../lib/generated/ironwing";
 
 import { getMockPlatformController, invokeMockCommand, listenMockEvent, type MockLogSeedPreset } from "./backend";
-
-function readRustTelemetrySource() {
-    return readFileSync("crates/ironwing-core/src/telemetry.rs", "utf8");
-}
-
-function readRustLiveRuntimeCommandsSource() {
-    return readFileSync("crates/ironwing-core/src/live_runtime/commands.rs", "utf8");
-}
-
-function readRustMessageRateCatalog() {
-    const source = readRustTelemetrySource();
-    const catalogMatch = source.match(/pub const AVAILABLE_MESSAGE_RATES: &\[MessageRateInfo\] = &\[(.*?)\n\];/s);
-    if (!catalogMatch) {
-        throw new Error("Could not locate AVAILABLE_MESSAGE_RATES in Rust telemetry.rs");
-    }
-
-    const entryPattern = /MessageRateInfo \{\s*id: (\d+),\s*name: "([^"]+)",\s*default_rate_hz: ([0-9.]+),\s*}/g;
-    const entries = [...(catalogMatch[1] ?? "").matchAll(entryPattern)].map((match) => ({
-        id: Number(match[1]),
-        name: match[2] ?? "",
-        default_rate_hz: Number(match[3]),
-    }));
-
-    if (entries.length === 0) {
-        throw new Error("Could not parse any Rust message-rate entries");
-    }
-
-    return entries;
-}
-
-function readRustRateLimits() {
-    const telemetrySource = readRustTelemetrySource();
-    const liveRuntimeCommandsSource = readRustLiveRuntimeCommandsSource();
-    const messageRateMatch = liveRuntimeCommandsSource.match(/if !\(([0-9.]+)\.\.=([0-9.]+)\)\.contains\(&rate_hz\)/);
-    const telemetryMinMatch = telemetrySource.match(/pub const MIN_TELEMETRY_RATE_HZ: u32 = (\d+);/);
-    const telemetryMaxMatch = telemetrySource.match(/pub const MAX_TELEMETRY_RATE_HZ: u32 = (\d+);/);
-
-    if (!messageRateMatch || !telemetryMinMatch || !telemetryMaxMatch) {
-        throw new Error("Could not parse telemetry/message-rate limits from Rust core sources");
-    }
-
-    return {
-        messageRate: {
-            min: Number(messageRateMatch[1]),
-            max: Number(messageRateMatch[2]),
-        },
-        telemetryRate: {
-            min: Number(telemetryMinMatch[1]),
-            max: Number(telemetryMaxMatch[1]),
-        },
-    };
-}
 
 afterEach(() => {
     vi.useRealTimers();
@@ -1754,18 +1702,16 @@ describe("mock firmware backend parity", () => {
     });
 
     it("keeps mock message-rate defaults aligned with the Rust command catalog", async () => {
-        const rustCatalog = readRustMessageRateCatalog();
+        const generatedCatalog = MESSAGE_RATE_CATALOG.map((entry) => ({ ...entry }));
 
-        await expect(invokeMockCommand("get_available_message_rates")).resolves.toEqual(rustCatalog);
+        await expect(invokeMockCommand("get_available_message_rates")).resolves.toEqual(generatedCatalog);
     });
 
     it("matches Rust telemetry and message-rate validation semantics", async () => {
-        const limits = readRustRateLimits();
-
-        await expect(invokeMockCommand("set_telemetry_rate", { rateHz: limits.telemetryRate.min - 1 })).rejects.toThrow(
+        await expect(invokeMockCommand("set_telemetry_rate", { rateHz: TELEMETRY_RATE_LIMITS.min - 1 })).rejects.toThrow(
             "rate_hz must be between 1 and 20",
         );
-        await expect(invokeMockCommand("set_telemetry_rate", { rateHz: limits.telemetryRate.max + 1 })).rejects.toThrow(
+        await expect(invokeMockCommand("set_telemetry_rate", { rateHz: TELEMETRY_RATE_LIMITS.max + 1 })).rejects.toThrow(
             "rate_hz must be between 1 and 20",
         );
 
@@ -1778,10 +1724,10 @@ describe("mock firmware backend parity", () => {
         });
 
         await expect(
-            invokeMockCommand("set_message_rate", { messageId: 33, rateHz: limits.messageRate.min - 0.1 }),
+            invokeMockCommand("set_message_rate", { messageId: 33, rateHz: MESSAGE_RATE_LIMITS.min - 0.1 }),
         ).rejects.toThrow("rate_hz must be between 0.1 and 50.0");
         await expect(
-            invokeMockCommand("set_message_rate", { messageId: 33, rateHz: limits.messageRate.max + 0.1 }),
+            invokeMockCommand("set_message_rate", { messageId: 33, rateHz: MESSAGE_RATE_LIMITS.max + 0.1 }),
         ).rejects.toThrow("rate_hz must be between 0.1 and 50.0");
         await expect(invokeMockCommand("set_message_rate", { messageId: 33, rateHz: 4 })).resolves.toBeUndefined();
     });

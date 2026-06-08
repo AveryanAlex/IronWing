@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { TypedDraftItem } from "./mission-draft-typed";
-import type { HomePosition, MissionCommand, MissionItem } from "./mavkit-types";
+import type { HomePosition, LoiterDirection, MissionCommand, MissionItem } from "./mavkit-types";
 import { defaultGeoPoint3d } from "./mavkit-types";
 import { bearingDistance, latLonFromBearingDistance } from "./mission-coordinates";
 import { buildMissionRenderFeatures } from "./mission-path-render";
@@ -58,7 +58,7 @@ function arcWaypoint(
   lat: number,
   lon: number,
   arc_angle_deg: number,
-  direction: "Clockwise" | "CounterClockwise",
+  direction: LoiterDirection,
 ): TypedDraftItem {
   return makeDraftItem(index, {
     Nav: {
@@ -76,7 +76,7 @@ function loiterTurns(
   lat: number,
   lon: number,
   radius_m: number,
-  direction: "Clockwise" | "CounterClockwise" = "Clockwise",
+  direction: LoiterDirection = "clockwise",
 ): TypedDraftItem {
   return makeDraftItem(index, {
     Nav: {
@@ -95,7 +95,7 @@ function loiterTime(
   index: number,
   lat: number,
   lon: number,
-  direction: "Clockwise" | "CounterClockwise" = "Clockwise",
+  direction: LoiterDirection = "clockwise",
 ): TypedDraftItem {
   return makeDraftItem(index, {
     Nav: {
@@ -215,7 +215,7 @@ describe("buildMissionRenderFeatures", () => {
 
     const features = buildMissionRenderFeatures(home, [
       waypoint(0, start.lat, start.lon),
-      arcWaypoint(1, end.lat, end.lon, 90, "Clockwise"),
+      arcWaypoint(1, end.lat, end.lon, 90, "clockwise"),
     ]);
 
     const arcLeg = features.legs[1]!;
@@ -247,7 +247,7 @@ describe("buildMissionRenderFeatures", () => {
 
     const features = buildMissionRenderFeatures(home, [
       waypoint(0, start.lat, start.lon),
-      arcWaypoint(1, end.lat, end.lon, 0, "Clockwise"),
+      arcWaypoint(1, end.lat, end.lon, 0, "clockwise"),
     ]);
 
     const leg = features.legs[1]!;
@@ -261,13 +261,13 @@ describe("buildMissionRenderFeatures", () => {
   it("builds loiter circles using the command radius", () => {
     const center = offsetPoint(home, 45, 150);
     const features = buildMissionRenderFeatures(home, [
-      loiterTurns(0, center.lat, center.lon, 100, "CounterClockwise"),
+      loiterTurns(0, center.lat, center.lon, 100, "counter_clockwise"),
     ]);
 
     expect(features.loiterCircles).toHaveLength(1);
     const circle = features.loiterCircles[0]!;
     expect(circle.radius_m).toBe(100);
-    expect(circle.direction).toBe("CounterClockwise");
+    expect(circle.direction).toBe("counter_clockwise");
     expect(circle.usesDefaultRadius).toBe(false);
     expect(circle.coordinates[0]!.length).toBeGreaterThan(60);
 
@@ -369,7 +369,7 @@ describe("buildMissionRenderFeatures", () => {
     const features = buildMissionRenderFeatures(home, [
       waypoint(0, wp1.lat, wp1.lon),
       splineWaypoint(1, spline1.lat, spline1.lon),
-      arcWaypoint(2, arcTarget.lat, arcTarget.lon, 60, "CounterClockwise"),
+      arcWaypoint(2, arcTarget.lat, arcTarget.lon, 60, "counter_clockwise"),
       loiterTurns(3, loiterPoint.lat, loiterPoint.lon, 80),
       landStart(4, landStartPoint.lat, landStartPoint.lon),
       waypoint(5, finalPoint.lat, finalPoint.lon),

@@ -7,6 +7,7 @@ import type {
   TransferProgress,
 } from "../../../mission";
 import type { RallyPlan } from "../../../rally";
+import { EVENT_NAMES } from "../../../lib/generated/events";
 import { mockState, requireLiveEnvelope } from "./runtime";
 import type { CommandArgs, MockMissionProgressState, MockMissionState, MockPlatformEvent } from "./types";
 
@@ -251,7 +252,7 @@ export function missionProgressState(
 
 export function liveMissionStateStreamEvent(missionState: MockMissionState): MockPlatformEvent {
   return {
-    event: "mission://state",
+    event: EVENT_NAMES.MISSION_STATE,
     payload: {
       envelope: requireLiveEnvelope(),
       value: missionState,
@@ -261,7 +262,7 @@ export function liveMissionStateStreamEvent(missionState: MockMissionState): Moc
 
 export function liveMissionProgressStreamEvent(missionProgress: MockMissionProgressState): MockPlatformEvent {
   return {
-    event: "mission://progress",
+    event: EVENT_NAMES.MISSION_PROGRESS,
     payload: {
       envelope: requireLiveEnvelope(),
       value: missionProgress,

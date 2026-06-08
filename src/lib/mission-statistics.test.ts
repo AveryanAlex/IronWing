@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { TypedDraftItem } from "./mission-draft-typed";
-import type { HomePosition, MissionCommand, MissionItem } from "./mavkit-types";
+import type { HomePosition, LoiterDirection, MissionCommand, MissionItem } from "./mavkit-types";
 import { defaultGeoPoint3d } from "./mavkit-types";
 import { latLonFromBearingDistance } from "./mission-coordinates";
 import { buildMissionRenderFeatures } from "./mission-path-render";
@@ -62,7 +62,7 @@ function arcWaypoint(
   lat: number,
   lon: number,
   arc_angle_deg: number,
-  direction: "Clockwise" | "CounterClockwise",
+  direction: LoiterDirection,
 ): TypedDraftItem {
   return makeDraftItem(index, {
     Nav: {
@@ -88,7 +88,7 @@ function loiterTurns(
         position: defaultGeoPoint3d(lat, lon, 30),
         turns,
         radius_m,
-        direction: "Clockwise",
+        direction: "clockwise",
         exit_xtrack: false,
       },
     },
@@ -101,7 +101,7 @@ function loiterTime(index: number, lat: number, lon: number, time_s: number): Ty
       LoiterTime: {
         position: defaultGeoPoint3d(lat, lon, 30),
         time_s,
-        direction: "Clockwise",
+        direction: "clockwise",
         exit_xtrack: false,
       },
     },
@@ -166,7 +166,7 @@ function loiterUnlimited(index: number, lat: number, lon: number): TypedDraftIte
       LoiterUnlimited: {
         position: defaultGeoPoint3d(lat, lon, 30),
         radius_m: 50,
-        direction: "Clockwise",
+        direction: "clockwise",
       },
     },
   });
@@ -264,7 +264,7 @@ describe("computeMissionStatistics", () => {
     const items = [
       waypoint(0, wp1.lat, wp1.lon),
       splineWaypoint(1, spline1.lat, spline1.lon),
-      arcWaypoint(2, arcTarget.lat, arcTarget.lon, 60, "CounterClockwise"),
+      arcWaypoint(2, arcTarget.lat, arcTarget.lon, 60, "counter_clockwise"),
     ];
 
     const expectedTravelDistance = buildMissionRenderFeatures(home, items).labels
@@ -479,7 +479,7 @@ describe("computeMissionStatistics", () => {
           LoiterTime: {
             position: defaultGeoPoint3d(wp3.lat, wp3.lon, 60),
             time_s: 10,
-            direction: "Clockwise",
+            direction: "clockwise",
             exit_xtrack: false,
           },
         },

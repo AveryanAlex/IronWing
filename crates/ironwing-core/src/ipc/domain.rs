@@ -1,3 +1,4 @@
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct DomainValue<T> {
     pub available: bool,
@@ -6,6 +7,7 @@ pub struct DomainValue<T> {
     pub value: Option<T>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DomainProvenance {

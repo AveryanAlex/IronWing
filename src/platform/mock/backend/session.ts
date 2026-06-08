@@ -1,4 +1,5 @@
 import { liveGuidedDomain } from "./guided";
+import { EVENT_NAMES } from "../../../lib/generated/events";
 import {
     getResolvedReplayCursorUsec,
     playbackStateEvent,
@@ -147,7 +148,7 @@ export function openSessionSnapshotResult(sourceKind: "live" | "playback") {
 export function playbackStreamEvents(envelope: SessionEnvelope): MockPlatformEvent[] {
     return [
         {
-            event: "session://state",
+            event: EVENT_NAMES.SESSION_STATE,
             payload: {
                 envelope,
                 value: {
@@ -164,21 +165,21 @@ export function playbackStreamEvents(envelope: SessionEnvelope): MockPlatformEve
             },
         },
         {
-            event: "telemetry://state",
+            event: EVENT_NAMES.TELEMETRY_STATE,
             payload: {
                 envelope,
                 value: playbackTelemetryDomain(),
             },
         },
         {
-            event: "support://state",
+            event: EVENT_NAMES.SUPPORT_STATE,
             payload: {
                 envelope,
                 value: { available: false, complete: false, provenance: "playback", value: null },
             },
         },
         {
-            event: "status_text://state",
+            event: EVENT_NAMES.STATUS_TEXT_STATE,
             payload: {
                 envelope,
                 value: { available: true, complete: true, provenance: "playback", value: { entries: [] } },

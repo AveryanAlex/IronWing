@@ -1,3 +1,4 @@
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TransportDescriptor {
@@ -133,46 +134,55 @@ pub struct WebTransportOptions {
     pub web_bluetooth: TransportAvailability,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct UdpValidation {
     pub bind_addr_required: bool,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct TcpValidation {
     pub address_required: bool,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct SerialValidation {
     pub port_required: bool,
     pub baud_required: bool,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct AddressValidation {
     pub address_required: bool,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct UrlValidation {
     pub url_required: bool,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct WebSerialValidation {
     pub chooser_required: bool,
     pub baud_required: bool,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct WebBluetoothValidation {
     pub chooser_required: bool,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 pub struct DemoValidation {}
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BluetoothProfile {

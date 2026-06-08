@@ -303,6 +303,7 @@ pub fn usb_driver_guidance() -> &'static str {
      On macOS, no extra driver is needed"
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, serde::Serialize)]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub enum DfuRecoveryResult {

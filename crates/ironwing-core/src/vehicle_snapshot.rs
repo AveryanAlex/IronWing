@@ -98,18 +98,18 @@ pub fn seeded_vehicle_state(vehicle: &mavkit::Vehicle) -> VehicleState {
     }
 }
 
-pub fn mav_severity_name(severity: mavkit::dialect::MavSeverity) -> &'static str {
-    use mavkit::dialect::MavSeverity::*;
+pub fn mav_severity_name(severity: mavkit::MavSeverity) -> &'static str {
+    use mavkit::MavSeverity::*;
 
     match severity {
-        MAV_SEVERITY_EMERGENCY => "emergency",
-        MAV_SEVERITY_ALERT => "alert",
-        MAV_SEVERITY_CRITICAL => "critical",
-        MAV_SEVERITY_ERROR => "error",
-        MAV_SEVERITY_WARNING => "warning",
-        MAV_SEVERITY_NOTICE => "notice",
-        MAV_SEVERITY_INFO => "info",
-        MAV_SEVERITY_DEBUG => "debug",
+        Emergency => "emergency",
+        Alert => "alert",
+        Critical => "critical",
+        Error => "error",
+        Warning => "warning",
+        Notice => "notice",
+        Info => "info",
+        Debug => "debug",
     }
 }
 
@@ -119,15 +119,15 @@ mod tests {
 
     #[test]
     fn mav_severity_name_maps_all_variants_to_lowercase() {
-        use mavkit::dialect::MavSeverity::*;
+        use mavkit::MavSeverity::*;
 
-        assert_eq!(mav_severity_name(MAV_SEVERITY_EMERGENCY), "emergency");
-        assert_eq!(mav_severity_name(MAV_SEVERITY_ALERT), "alert");
-        assert_eq!(mav_severity_name(MAV_SEVERITY_CRITICAL), "critical");
-        assert_eq!(mav_severity_name(MAV_SEVERITY_ERROR), "error");
-        assert_eq!(mav_severity_name(MAV_SEVERITY_WARNING), "warning");
-        assert_eq!(mav_severity_name(MAV_SEVERITY_NOTICE), "notice");
-        assert_eq!(mav_severity_name(MAV_SEVERITY_INFO), "info");
-        assert_eq!(mav_severity_name(MAV_SEVERITY_DEBUG), "debug");
+        assert_eq!(mav_severity_name(Emergency), "emergency");
+        assert_eq!(mav_severity_name(Alert), "alert");
+        assert_eq!(mav_severity_name(Critical), "critical");
+        assert_eq!(mav_severity_name(Error), "error");
+        assert_eq!(mav_severity_name(Warning), "warning");
+        assert_eq!(mav_severity_name(Notice), "notice");
+        assert_eq!(mav_severity_name(Info), "info");
+        assert_eq!(mav_severity_name(Debug), "debug");
     }
 }

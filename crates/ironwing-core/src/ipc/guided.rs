@@ -4,6 +4,7 @@ use web_time::{SystemTime, UNIX_EPOCH};
 
 use crate::ipc::{DomainProvenance, DomainValue, OperationId, Reason, ReasonKind, SourceKind};
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GuidedStatus {
@@ -13,6 +14,7 @@ pub enum GuidedStatus {
     Unavailable,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GuidedBlockingReason {
@@ -24,6 +26,7 @@ pub enum GuidedBlockingReason {
     StopUnsupported,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GuidedTerminationReason {
@@ -33,6 +36,7 @@ pub enum GuidedTerminationReason {
     VehicleMissing,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GuidedFatalityScope {
@@ -40,12 +44,14 @@ pub enum GuidedFatalityScope {
     Session,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GuidedSessionKind {
     Goto,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum GuidedSession {
@@ -64,12 +70,14 @@ impl GuidedSession {
     }
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GuidedAction {
     pub allowed: bool,
     pub blocking_reason: Option<GuidedBlockingReason>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GuidedActions {
     pub start: GuidedAction,
@@ -77,6 +85,7 @@ pub struct GuidedActions {
     pub stop: GuidedAction,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GuidedTermination {
     pub reason: GuidedTerminationReason,
@@ -84,6 +93,7 @@ pub struct GuidedTermination {
     pub message: String,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GuidedLastCommand {
     pub operation_id: OperationId,
@@ -91,6 +101,7 @@ pub struct GuidedLastCommand {
     pub at_unix_msec: u64,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct GuidedState {
     pub status: GuidedStatus,
@@ -104,16 +115,19 @@ pub struct GuidedState {
 
 pub type GuidedSnapshot = DomainValue<GuidedState>;
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct StartGuidedSessionRequest {
     pub session: GuidedSession,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct UpdateGuidedSessionRequest {
     pub session: GuidedSession,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum GuidedFailureDetail {
@@ -128,6 +142,7 @@ pub enum GuidedFailureDetail {
     },
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct GuidedFailure {
     pub operation_id: OperationId,
@@ -137,6 +152,7 @@ pub struct GuidedFailure {
     pub detail: Option<GuidedFailureDetail>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub enum GuidedCommandResult {

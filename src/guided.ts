@@ -1,5 +1,12 @@
 import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
+import { EVENT_NAMES } from "./lib/generated/events";
+import type {
+  GuidedBlockingReason,
+  GuidedFatalityScope,
+  GuidedStatus,
+  GuidedTerminationReason,
+} from "./lib/generated/ironwing";
 import type { DomainValue } from "./lib/domain-status";
 import type { SessionEvent } from "./session";
 
@@ -11,17 +18,10 @@ export type GuidedSession = {
   altitude_msl_m: number;
 };
 
-export type GuidedStatus = "idle" | "active" | "blocked" | "unavailable";
-export type GuidedBlockingReason =
-  | "live_session_required"
-  | "playback"
-  | "vehicle_disarmed"
-  | "vehicle_mode_incompatible"
-  | "operation_in_progress"
-  | "stop_unsupported";
+export type { GuidedBlockingReason, GuidedFatalityScope, GuidedStatus };
 
 export type GuidedTermination = {
-  reason: "disconnect" | "mode_change" | "source_switch" | "vehicle_missing";
+  reason: GuidedTerminationReason;
   at_unix_msec: number;
   message: string;
 };
@@ -36,8 +36,6 @@ export type GuidedAction = {
   allowed: boolean;
   blocking_reason: GuidedBlockingReason | null;
 };
-
-export type GuidedFatalityScope = "operation" | "session";
 
 export type GuidedFailureDetail =
   | { kind: "blocking_reason"; blocking_reason: GuidedBlockingReason }
@@ -124,5 +122,5 @@ export async function guidedTakeoff(altitudeM: number): Promise<void> {
 export async function subscribeGuidedState(
   cb: (event: SessionEvent<GuidedDomain>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<GuidedDomain>>("guided://state", (event) => cb(event.payload));
+  return listen<SessionEvent<GuidedDomain>>(EVENT_NAMES.GUIDED_STATE, (event) => cb(event.payload));
 }

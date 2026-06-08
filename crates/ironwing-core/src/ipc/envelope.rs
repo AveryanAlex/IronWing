@@ -1,3 +1,4 @@
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SourceKind {
@@ -5,6 +6,7 @@ pub enum SourceKind {
     Playback,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct SessionEnvelope {
     pub session_id: String,
@@ -13,6 +15,7 @@ pub struct SessionEnvelope {
     pub reset_revision: u64,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum OperationId {
@@ -77,7 +80,67 @@ pub enum OperationId {
 }
 
 impl OperationId {
-    #[cfg(test)]
+    pub const ALL: &'static [Self] = &[
+        Self::OpenSessionSnapshot,
+        Self::AckSessionSnapshot,
+        Self::ArmVehicle,
+        Self::DisarmVehicle,
+        Self::SetFlightMode,
+        Self::VehicleTakeoff,
+        Self::StartGuidedSession,
+        Self::UpdateGuidedSession,
+        Self::StopGuidedSession,
+        Self::SetMessageRate,
+        Self::MissionUpload,
+        Self::MissionDownload,
+        Self::MissionClear,
+        Self::MissionCancel,
+        Self::FenceUpload,
+        Self::FenceDownload,
+        Self::FenceClear,
+        Self::RallyUpload,
+        Self::RallyDownload,
+        Self::RallyClear,
+        Self::MissionSetCurrent,
+        Self::CalibrateAccel,
+        Self::CalibrateGyro,
+        Self::ParamDownloadAll,
+        Self::ParamWrite,
+        Self::ParamWriteBatch,
+        Self::ParamCancel,
+        Self::RebootVehicle,
+        Self::MotorTest,
+        Self::SetServo,
+        Self::RcOverride,
+        Self::CalibrateCompassStart,
+        Self::CalibrateCompassAccept,
+        Self::CalibrateCompassCancel,
+        Self::RequestPrearmChecks,
+        Self::LogOpen,
+        Self::LogLibraryList,
+        Self::LogLibraryRegister,
+        Self::LogLibraryRelink,
+        Self::LogLibraryRemove,
+        Self::LogLibraryReindex,
+        Self::LogLibraryCancel,
+        Self::LogRawMessagesQuery,
+        Self::LogChartSeriesQuery,
+        Self::LogExport,
+        Self::ReplayOpen,
+        Self::ReplayPlay,
+        Self::ReplayPause,
+        Self::ReplaySeek,
+        Self::ReplaySetSpeed,
+        Self::ReplayStop,
+        Self::RecordingStart,
+        Self::RecordingStop,
+        Self::RecordingStatus,
+        Self::RecordingSettingsRead,
+        Self::RecordingSettingsWrite,
+        Self::FirmwareInstallUpdate,
+        Self::FirmwareBootloaderInstallation,
+    ];
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::OpenSessionSnapshot => "open_session_snapshot",
@@ -142,6 +205,7 @@ impl OperationId {
     }
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReasonKind {
@@ -155,12 +219,14 @@ pub enum ReasonKind {
     PermissionDenied,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Reason {
     pub kind: ReasonKind,
     pub message: String,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct OperationFailure {
     pub operation_id: OperationId,
@@ -175,6 +241,7 @@ pub fn operation_failure_json(failure: OperationFailure) -> String {
 }
 
 #[cfg_attr(test, allow(dead_code))]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct ScopedEvent<T> {
     pub envelope: SessionEnvelope,

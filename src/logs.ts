@@ -1,20 +1,24 @@
 import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
+import { EVENT_NAMES } from "./lib/generated/events";
+import type * as Generated from "./lib/generated/ironwing";
 import type { FlightPathPoint } from "./playback";
-import type { OperationId } from "./session";
 
-export type LogType = "tlog" | "bin";
+type UiWire<T> = T extends bigint
+  ? number
+  : T extends string | number | boolean | null | undefined
+    ? T
+    : T extends Array<infer Item>
+      ? UiWire<Item>[]
+      : T extends object
+        ? { [K in keyof T]: UiWire<T[K]> }
+        : T;
 
-export type LogFormat = LogType;
+export type LogType = Generated.LogFormat;
 
-export type LogFormatAdapter = {
-  format: LogFormat;
-  label: string;
-  file_extensions: string[];
-  supports_replay: boolean;
-  supports_raw_messages: boolean;
-  supports_chart_series: boolean;
-};
+export type LogFormat = Generated.LogFormat;
+
+export type LogFormatAdapter = UiWire<Generated.LogFormatAdapter>;
 
 export type LogSummary = {
   file_name: string;
@@ -31,222 +35,43 @@ export type LogDataPoint = {
   fields: Record<string, number>;
 };
 
-export type ReferencedFileFingerprint = {
-  size_bytes: number;
-  modified_unix_msec: number;
-};
+export type ReferencedFileFingerprint = UiWire<Generated.ReferencedFileFingerprint>;
+export type ReferencedFileStatus = UiWire<Generated.ReferencedFileStatus>;
+export type ReferencedLogFile = UiWire<Generated.ReferencedLogFile>;
+export type LogDiagnosticSeverity = Generated.LogDiagnosticSeverity;
+export type LogDiagnosticSource = Generated.LogDiagnosticSource;
+export type LogDiagnostic = UiWire<Generated.LogDiagnostic>;
+export type LogMetadata = UiWire<Generated.LogMetadata>;
+export type LogIndexReference = UiWire<Generated.LogIndexReference>;
+export type LogLibraryEntryStatus = Generated.LogLibraryEntryStatus;
+export type LogLibraryEntry = UiWire<Generated.LogLibraryEntry>;
+export type AppDataLogLibraryStorageLocation = Extract<UiWire<Generated.LogLibraryStorageLocation>, { kind: "app_data" }>;
+export type BrowserLogLibraryStorageLocation = Extract<UiWire<Generated.LogLibraryStorageLocation>, { kind: "browser_storage" }>;
+export type LogLibraryStorageLocation = UiWire<Generated.LogLibraryStorageLocation>;
+export type LogLibraryCatalog = UiWire<Generated.LogLibraryCatalog>;
+export type LogCatalogMigrationError = UiWire<Generated.LogCatalogMigrationError>;
+export type LogLoadPhase = Generated.LogOperationPhase;
+export type LogProgress = UiWire<Generated.LogOperationProgress>;
 
-export type ReferencedFileStatus =
-  | { kind: "available"; current_fingerprint: ReferencedFileFingerprint }
-  | { kind: "missing" }
-  | { kind: "stale"; current_fingerprint: ReferencedFileFingerprint };
-
-export type ReferencedLogFile = {
-  original_path: string;
-  fingerprint: ReferencedFileFingerprint;
-  status: ReferencedFileStatus;
-};
-
-export type LogDiagnosticSeverity = "info" | "warning" | "error";
-
-export type LogDiagnosticSource = "catalog" | "file_system" | "parse" | "index" | "replay" | "export" | "recording";
-
-export type LogDiagnostic = {
-  severity: LogDiagnosticSeverity;
-  source: LogDiagnosticSource;
-  code: string;
-  message: string;
-  recoverable: boolean;
-  timestamp_usec: number | null;
-};
-
-export type LogMetadata = {
-  display_name: string;
-  format: LogFormat;
-  start_usec: number | null;
-  end_usec: number | null;
-  duration_secs: number | null;
-  total_messages: number;
-  message_types: Record<string, number>;
-  vehicle_type: string | null;
-  autopilot: string | null;
-};
-
-/**
- * Snapshot of the entry-specific index file stored beside the catalog.
- * `index_version` is intentionally separate from the catalog schema so index
- * rebuilds can roll forward without forcing a catalog migration.
- */
-export type LogIndexReference = {
-  index_id: string;
-  relative_path: string;
-  format: LogFormat;
-  index_version: number;
-  built_at_unix_msec: number;
-  message_count: number;
-  covers_start_usec: number | null;
-  covers_end_usec: number | null;
-};
-
-export type LogLibraryEntryStatus = "ready" | "missing" | "stale" | "indexing" | "partial" | "corrupt" | "unsupported";
-
-export type LogLibraryEntry = {
-  entry_id: string;
-  status: LogLibraryEntryStatus;
-  imported_at_unix_msec: number;
-  source: ReferencedLogFile;
-  metadata: LogMetadata;
-  diagnostics: LogDiagnostic[];
-  index: LogIndexReference | null;
-};
-
-/**
- * Serialized description of the app-data layout used for the log library.
- * The catalog records these paths so migrations and diagnostics can explain
- * where the catalog, indexes, and recordings live on disk.
- */
-export type AppDataLogLibraryStorageLocation = {
-  kind: "app_data";
-  catalog_path: string;
-  indexes_dir: string;
-  recordings_dir: string;
-};
-
-export type BrowserLogLibraryStorageLocation = {
-  kind: "browser_storage";
-  catalog_id: string;
-  indexes_store: string;
-  blobs_store: string;
-  recordings_store: string;
-};
-
-export type LogLibraryStorageLocation = AppDataLogLibraryStorageLocation | BrowserLogLibraryStorageLocation;
-
-/**
- * Top-level log library catalog persisted in app data.
- * `schema_version` is the catalog JSON contract; `migrated_from_schema_version`
- * captures exact-match v1 migrations only.
- */
-export type LogLibraryCatalog = {
-  schema_version: 1;
-  storage: LogLibraryStorageLocation;
-  migrated_from_schema_version: number | null;
-  entries: LogLibraryEntry[];
-};
-
-export type LogCatalogMigrationError =
-  | { kind: "missing_schema_version" }
-  | { kind: "unsupported_schema_version"; schema_version: number; supported_schema_version: number }
-  | { kind: "invalid_catalog"; message: string };
-
-export type LogLoadPhase =
-  | "queued"
-  | "reading_metadata"
-  | "parsing"
-  | "indexing"
-  | "writing_catalog"
-  | "exporting"
-  | "completed"
-  | "cancelled"
-  | "failed";
-
-export type LogProgress = {
-  operation_id: OperationId;
-  phase: LogLoadPhase;
-  completed_items: number;
-  total_items: number | null;
-  percent: number | null;
-  entry_id: string | null;
-  instance_id: string | null;
-  message: string | null;
-};
-
-export type RawMessageQuery = {
-  entry_id: string;
-  cursor: string | null;
-  start_usec: number | null;
-  end_usec: number | null;
-  message_types: string[];
-  text: string | null;
-  field_filters: RawMessageFieldFilter[];
-  limit: number;
-  include_detail: boolean;
-  include_hex: boolean;
-};
+export type RawMessageQuery = UiWire<Generated.RawMessageQuery>;
 
 export type JsonFieldValue = string | number | boolean | null | JsonFieldValue[] | { [key: string]: JsonFieldValue };
 
-export type RawMessageFieldFilter = {
-  field: string;
-  value_text: string | null;
-};
-
-export type RawMessageRecord = {
-  sequence: number;
-  timestamp_usec: number;
-  message_type: string;
-  system_id: number | null;
-  component_id: number | null;
-  raw_len_bytes: number;
+export type RawMessageFieldFilter = UiWire<Generated.RawMessageFieldFilter>;
+export type RawMessageRecord = Omit<UiWire<Generated.RawMessageRecord>, "fields" | "detail"> & {
   fields: Record<string, JsonFieldValue>;
   detail: JsonFieldValue | null;
-  hex_payload: string | null;
-  diagnostics: LogDiagnostic[];
 };
-
-export type RawMessagePage = {
-  entry_id: string;
+export type RawMessagePage = Omit<UiWire<Generated.RawMessagePage>, "items"> & {
   items: RawMessageRecord[];
-  next_cursor: string | null;
-  total_available: number | null;
 };
-
-export type ChartSeriesSelector = {
-  message_type: string;
-  field: string;
-  label: string;
-  unit: string | null;
-};
-
-export type ChartSeriesRequest = {
-  entry_id: string;
-  selectors: ChartSeriesSelector[];
-  start_usec: number | null;
-  end_usec: number | null;
-  max_points: number | null;
-};
-
-export type ChartPoint = {
-  timestamp_usec: number;
-  value: number;
-};
-
-export type ChartSeries = {
-  selector: ChartSeriesSelector;
-  points: ChartPoint[];
-};
-
-export type ChartSeriesPage = {
-  entry_id: string;
-  start_usec: number | null;
-  end_usec: number | null;
-  series: ChartSeries[];
-  diagnostics: LogDiagnostic[];
-};
-
-export type LogExportFormat = "csv";
-
-export type LogExportRequest = {
-  entry_id: string;
-  instance_id: string;
-  format: LogExportFormat;
-  destination_path: string;
-  start_usec: number | null;
-  end_usec: number | null;
-  message_types: string[];
-  text: string | null;
-  field_filters: RawMessageFieldFilter[];
-};
+export type ChartSeriesSelector = UiWire<Generated.ChartSeriesSelector>;
+export type ChartSeriesRequest = UiWire<Generated.ChartSeriesRequest>;
+export type ChartPoint = Omit<UiWire<Generated.ChartPoint>, "value"> & { value: number };
+export type ChartSeries = Omit<UiWire<Generated.ChartSeries>, "points"> & { points: ChartPoint[] };
+export type ChartSeriesPage = Omit<UiWire<Generated.ChartSeriesPage>, "series"> & { series: ChartSeries[] };
+export type LogExportFormat = Generated.LogExportFormat;
+export type LogExportRequest = UiWire<Generated.LogExportRequest>;
 
 export type FlightPathQuery = {
   entry_id: string;
@@ -255,13 +80,7 @@ export type FlightPathQuery = {
   max_points: number | null;
 };
 
-export type LogExportResult = {
-  operation_id: OperationId;
-  destination_path: string;
-  bytes_written: number;
-  rows_written: number;
-  diagnostics: LogDiagnostic[];
-};
+export type LogExportResult = UiWire<Generated.LogExportResult>;
 
 /** Load only the log summary metadata; bounded queries fetch the actual data. */
 export async function openLog(path: string): Promise<LogSummary> {
@@ -382,5 +201,5 @@ export async function exportLogCsv(
 }
 
 export async function subscribeLogProgress(cb: (progress: LogProgress) => void): Promise<UnlistenFn> {
-  return listen<LogProgress>("log://progress", (event) => cb(event.payload));
+  return listen<LogProgress>(EVENT_NAMES.LOG_PROGRESS, (event) => cb(event.payload));
 }

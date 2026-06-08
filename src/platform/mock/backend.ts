@@ -6,6 +6,7 @@ import {
   updateGuidedSession,
   vehicleTakeoff,
 } from "./backend/guided";
+import { EVENT_NAMES } from "../../lib/generated/events";
 import {
   closeMockLog,
   cancelLogLibraryOperation,
@@ -230,7 +231,7 @@ function publishMissionState(missionState: MockMissionState) {
     return;
   }
 
-  emitEvent("mission://state", liveMissionStateStreamEvent(missionState).payload);
+  emitEvent(EVENT_NAMES.MISSION_STATE, liveMissionStateStreamEvent(missionState).payload);
 }
 
 function publishMissionProgress(missionProgress: MockMissionProgressState) {
@@ -238,7 +239,7 @@ function publishMissionProgress(missionProgress: MockMissionProgressState) {
     return;
   }
 
-  emitEvent("mission://progress", liveMissionProgressStreamEvent(missionProgress).payload);
+  emitEvent(EVENT_NAMES.MISSION_PROGRESS, liveMissionProgressStreamEvent(missionProgress).payload);
 }
 
 function beginMissionOperation(
@@ -328,14 +329,14 @@ async function runCompassCalibration() {
         if (pendingCompassCalibration !== calibration || !mockState.liveVehicleAvailable) {
           return;
         }
-        emitEvent("compass://cal_progress", progress);
+        emitEvent(EVENT_NAMES.COMPASS_CAL_PROGRESS, progress);
       }
 
       if (pendingCompassCalibration !== calibration || !mockState.liveVehicleAvailable) {
         return;
       }
 
-      emitEvent("compass://cal_report", {
+      emitEvent(EVENT_NAMES.COMPASS_CAL_REPORT, {
         compass_id: 1,
         status: "success",
         fitness: 12.5,
@@ -535,9 +536,9 @@ async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unk
       mockState.pendingPlaybackEnvelope = null;
       mockState.playbackCursorUsec = null;
       const idleState = closeMockLog();
-      emitEvent("playback://state", { envelope: playbackEnvelope, value: idleState });
+      emitEvent(EVENT_NAMES.PLAYBACK_STATE, { envelope: playbackEnvelope, value: idleState });
       if (mockState.liveEnvelope && mockState.liveVehicleState) {
-        emitEvent("session://state", liveSessionStreamEvent(mockState.liveVehicleState).payload);
+        emitEvent(EVENT_NAMES.SESSION_STATE, liveSessionStreamEvent(mockState.liveVehicleState).payload);
       }
       return idleState;
     }
@@ -695,7 +696,7 @@ async function defaultCommandResult(cmd: string, args: CommandArgs): Promise<unk
         const liveEnvelope = mockState.liveEnvelope;
         disconnectLink(args);
         if (liveEnvelope) {
-          emitEvent("session://state", liveDisconnectedSessionPayload(liveEnvelope));
+          emitEvent(EVENT_NAMES.SESSION_STATE, liveDisconnectedSessionPayload(liveEnvelope));
         }
       }
       return undefined;
@@ -991,7 +992,7 @@ function createController(): MockPlatformController {
         return;
       }
 
-      emitEvent("mission://progress", liveMissionProgressStreamEvent(missionProgress).payload);
+      emitEvent(EVENT_NAMES.MISSION_PROGRESS, liveMissionProgressStreamEvent(missionProgress).payload);
     },
     emitParamStore(paramStore) {
       mockState.liveParamStore = structuredClone(paramStore);
@@ -999,7 +1000,7 @@ function createController(): MockPlatformController {
         return;
       }
 
-      emitEvent("param://store", liveParamStoreStreamEvent(paramStore).payload);
+      emitEvent(EVENT_NAMES.PARAM_STORE, liveParamStoreStreamEvent(paramStore).payload);
     },
     emitParamProgress(paramProgress) {
       mockState.liveParamProgress = structuredClone(paramProgress);
@@ -1007,14 +1008,14 @@ function createController(): MockPlatformController {
         return;
       }
 
-      emitEvent("param://progress", liveParamProgressStreamEvent(paramProgress).payload);
+      emitEvent(EVENT_NAMES.PARAM_PROGRESS, liveParamProgressStreamEvent(paramProgress).payload);
     },
     emitLiveGuidedState(guidedState) {
       applyMockGuidedState(guidedState);
-      emitEvent("guided://state", liveGuidedStreamEvent(guidedState).payload);
+      emitEvent(EVENT_NAMES.GUIDED_STATE, liveGuidedStreamEvent(guidedState).payload);
     },
     emitLogProgress(progress) {
-      emitEvent("log://progress", emitProgressEvent(progress).payload);
+      emitEvent(EVENT_NAMES.LOG_PROGRESS, emitProgressEvent(progress).payload);
     },
     emitPlaybackState(playbackState) {
       writeMockReplayState(playbackState);
@@ -1022,7 +1023,7 @@ function createController(): MockPlatformController {
         return;
       }
 
-      emitEvent("playback://state", playbackStateEvent(mockState.playbackEnvelope).payload);
+      emitEvent(EVENT_NAMES.PLAYBACK_STATE, playbackStateEvent(mockState.playbackEnvelope).payload);
     },
     setLogLibraryCatalog(catalog) {
       return setMockLogLibraryCatalog(catalog);

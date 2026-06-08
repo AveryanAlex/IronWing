@@ -50,15 +50,15 @@ describe("sampleSplinePoints", () => {
 
 describe("sampleArcPoints", () => {
   it("returns null for zero arc angle", () => {
-    expect(sampleArcPoints(offset(0, 0), offset(0.001, 0), 0, "Clockwise", 10)).toBeNull();
+    expect(sampleArcPoints(offset(0, 0), offset(0.001, 0), 0, "clockwise", 10)).toBeNull();
   });
 
   it("returns null for coincident start and end", () => {
-    expect(sampleArcPoints(offset(0, 0), offset(0, 0), 90, "Clockwise", 10)).toBeNull();
+    expect(sampleArcPoints(offset(0, 0), offset(0, 0), 90, "clockwise", 10)).toBeNull();
   });
 
   it("returns steps + 1 points for a valid arc", () => {
-    const result = sampleArcPoints(offset(0, 0), offset(0, 0.001), 90, "Clockwise", 16);
+    const result = sampleArcPoints(offset(0, 0), offset(0, 0.001), 90, "clockwise", 16);
     expect(result).not.toBeNull();
     expect(result).toHaveLength(17);
   });
@@ -66,7 +66,7 @@ describe("sampleArcPoints", () => {
   it("snaps endpoints to start and end", () => {
     const start = offset(0, 0);
     const end = offset(0, 0.001);
-    const result = sampleArcPoints(start, end, 90, "CounterClockwise", 10)!;
+    const result = sampleArcPoints(start, end, 90, "counter_clockwise", 10)!;
     expect(result[0]).toEqual({ latitude_deg: start.latitude_deg, longitude_deg: start.longitude_deg });
     expect(result[result.length - 1]).toEqual({ latitude_deg: end.latitude_deg, longitude_deg: end.longitude_deg });
   });

@@ -50,7 +50,7 @@ describe("commandPosition", () => {
     const cmd: MissionCommand = {
       Do: {
         ChangeSpeed: {
-          speed_type: "Airspeed",
+          speed_type: "airspeed",
           speed_mps: 15,
           throttle_pct: -1,
         },
@@ -94,7 +94,7 @@ describe("commandPosition", () => {
     const cmd: MissionCommand = {
       Other: {
         command: 999,
-        frame: "Global",
+        frame: "global",
         param1: 0,
         param2: 0,
         param3: 0,
@@ -149,7 +149,7 @@ describe("commandCategory", () => {
       commandCategory({
         Other: {
           command: 1,
-          frame: "Mission",
+          frame: "mission",
           param1: 0,
           param2: 0,
           param3: 0,
@@ -291,7 +291,7 @@ describe("commandDisplayName", () => {
   it("returns 'Change Speed' for DoChangeSpeed", () => {
     const cmd: MissionCommand = {
       Do: {
-        ChangeSpeed: { speed_type: "Airspeed", speed_mps: 15, throttle_pct: -1 },
+        ChangeSpeed: { speed_type: "airspeed", speed_mps: 15, throttle_pct: -1 },
       },
     };
     expect(commandDisplayName(cmd)).toBe("Change Speed");
@@ -314,7 +314,7 @@ describe("commandDisplayName", () => {
           position: relHomePoint,
           turns: 3,
           radius_m: 100,
-          direction: "Clockwise",
+          direction: "clockwise",
           exit_xtrack: false,
         },
       },
@@ -327,7 +327,7 @@ describe("commandDisplayName", () => {
       commandDisplayName({
         Other: {
           command: 999,
-          frame: "Mission",
+          frame: "mission",
           param1: 0,
           param2: 0,
           param3: 0,

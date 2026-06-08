@@ -1,5 +1,7 @@
 import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
+import { EVENT_NAMES } from "./lib/generated/events";
+import type { CalibrationLifecycle, CalibrationState, CalibrationStep } from "./lib/generated/ironwing";
 import { createLatestScopedValueHandler } from "./lib/scoped-session-events";
 import type { DomainValue } from "./lib/domain-status";
 import type { MagCalProgress, MagCalReport } from "./sensor-health";
@@ -15,19 +17,7 @@ export type RcOverrideChannel = {
   value: RcOverrideChannelValue;
 };
 
-export type CalibrationLifecycle = "not_started" | "running" | "complete" | "failed";
-
-export type CalibrationStep = {
-  lifecycle: CalibrationLifecycle;
-  progress: MagCalProgress | null;
-  report: MagCalReport | null;
-};
-
-export type CalibrationState = {
-  accel: CalibrationStep | null;
-  compass: CalibrationStep | null;
-  radio: CalibrationStep | null;
-};
+export type { CalibrationLifecycle, CalibrationState, CalibrationStep };
 
 export type CalibrationDomain = DomainValue<CalibrationState>;
 
@@ -35,13 +25,13 @@ export async function subscribeCalibrationState(
   cb: (domain: CalibrationDomain) => void,
 ): Promise<UnlistenFn> {
   const handleEvent = createLatestScopedValueHandler(cb);
-  return listen<SessionEvent<CalibrationDomain>>("calibration://state", (event) => handleEvent(event.payload));
+  return listen<SessionEvent<CalibrationDomain>>(EVENT_NAMES.CALIBRATION_STATE, (event) => handleEvent(event.payload));
 }
 
 export async function subscribeCalibrationStateEvent(
   cb: (event: SessionEvent<CalibrationDomain>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<CalibrationDomain>>("calibration://state", (event) => cb(event.payload));
+  return listen<SessionEvent<CalibrationDomain>>(EVENT_NAMES.CALIBRATION_STATE, (event) => cb(event.payload));
 }
 
 export async function calibrateAccel(): Promise<void> {

@@ -915,7 +915,7 @@ function buildMarkerCandidates(
       longitude_deg: item.preview.longitude_deg,
       draggable: !item.readOnly,
       selected: input.selection.kind === "mission-item" && input.selection.uiId === item.uiId,
-      current: (item.document as MissionItem).current,
+      current: (item.document as MissionItem).current ?? false,
       readOnly: item.readOnly,
       uiId: item.uiId,
       index: item.index,

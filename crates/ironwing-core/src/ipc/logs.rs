@@ -4,6 +4,7 @@ use crate::ipc::{OperationFailure, OperationId, Reason};
 
 pub const LOG_LIBRARY_CATALOG_SCHEMA_VERSION: u16 = 1;
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogFormat {
@@ -11,6 +12,7 @@ pub enum LogFormat {
     Bin,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LogFormatAdapter {
     pub format: LogFormat,
@@ -21,12 +23,14 @@ pub struct LogFormatAdapter {
     pub supports_chart_series: bool,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ReferencedFileFingerprint {
     pub size_bytes: u64,
     pub modified_unix_msec: u64,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ReferencedFileStatus {
@@ -39,6 +43,7 @@ pub enum ReferencedFileStatus {
     },
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ReferencedLogFile {
     pub original_path: String,
@@ -46,6 +51,7 @@ pub struct ReferencedLogFile {
     pub status: ReferencedFileStatus,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogDiagnosticSeverity {
@@ -54,6 +60,7 @@ pub enum LogDiagnosticSeverity {
     Error,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogDiagnosticSource {
@@ -66,6 +73,7 @@ pub enum LogDiagnosticSource {
     Recording,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LogDiagnostic {
     pub severity: LogDiagnosticSeverity,
@@ -76,6 +84,7 @@ pub struct LogDiagnostic {
     pub timestamp_usec: Option<u64>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LogMetadata {
     pub display_name: String,
@@ -89,6 +98,7 @@ pub struct LogMetadata {
     pub autopilot: Option<String>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LogIndexReference {
     pub index_id: String,
@@ -101,6 +111,7 @@ pub struct LogIndexReference {
     pub covers_end_usec: Option<u64>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogLibraryEntryStatus {
@@ -113,6 +124,7 @@ pub enum LogLibraryEntryStatus {
     Unsupported,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LogLibraryEntry {
     pub entry_id: String,
@@ -124,6 +136,7 @@ pub struct LogLibraryEntry {
     pub index: Option<LogIndexReference>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LogLibraryStorageLocation {
@@ -140,6 +153,7 @@ pub enum LogLibraryStorageLocation {
     },
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LogLibraryCatalog {
     pub schema_version: u16,
@@ -148,6 +162,7 @@ pub struct LogLibraryCatalog {
     pub entries: Vec<LogLibraryEntry>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum LogCatalogMigrationError {
@@ -184,6 +199,7 @@ pub fn migrate_log_library_catalog(
     }
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogOperationPhase {
@@ -198,6 +214,7 @@ pub enum LogOperationPhase {
     Failed,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LogOperationProgress {
     pub operation_id: OperationId,
@@ -210,6 +227,7 @@ pub struct LogOperationProgress {
     pub message: Option<String>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReplayStatus {
@@ -225,12 +243,14 @@ pub enum ReplayStatus {
 
 pub type ReplayState = crate::ipc::playback::PlaybackState;
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RawMessageFieldFilter {
     pub field: String,
     pub value_text: Option<String>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct RawMessageQuery {
     pub entry_id: String,
@@ -245,6 +265,7 @@ pub struct RawMessageQuery {
     pub include_hex: bool,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct RawMessageRecord {
     pub sequence: u64,
@@ -259,6 +280,7 @@ pub struct RawMessageRecord {
     pub diagnostics: Vec<LogDiagnostic>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct RawMessagePage {
     pub entry_id: String,
@@ -267,6 +289,7 @@ pub struct RawMessagePage {
     pub total_available: Option<u64>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ChartSeriesSelector {
     pub message_type: String,
@@ -275,6 +298,7 @@ pub struct ChartSeriesSelector {
     pub unit: Option<String>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ChartSeriesRequest {
     pub entry_id: String,
@@ -284,18 +308,21 @@ pub struct ChartSeriesRequest {
     pub max_points: Option<u32>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ChartPoint {
     pub timestamp_usec: u64,
     pub value: f64,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ChartSeries {
     pub selector: ChartSeriesSelector,
     pub points: Vec<ChartPoint>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ChartSeriesPage {
     pub entry_id: String,
@@ -305,12 +332,14 @@ pub struct ChartSeriesPage {
     pub diagnostics: Vec<LogDiagnostic>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum LogExportFormat {
     Csv,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LogExportRequest {
     pub entry_id: String,
@@ -324,6 +353,7 @@ pub struct LogExportRequest {
     pub field_filters: Vec<RawMessageFieldFilter>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LogExportResult {
     pub operation_id: OperationId,
@@ -333,6 +363,7 @@ pub struct LogExportResult {
     pub diagnostics: Vec<LogDiagnostic>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RecordingMode {
@@ -340,6 +371,7 @@ pub enum RecordingMode {
     AutoOnConnect,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RecordingSettings {
     pub auto_record_on_connect: bool,
@@ -348,6 +380,7 @@ pub struct RecordingSettings {
     pub add_completed_recordings_to_library: bool,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum RecordingStatus {
@@ -371,18 +404,21 @@ pub enum RecordingStatus {
     },
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RecordingStartRequest {
     pub destination_path: String,
     pub mode: RecordingMode,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RecordingSettingsResult {
     pub operation_id: OperationId,
     pub settings: RecordingSettings,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct RecordingFailure {
     pub operation_id: OperationId,

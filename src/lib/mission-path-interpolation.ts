@@ -9,6 +9,7 @@ import {
   localXYToLatLon,
   type GeoRef,
 } from "./mission-coordinates";
+import type { LoiterDirection } from "./mavkit-types";
 
 // ---------------------------------------------------------------------------
 // Catmull-Rom helpers
@@ -83,7 +84,7 @@ export function sampleArcPoints(
   start: GeoRef,
   end: GeoRef,
   arcAngleDeg: number,
-  direction: "Clockwise" | "CounterClockwise",
+  direction: LoiterDirection,
   steps: number,
 ): GeoRef[] | null {
   if (arcAngleDeg === 0) {
@@ -110,13 +111,13 @@ export function sampleArcPoints(
   const midpointY = (startXY.y_m + endXY.y_m) / 2;
   const leftNormalX = -chordY / chordLength;
   const leftNormalY = chordX / chordLength;
-  const normalSign = direction === "CounterClockwise" ? 1 : -1;
+  const normalSign = direction === "counter_clockwise" ? 1 : -1;
   const centerDistance = chordLength / (2 * Math.tan(theta / 2));
   const centerX = midpointX + leftNormalX * centerDistance * normalSign;
   const centerY = midpointY + leftNormalY * centerDistance * normalSign;
   const radius = Math.hypot(startXY.x_m - centerX, startXY.y_m - centerY);
   const startAngle = Math.atan2(startXY.y_m - centerY, startXY.x_m - centerX);
-  const sweep = direction === "CounterClockwise" ? theta : -theta;
+  const sweep = direction === "counter_clockwise" ? theta : -theta;
 
   const points: GeoRef[] = [];
   for (let step = 0; step <= steps; step += 1) {

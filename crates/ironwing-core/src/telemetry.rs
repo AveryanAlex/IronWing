@@ -2,7 +2,11 @@ pub const DEFAULT_TELEMETRY_INTERVAL_MS: u64 = 200;
 pub const MIN_TELEMETRY_RATE_HZ: u32 = 1;
 pub const MAX_TELEMETRY_RATE_HZ: u32 = 20;
 pub const TELEMETRY_RATE_RANGE_ERROR: &str = "rate_hz must be between 1 and 20";
+pub const MIN_MESSAGE_RATE_HZ: f32 = 0.1;
+pub const MAX_MESSAGE_RATE_HZ: f32 = 50.0;
+pub const MESSAGE_RATE_RANGE_ERROR: &str = "rate_hz must be between 0.1 and 50.0";
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, serde::Serialize, PartialEq)]
 pub struct MessageRateInfo {
     pub id: u32,
@@ -10,6 +14,7 @@ pub struct MessageRateInfo {
     pub default_rate_hz: f32,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MessageIntervalRequest {
     pub message_id: u32,

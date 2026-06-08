@@ -47,6 +47,7 @@ import {
   firmwareCatalogTargetsFromRemote,
   resetFirmwareCatalogCacheForTests,
 } from "../../../lib/firmware/catalog-client";
+import { EVENT_NAMES } from "../../../lib/generated/events";
 
 export const WEB_SERIAL_FLASH_UNSUPPORTED_RESULT = {
   result: "failed",
@@ -208,7 +209,7 @@ export function emitWebFirmwareProgress(phase: string, written: number, total: n
     bytes_total: total,
     pct: total > 0 ? (written / total) * 100 : 0,
   } satisfies FirmwareProgress;
-  emitWebEvent("firmware://progress", progress);
+  emitWebEvent(EVENT_NAMES.FIRMWARE_PROGRESS, progress);
 }
 
 export async function webFirmwarePorts(): Promise<PortInfo[]> {

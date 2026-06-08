@@ -1,4 +1,5 @@
 import { mockProfileTiming, mockState, requireLiveEnvelope } from "./runtime";
+import { EVENT_NAMES } from "../../../lib/generated/events";
 import type {
   CommandArgs,
   MockParamProgressState,
@@ -43,7 +44,7 @@ function publishParamProgress(
     return;
   }
 
-  emitEvent("param://progress", liveParamProgressStreamEvent(progress).payload);
+  emitEvent(EVENT_NAMES.PARAM_PROGRESS, liveParamProgressStreamEvent(progress).payload);
 }
 
 function publishParamStore(
@@ -55,7 +56,7 @@ function publishParamStore(
     return;
   }
 
-  emitEvent("param://store", liveParamStoreStreamEvent(paramStore).payload);
+  emitEvent(EVENT_NAMES.PARAM_STORE, liveParamStoreStreamEvent(paramStore).payload);
 }
 
 function beginParamOperation(kind: PendingParamOperation["kind"]): PendingParamOperation {
@@ -356,7 +357,7 @@ export async function writeParam(args: CommandArgs, emitEvent: (event: string, p
 
 export function liveParamStoreStreamEvent(paramStore: MockParamStoreState): MockPlatformEvent {
   return {
-    event: "param://store",
+    event: EVENT_NAMES.PARAM_STORE,
     payload: {
       envelope: requireLiveEnvelope(),
       value: paramStore,
@@ -366,7 +367,7 @@ export function liveParamStoreStreamEvent(paramStore: MockParamStoreState): Mock
 
 export function liveParamProgressStreamEvent(paramProgress: MockParamProgressState): MockPlatformEvent {
   return {
-    event: "param://progress",
+    event: EVENT_NAMES.PARAM_PROGRESS,
     payload: {
       envelope: requireLiveEnvelope(),
       value: paramProgress,

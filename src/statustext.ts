@@ -1,4 +1,5 @@
 import { listen, type UnlistenFn } from "@platform/event";
+import { EVENT_NAMES } from "./lib/generated/events";
 import type { DomainValue } from "./lib/domain-status";
 import {
     createLatestScopedEventHandler,
@@ -68,7 +69,7 @@ export async function subscribeStatusText(
         }
     });
 
-    return listen<SessionEvent<StatusTextDomain>>("status_text://state", (event) => handleEvent(event.payload));
+    return listen<SessionEvent<StatusTextDomain>>(EVENT_NAMES.STATUS_TEXT_STATE, (event) => handleEvent(event.payload));
 }
 
 export function readLiveStatusText(domain: StatusTextDomain | null | undefined): StatusMessage[] {

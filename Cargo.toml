@@ -2,6 +2,7 @@
 members = [
     "src-tauri",
     "crates/ironwing-core",
+    "crates/ironwing-contract-export",
     "crates/ironwing-firmware",
     "crates/ironwing-wasm",
     "crates/tauri-plugin-bluetooth-classic",

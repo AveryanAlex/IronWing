@@ -1,8 +1,20 @@
 import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
+import { EVENT_NAMES } from "./lib/generated/events";
+import type * as Generated from "./lib/generated/ironwing";
 import type { LogDiagnostic } from "./logs";
-import type { OperationId, SessionEnvelope, SessionEvent } from "./session";
+import type { SessionEvent } from "./session";
 import type { Telemetry, VehicleState } from "./telemetry";
+
+type UiWire<T> = T extends bigint
+  ? number
+  : T extends string | number | boolean | null | undefined
+    ? T
+    : T extends Array<infer Item>
+      ? UiWire<Item>[]
+      : T extends object
+        ? { [K in keyof T]: UiWire<T[K]> }
+        : T;
 
 export type FlightPathPoint = {
   timestamp_usec: number;
@@ -43,29 +55,17 @@ export type TelemetrySnapshot = {
   servo_outputs?: number[];
 };
 
-export type ReplayStatus = "idle" | "loading" | "ready" | "playing" | "paused" | "seeking" | "ended" | "error";
+export type ReplayStatus = Generated.ReplayStatus;
 
-export type ReplayState = {
-  status: ReplayStatus;
-  entry_id: string | null;
-  operation_id: OperationId | null;
-  cursor_usec: number | null;
-  start_usec: number | null;
-  end_usec: number | null;
-  duration_secs: number | null;
+export type ReplayState = Omit<UiWire<Generated.PlaybackState>, "available_speeds" | "diagnostic" | "speed"> & {
   speed: number;
   available_speeds: number[];
-  barrier_ready: boolean;
-  readonly: boolean;
   diagnostic: LogDiagnostic | null;
 };
 
 export type PlaybackStateSnapshot = ReplayState;
 
-export type PlaybackSeekResult = {
-  envelope: SessionEnvelope;
-  cursor_usec: number | null;
-};
+export type PlaybackSeekResult = UiWire<Generated.PlaybackSeekResult>;
 
 export async function getFlightPath(
   maxPoints?: number,
@@ -106,7 +106,7 @@ export async function stopPlayback(): Promise<PlaybackStateSnapshot> {
 export async function subscribePlaybackState(
   cb: (event: SessionEvent<PlaybackStateSnapshot>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<PlaybackStateSnapshot>>("playback://state", (event) => cb(event.payload));
+  return listen<SessionEvent<PlaybackStateSnapshot>>(EVENT_NAMES.PLAYBACK_STATE, (event) => cb(event.payload));
 }
 
 function lerpOpt(

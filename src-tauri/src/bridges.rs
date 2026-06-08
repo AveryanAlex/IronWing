@@ -130,14 +130,14 @@ mod tests {
 
     #[test]
     fn mav_severity_name_maps_all_variants_to_lowercase() {
-        use mavkit::dialect::MavSeverity::*;
-        assert_eq!(mav_severity_name(MAV_SEVERITY_EMERGENCY), "emergency");
-        assert_eq!(mav_severity_name(MAV_SEVERITY_ALERT), "alert");
-        assert_eq!(mav_severity_name(MAV_SEVERITY_CRITICAL), "critical");
-        assert_eq!(mav_severity_name(MAV_SEVERITY_ERROR), "error");
-        assert_eq!(mav_severity_name(MAV_SEVERITY_WARNING), "warning");
-        assert_eq!(mav_severity_name(MAV_SEVERITY_NOTICE), "notice");
-        assert_eq!(mav_severity_name(MAV_SEVERITY_INFO), "info");
-        assert_eq!(mav_severity_name(MAV_SEVERITY_DEBUG), "debug");
+        use mavkit::MavSeverity::*;
+        assert_eq!(mav_severity_name(Emergency), "emergency");
+        assert_eq!(mav_severity_name(Alert), "alert");
+        assert_eq!(mav_severity_name(Critical), "critical");
+        assert_eq!(mav_severity_name(Error), "error");
+        assert_eq!(mav_severity_name(Warning), "warning");
+        assert_eq!(mav_severity_name(Notice), "notice");
+        assert_eq!(mav_severity_name(Info), "info");
+        assert_eq!(mav_severity_name(Debug), "debug");
     }
 }

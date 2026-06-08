@@ -2,6 +2,7 @@ use mavkit::ardupilot::{MagCalProgress, MagCalReport, MagCalStatus};
 
 use crate::ipc::{DomainProvenance, DomainValue};
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CalibrationLifecycle {
@@ -11,6 +12,7 @@ pub enum CalibrationLifecycle {
     Failed,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CalibrationStep {
     pub lifecycle: CalibrationLifecycle,
@@ -18,6 +20,7 @@ pub struct CalibrationStep {
     pub report: Option<MagCalReport>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CalibrationState {
     pub accel: Option<CalibrationStep>,

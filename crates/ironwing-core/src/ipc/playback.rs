@@ -1,16 +1,19 @@
 use crate::ipc::{LogDiagnostic, OperationId, ReplayStatus, SessionEnvelope};
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PlaybackSnapshot {
     pub cursor_usec: Option<u64>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct PlaybackSeekResult {
     pub envelope: SessionEnvelope,
     pub cursor_usec: Option<u64>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PlaybackState {
     pub status: ReplayStatus,

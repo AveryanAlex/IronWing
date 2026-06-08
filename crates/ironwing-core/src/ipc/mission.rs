@@ -2,12 +2,14 @@ use mavkit::{HomePosition, MissionPlan, RcOverrideChannelValue};
 
 /// Result of downloading a mission plan from a vehicle.
 /// Home position is extracted from telemetry home, not from plan items.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MissionDownload {
     pub plan: MissionPlan,
     pub home: Option<HomePosition>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, serde::Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum RcOverrideChannelValueWire {
@@ -28,6 +30,7 @@ impl TryFrom<RcOverrideChannelValueWire> for RcOverrideChannelValue {
     }
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, serde::Deserialize)]
 pub struct RcOverrideChannelWire {
     pub channel: u8,

@@ -166,26 +166,26 @@ describe("inspector-relevant metadata spot checks", () => {
 
     it("keeps command-specific enum values isolated per metadata entry", () => {
         expect(getCommandMetadata(208)?.typedFields?.action?.enumValues).toEqual([
-            { value: "Disable", label: "Disable" },
-            { value: "Enable", label: "Enable" },
-            { value: "Release", label: "Release" },
+            { value: "disable", label: "Disable" },
+            { value: "enable", label: "Enable" },
+            { value: "release", label: "Release" },
         ]);
 
         expect(getCommandMetadata(211)?.typedFields?.action?.enumValues).toEqual([
-            { value: "Release", label: "Release" },
-            { value: "Grab", label: "Grab" },
+            { value: "release", label: "Release" },
+            { value: "grab", label: "Grab" },
         ]);
 
         expect(getCommandMetadata(42600)?.typedFields?.action?.enumValues).toEqual([
-            { value: "Relax", label: "Relax" },
-            { value: "LengthControl", label: "Length Control" },
-            { value: "RateControl", label: "Rate Control" },
+            { value: "relax", label: "Relax" },
+            { value: "length_control", label: "Length Control" },
+            { value: "rate_control", label: "Rate Control" },
         ]);
 
         expect(getCommandMetadata(207)?.typedFields?.action?.enumValues).toEqual([
-            { value: "Disable", label: "Disable" },
-            { value: "Enable", label: "Enable" },
-            { value: "DisableFloor", label: "Disable Floor" },
+            { value: "disable", label: "Disable" },
+            { value: "enable", label: "Enable" },
+            { value: "disable_floor", label: "Disable Floor" },
         ]);
     });
 

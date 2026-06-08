@@ -5,6 +5,7 @@ pub const BOOTLOADER_INSTALLATION_PATH: &str = "bootloader_installation";
 
 // ── Session status (top-level discriminant: which path is active) ──
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum FirmwareSessionStatus {
@@ -25,6 +26,7 @@ pub enum FirmwareSessionStatus {
     },
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum FirmwareSessionPath {
@@ -34,6 +36,7 @@ pub enum FirmwareSessionPath {
 
 // ── Firmware install/update path ──
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SerialFlashPhase {
@@ -45,6 +48,7 @@ pub enum SerialFlashPhase {
     Rebooting,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub enum SerialFlashOutcome {
@@ -83,6 +87,7 @@ pub enum SerialFlashOutcome {
 
 // ── Bootloader installation path (implemented via USB DFU) ──
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DfuRecoveryPhase {
@@ -94,6 +99,7 @@ pub enum DfuRecoveryPhase {
     ManifestingOrResetting,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub enum DfuRecoveryOutcome {
@@ -106,6 +112,7 @@ pub enum DfuRecoveryOutcome {
 
 // ── Unified terminal outcome (wraps path-specific outcomes) ──
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "path", rename_all = "snake_case")]
 pub enum FirmwareOutcome {
@@ -124,6 +131,7 @@ pub type BootloaderInstallationSource = DfuRecoverySource;
 
 // ── Firmware source (path-specific: catalog + local_apj for serial, local_bin for DFU) ──
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum FirmwareSource {
@@ -142,6 +150,7 @@ pub enum FirmwareSource {
 
 // ── Serial-board identity (detected during serial-path probing) ──
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 pub struct SerialBoardIdentity {
     pub board_id: u32,
@@ -153,6 +162,7 @@ pub struct SerialBoardIdentity {
 
 // ── DFU recovery identity (detected during DFU-path device enumeration) ──
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 pub struct DfuRecoveryIdentity {
     pub vendor_id: u16,
@@ -163,6 +173,7 @@ pub struct DfuRecoveryIdentity {
 
 // ── Action-required prompts (firmware flow pauses for user decision) ──
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum ActionRequired {
@@ -181,6 +192,7 @@ pub enum ActionRequired {
 
 // ── Progress snapshot ──
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 pub struct FirmwareProgress {
     pub phase_label: String,
@@ -192,6 +204,7 @@ pub struct FirmwareProgress {
 // ── Port inventory (firmware-specific, separate from connection dropdown) ──
 
 /// Structured serial/USB port metadata for firmware device discovery.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct PortInfo {
     pub port_name: String,
@@ -204,6 +217,7 @@ pub struct PortInfo {
 }
 
 /// Result of a firmware port inventory scan.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum InventoryResult {
@@ -213,6 +227,7 @@ pub enum InventoryResult {
     Unsupported,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DfuDeviceInfo {
     pub vid: u16,
@@ -223,6 +238,7 @@ pub struct DfuDeviceInfo {
     pub product: Option<String>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DfuScanResult {
@@ -233,6 +249,7 @@ pub enum DfuScanResult {
 // ── Catalog entry (normalized from ArduPilot manifest) ──
 
 /// A normalized firmware catalog entry from the official ArduPilot manifest.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 pub struct CatalogEntry {
     pub board_id: u32,
@@ -253,6 +270,7 @@ pub struct CatalogEntry {
 
 /// A grouped recovery target keyed by `board_id + platform`.
 /// Contains enough fields for a manual board selector in recovery mode.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 pub struct CatalogTargetSummary {
     pub board_id: u32,
@@ -265,6 +283,7 @@ pub struct CatalogTargetSummary {
 
 // ── Serial preflight info (returned by the preflight command before flashing) ──
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 pub struct SerialPreflightInfo {
     pub vehicle_connected: bool,
@@ -277,6 +296,7 @@ pub struct SerialPreflightInfo {
 
 // ── Serial flash source (command-level: what the frontend sends) ──
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SerialFlashSource {
@@ -284,11 +304,13 @@ pub enum SerialFlashSource {
     LocalApjBytes { data: Vec<u8> },
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SerialFlashOptions {
     pub full_chip_erase: bool,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SerialReadinessRequest {
     pub port: String,
@@ -296,6 +318,7 @@ pub struct SerialReadinessRequest {
     pub options: Option<SerialFlashOptions>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum SerialReadiness {
@@ -305,6 +328,7 @@ pub enum SerialReadiness {
     },
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 pub struct SerialReadinessResponse {
     pub request_token: String,
@@ -313,6 +337,7 @@ pub struct SerialReadinessResponse {
     pub bootloader_status: FirmwareInstallBootloaderStatus,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum FirmwareInstallBootloaderStatus {
@@ -321,6 +346,7 @@ pub enum FirmwareInstallBootloaderStatus {
     Unknown,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SerialReadinessBlockedReason {
@@ -330,6 +356,7 @@ pub enum SerialReadinessBlockedReason {
     SourceMissing,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 pub struct FirmwareBootloaderBoardInfo {
     pub port: String,
@@ -340,6 +367,7 @@ pub struct FirmwareBootloaderBoardInfo {
     pub extf_size: Option<u32>,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub enum FirmwareRebootToBootloaderResult {
@@ -350,6 +378,7 @@ pub enum FirmwareRebootToBootloaderResult {
 
 // ── DFU recovery source (command-level: what the frontend sends) ──
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum DfuRecoverySource {
@@ -365,6 +394,7 @@ pub enum DfuRecoverySource {
 
 /// Terminal result of a serial flash flow execution.
 /// Distinguishes verified from unverified outcomes explicitly.
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "result", rename_all = "snake_case")]
 pub enum SerialFlowResult {
@@ -463,6 +493,7 @@ impl SerialFlowResult {
 
 // ── Typed errors ──
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "code", rename_all = "snake_case")]
 pub enum FirmwareError {

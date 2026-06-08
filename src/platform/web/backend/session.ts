@@ -10,20 +10,9 @@ import { observeRecordingInboundBridge, startAutoRecordingOnConnect, stopWebReco
 import { unsupported } from "./unsupported";
 import type { WebCommandArgs, WebCommandResult } from "./command-handler";
 import type { TransportDescriptor } from "../../../transport";
+import type { Capability, RuntimeCapabilities } from "../../../lib/generated/ironwing";
 
-export type Capability =
-  | { kind: "supported" }
-  | { kind: "maybe"; reason: string }
-  | { kind: "unsupported"; reason: string };
-
-export type RuntimeCapabilities = {
-  transports: TransportDescriptor[];
-  firmware_install_update: Capability;
-  log_library_filesystem: Capability;
-  recording_filesystem: Capability;
-  mission_transfer: Capability;
-  parameter_transfer: Capability;
-};
+export type { Capability, RuntimeCapabilities };
 
 type WebConnectTransportRequest = {
   kind?: string;

@@ -1,8 +1,8 @@
 import { invoke } from "@platform/core";
 import { listen, type UnlistenFn } from "@platform/event";
 import type { FencePlan } from "./fence";
-import { fromMissionWireDownload, toMissionWirePlan } from "./lib/mavkit-types/wire";
-import type { MissionPlan } from "./lib/mavkit-types";
+import { EVENT_NAMES } from "./lib/generated/events";
+import type { MissionPlan, WireMissionPlan } from "./lib/mavkit-types";
 import type { RallyPlan } from "./rally";
 import type { SessionEvent } from "./session";
 
@@ -80,20 +80,29 @@ export type DomainPlanMap = {
   rally: RallyPlan;
 };
 
+export function toWireMissionPlan(plan: MissionPlan | WireMissionPlan): WireMissionPlan {
+  return {
+    items: plan.items.map((item) => {
+      const { current: _current, ...wireItem } = item as MissionPlan["items"][number];
+      return wireItem;
+    }),
+  };
+}
+
 export async function uploadMission(
   plan: import("./lib/mavkit-types").MissionPlan,
 ): Promise<void> {
-  await invoke("mission_upload", { plan: toMissionWirePlan(plan) });
+  await invoke("mission_upload", { plan: toWireMissionPlan(plan) });
 }
 
 export async function downloadMission(): Promise<MissionDownload> {
-  return fromMissionWireDownload(await invoke<MissionDownload>("mission_download"));
+  return invoke<MissionDownload>("mission_download");
 }
 
 export async function validateMission(
   plan: import("./lib/mavkit-types").MissionPlan,
 ): Promise<MissionIssue[]> {
-  return invoke<MissionIssue[]>("mission_validate", { plan: toMissionWirePlan(plan) });
+  return invoke<MissionIssue[]>("mission_validate", { plan: toWireMissionPlan(plan) });
 }
 
 export async function clearMission(): Promise<void> {
@@ -112,7 +121,7 @@ export async function subscribeMissionProgress(
   cb: (event: SessionEvent<TransferProgress>) => void,
 ): Promise<UnlistenFn> {
   return listen<SessionEvent<TransferProgress>>(
-    "mission://progress",
+    EVENT_NAMES.MISSION_PROGRESS,
     (event) => cb(event.payload),
   );
 }
@@ -120,7 +129,7 @@ export async function subscribeMissionProgress(
 export async function subscribeMissionState(
   cb: (event: SessionEvent<MissionState>) => void,
 ): Promise<UnlistenFn> {
-  return listen<SessionEvent<MissionState>>("mission://state", (event) =>
+  return listen<SessionEvent<MissionState>>(EVENT_NAMES.MISSION_STATE, (event) =>
     cb(event.payload),
   );
 }
