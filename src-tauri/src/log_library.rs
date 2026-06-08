@@ -17,8 +17,7 @@ use crate::ipc::logs::{
     migrate_log_library_catalog,
 };
 use crate::logs::{
-    LogOperationReporter, LogStore, LogType, app_log_progress_emitter, parse_log_file,
-    run_log_operation,
+    LogOperationReporter, LogStore, app_log_progress_emitter, parse_log_file, run_log_operation,
 };
 
 // Keep the app-data layout explicit so catalog paths remain diagnosable and
@@ -816,15 +815,6 @@ fn format_catalog_migration_error(error: LogCatalogMigrationError) -> String {
         ),
         LogCatalogMigrationError::InvalidCatalog { message } => {
             format!("invalid log library catalog: {message}")
-        }
-    }
-}
-
-impl From<LogType> for LogFormat {
-    fn from(value: LogType) -> Self {
-        match value {
-            LogType::Tlog => Self::Tlog,
-            LogType::Bin => Self::Bin,
         }
     }
 }

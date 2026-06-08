@@ -11,6 +11,11 @@ use crate::ipc::logs::{
     LogDiagnosticSeverity, LogDiagnosticSource, LogExportRequest, RawMessageFieldFilter,
     RawMessagePage, RawMessageQuery, RawMessageRecord,
 };
+use crate::ipc::playback::PlaybackSeekResult;
+use crate::ipc::{SessionEnvelope, VehicleState};
+use crate::log_playback::{
+    PlaybackFrame, PlaybackLogBounds, playback_frame_from_parts, resolve_playback_cursor_usec,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -57,6 +62,27 @@ pub struct StoredEntry {
     pub system_id: Option<u8>,
     pub component_id: Option<u8>,
     pub text: String,
+}
+
+impl StoredEntry {
+    pub fn from_numeric_fields(
+        sequence: u64,
+        timestamp_usec: u64,
+        msg_name: impl Into<String>,
+        fields: HashMap<String, f64>,
+    ) -> Self {
+        let field_values = json_fields_from_numeric(&fields);
+        build_stored_entry(StoredEntryParts {
+            sequence,
+            timestamp_usec,
+            msg_name: msg_name.into(),
+            fields,
+            field_values,
+            raw_payload: None,
+            system_id: None,
+            component_id: None,
+        })
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -131,6 +157,109 @@ pub struct FlightSummary {
     pub mah_consumed: Option<f64>,
     pub gps_sats_min: Option<u32>,
     pub gps_sats_max: Option<u32>,
+}
+
+impl LogStore {
+    pub fn from_entries(path: &str, log_type: LogType, entries: Vec<StoredEntry>) -> Self {
+        build_store(path, log_type, entries)
+    }
+
+    pub fn summary(&self) -> &LogSummary {
+        &self.summary
+    }
+
+    pub fn source_path(&self) -> &str {
+        &self.source_path
+    }
+
+    pub fn entry_id(&self) -> Option<&str> {
+        self.entry_id.as_deref()
+    }
+
+    pub fn set_entry_id(&mut self, entry_id: Option<String>) {
+        self.entry_id = entry_id;
+    }
+
+    pub fn entries(&self) -> &[StoredEntry] {
+        &self.entries
+    }
+
+    pub fn type_index(&self) -> &HashMap<String, Vec<usize>> {
+        &self.type_index
+    }
+
+    pub fn playback_bounds(&self) -> Option<(u64, u64)> {
+        (!self.entries.is_empty()).then_some((self.summary.start_usec, self.summary.end_usec))
+    }
+
+    pub fn playback_log_bounds(&self) -> PlaybackLogBounds {
+        PlaybackLogBounds {
+            cursor_usec: self.resolved_playback_cursor_usec(),
+            start_usec: self.summary.start_usec,
+            end_usec: self.summary.end_usec,
+            duration_secs: self.summary.duration_secs,
+        }
+    }
+
+    pub fn resolved_playback_cursor_usec(&self) -> Option<u64> {
+        self.resolve_cursor_usec(self.playback_cursor_usec)
+    }
+
+    pub fn set_playback_cursor_usec(&mut self, cursor_usec: Option<u64>) -> Option<u64> {
+        self.playback_cursor_usec = self.resolve_cursor_usec(cursor_usec);
+        self.playback_cursor_usec
+    }
+
+    pub fn seek_playback(
+        &mut self,
+        cursor_usec: Option<u64>,
+        envelope: SessionEnvelope,
+    ) -> PlaybackSeekResult {
+        self.playback_cursor_usec = self.resolve_cursor_usec(cursor_usec);
+        PlaybackSeekResult {
+            envelope,
+            cursor_usec: self.playback_cursor_usec,
+        }
+    }
+
+    pub fn playback_frame(&self) -> PlaybackFrame {
+        let cursor_usec = self.resolve_cursor_usec(self.playback_cursor_usec);
+        let telemetry = telemetry_at(self, cursor_usec);
+        let vehicle_state = vehicle_state_at(&telemetry);
+
+        playback_frame_from_parts(
+            vehicle_state,
+            &serde_json::to_value(telemetry).unwrap_or(serde_json::Value::Null),
+            cursor_usec,
+        )
+    }
+
+    fn resolve_cursor_usec(&self, cursor_usec: Option<u64>) -> Option<u64> {
+        resolve_playback_cursor_usec(
+            !self.entries.is_empty(),
+            self.summary.start_usec,
+            self.summary.end_usec,
+            cursor_usec,
+        )
+    }
+}
+
+fn vehicle_state_at(telemetry: &TelemetrySnapshot) -> Option<VehicleState> {
+    let armed = telemetry.armed?;
+    let custom_mode = telemetry.custom_mode?;
+
+    Some(VehicleState {
+        armed,
+        custom_mode,
+        mode_name: format!("Mode {custom_mode}"),
+        system_status: mavkit::SystemStatus::Active,
+        vehicle_type: Default::default(),
+        autopilot: Default::default(),
+        firmware_version: None,
+        system_id: 0,
+        component_id: 0,
+        heartbeat_received: false,
+    })
 }
 
 const DEFAULT_COMPAT_QUERY_POINTS: usize = 2_000;
@@ -1232,4 +1361,414 @@ fn write_csv_export(entries: Vec<&StoredEntry>) -> Result<(Vec<u8>, u64), String
         row_count += 1;
     }
     Ok((writer, row_count))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mavkit::dialect::{
+        GLOBAL_POSITION_INT_DATA, HEARTBEAT_DATA, MavAutopilot, MavModeFlag, MavState, MavType,
+        VFR_HUD_DATA,
+    };
+
+    fn stored_entry_with_values(
+        sequence: u64,
+        timestamp_usec: u64,
+        msg_name: &str,
+        fields: HashMap<String, f64>,
+        field_values: BTreeMap<String, JsonValue>,
+        raw_payload: Option<Vec<u8>>,
+    ) -> StoredEntry {
+        build_stored_entry(StoredEntryParts {
+            sequence,
+            timestamp_usec,
+            msg_name: msg_name.to_string(),
+            fields,
+            field_values,
+            raw_payload,
+            system_id: None,
+            component_id: None,
+        })
+    }
+
+    fn numeric_entry(
+        sequence: u64,
+        timestamp_usec: u64,
+        msg_name: &str,
+        fields: HashMap<String, f64>,
+    ) -> StoredEntry {
+        StoredEntry::from_numeric_fields(sequence, timestamp_usec, msg_name, fields)
+    }
+
+    fn store_from_entries(path: &str, log_type: LogType, entries: Vec<StoredEntry>) -> LogStore {
+        LogStore::from_entries(path, log_type, entries)
+    }
+
+    fn assert_close(actual: f64, expected: f64) {
+        assert!(
+            (actual - expected).abs() < 1e-5,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    #[test]
+    fn extract_fields_scales_global_position_int_units() {
+        let message = MavMessage::GLOBAL_POSITION_INT(GLOBAL_POSITION_INT_DATA {
+            time_boot_ms: 0,
+            lat: 374_221_234,
+            lon: -1_220_845_678,
+            alt: 123_456,
+            relative_alt: 7_890,
+            vx: 321,
+            vy: -123,
+            vz: 45,
+            hdg: 9_001,
+        });
+
+        let (name, fields) = extract_fields(&message);
+
+        assert_eq!(name, "GLOBAL_POSITION_INT");
+        assert_close(fields["lat"], 37.4221234);
+        assert_close(fields["lon"], -122.0845678);
+        assert_close(fields["alt"], 123.456);
+        assert_close(fields["relative_alt"], 7.89);
+        assert_close(fields["hdg"], 90.01);
+    }
+
+    #[test]
+    fn query_raw_message_page_paginates_and_filters_shared_store() {
+        let store = store_from_entries(
+            "raw-query.tlog",
+            LogType::Tlog,
+            vec![
+                stored_entry_with_values(
+                    0,
+                    100,
+                    "HEARTBEAT",
+                    HashMap::from([("custom_mode".to_string(), 4.0)]),
+                    BTreeMap::from([
+                        ("custom_mode".to_string(), JsonValue::from(4.0)),
+                        ("note".to_string(), JsonValue::from("startup")),
+                    ]),
+                    Some(vec![0xFE, 0x09, 0x00]),
+                ),
+                stored_entry_with_values(
+                    1,
+                    200,
+                    "GLOBAL_POSITION_INT",
+                    HashMap::from([("relative_alt".to_string(), 12_000.0)]),
+                    BTreeMap::from([
+                        ("relative_alt".to_string(), JsonValue::from(12_000.0)),
+                        ("note".to_string(), JsonValue::from("alt match one")),
+                    ]),
+                    Some(vec![0xFD, 0x0C, 0x01]),
+                ),
+                stored_entry_with_values(
+                    2,
+                    300,
+                    "GLOBAL_POSITION_INT",
+                    HashMap::from([("relative_alt".to_string(), 16_000.0)]),
+                    BTreeMap::from([
+                        ("relative_alt".to_string(), JsonValue::from(16_000.0)),
+                        ("note".to_string(), JsonValue::from("alt match two")),
+                    ]),
+                    Some(vec![0xFD, 0x0C, 0x02]),
+                ),
+            ],
+        );
+        let request = RawMessageQuery {
+            entry_id: "entry-tlog".into(),
+            cursor: None,
+            start_usec: Some(150),
+            end_usec: Some(350),
+            message_types: vec!["GLOBAL_POSITION_INT".into()],
+            text: Some("alt match".into()),
+            field_filters: vec![RawMessageFieldFilter {
+                field: "relative_alt".into(),
+                value_text: Some("000".into()),
+            }],
+            limit: 1,
+            include_detail: true,
+            include_hex: true,
+        };
+
+        let first_page = query_raw_message_page(&store, &request).expect("first page");
+        assert_eq!(first_page.total_available, Some(2));
+        assert_eq!(first_page.items.len(), 1);
+        assert_eq!(first_page.items[0].sequence, 1);
+        assert_eq!(first_page.items[0].hex_payload.as_deref(), Some("fd0c01"));
+        assert_eq!(first_page.next_cursor.as_deref(), Some("0000000000000002"));
+
+        let second_page = query_raw_message_page(
+            &store,
+            &RawMessageQuery {
+                cursor: first_page.next_cursor,
+                ..request
+            },
+        )
+        .expect("second page");
+        assert_eq!(second_page.items.len(), 1);
+        assert_eq!(second_page.items[0].sequence, 2);
+        assert_eq!(second_page.next_cursor, None);
+    }
+
+    #[test]
+    fn query_chart_series_bounds_and_downsamples_points() {
+        let store = store_from_entries(
+            "chart-query.tlog",
+            LogType::Tlog,
+            vec![
+                numeric_entry(0, 100, "VFR_HUD", HashMap::from([("alt".to_string(), 0.0)])),
+                numeric_entry(
+                    1,
+                    200,
+                    "VFR_HUD",
+                    HashMap::from([("alt".to_string(), 10.0)]),
+                ),
+                numeric_entry(
+                    2,
+                    300,
+                    "VFR_HUD",
+                    HashMap::from([("alt".to_string(), 20.0)]),
+                ),
+                numeric_entry(
+                    3,
+                    400,
+                    "VFR_HUD",
+                    HashMap::from([("alt".to_string(), 30.0)]),
+                ),
+            ],
+        );
+        let page = query_chart_series(
+            &store,
+            &ChartSeriesRequest {
+                entry_id: "entry-tlog".into(),
+                selectors: vec![crate::ipc::logs::ChartSeriesSelector {
+                    message_type: "VFR_HUD".into(),
+                    field: "alt".into(),
+                    label: "Altitude".into(),
+                    unit: Some("m".into()),
+                }],
+                start_usec: Some(150),
+                end_usec: Some(450),
+                max_points: Some(2),
+            },
+        );
+
+        assert_eq!(page.series.len(), 1);
+        assert_eq!(page.series[0].points.len(), 2);
+        assert_eq!(page.series[0].points[0].timestamp_usec, 200);
+        assert_eq!(page.series[0].points[1].timestamp_usec, 400);
+    }
+
+    #[test]
+    fn telemetry_at_carries_tlog_values_to_cursor() {
+        let heartbeat = MavMessage::HEARTBEAT(HEARTBEAT_DATA {
+            custom_mode: 42,
+            mavtype: MavType::MAV_TYPE_QUADROTOR,
+            autopilot: MavAutopilot::MAV_AUTOPILOT_ARDUPILOTMEGA,
+            base_mode: MavModeFlag::MAV_MODE_FLAG_SAFETY_ARMED,
+            system_status: MavState::MAV_STATE_ACTIVE,
+            mavlink_version: 3,
+        });
+        let vfr = MavMessage::VFR_HUD(VFR_HUD_DATA {
+            airspeed: 12.0,
+            groundspeed: 11.0,
+            heading: 250,
+            throttle: 70,
+            alt: 123.4,
+            climb: -1.2,
+        });
+        let (_, heartbeat_fields) = extract_fields(&heartbeat);
+        let (_, vfr_fields) = extract_fields(&vfr);
+        let store = store_from_entries(
+            "telemetry.tlog",
+            LogType::Tlog,
+            vec![
+                numeric_entry(0, 100, "HEARTBEAT", heartbeat_fields),
+                numeric_entry(1, 150, "VFR_HUD", vfr_fields),
+            ],
+        );
+
+        let snapshot = telemetry_at(&store, Some(150));
+
+        assert_eq!(snapshot.custom_mode, Some(42));
+        assert_eq!(snapshot.armed, Some(true));
+        assert_close(snapshot.altitude_m.expect("altitude"), 123.4);
+        assert_close(snapshot.speed_mps.expect("ground speed"), 11.0);
+    }
+
+    #[test]
+    fn flight_path_points_scale_bin_gps_dege7_values() {
+        let store = store_from_entries(
+            "path.bin",
+            LogType::Bin,
+            vec![numeric_entry(
+                0,
+                1_000,
+                "GPS",
+                HashMap::from([
+                    ("Lat".to_string(), 377_749_000.0),
+                    ("Lng".to_string(), -1_220_419_000.0),
+                    ("Alt".to_string(), 12.0),
+                    ("GCrs".to_string(), 180.0),
+                ]),
+            )],
+        );
+
+        let points = flight_path_points(&store, None, None, None).expect("flight path");
+
+        assert_eq!(points.len(), 1);
+        assert_close(points[0].lat, 37.7749);
+        assert_close(points[0].lon, -122.0419);
+        assert_eq!(points[0].alt, 12.0);
+    }
+
+    #[test]
+    fn flight_summary_computes_basic_tlog_stats() {
+        let store = store_from_entries(
+            "summary.tlog",
+            LogType::Tlog,
+            vec![
+                numeric_entry(
+                    0,
+                    0,
+                    "VFR_HUD",
+                    HashMap::from([("alt".to_string(), 10.0), ("groundspeed".to_string(), 2.0)]),
+                ),
+                numeric_entry(
+                    1,
+                    1_000_000,
+                    "VFR_HUD",
+                    HashMap::from([("alt".to_string(), 20.0), ("groundspeed".to_string(), 4.0)]),
+                ),
+                numeric_entry(
+                    2,
+                    1_000_000,
+                    "SYS_STATUS",
+                    HashMap::from([("voltage_battery".to_string(), 11.5)]),
+                ),
+                numeric_entry(
+                    3,
+                    1_000_000,
+                    "GLOBAL_POSITION_INT",
+                    HashMap::from([
+                        ("lat".to_string(), 37.0),
+                        ("lon".to_string(), -122.0),
+                        ("satellites_visible".to_string(), 10.0),
+                    ]),
+                ),
+                numeric_entry(
+                    4,
+                    2_000_000,
+                    "GLOBAL_POSITION_INT",
+                    HashMap::from([
+                        ("lat".to_string(), 37.001),
+                        ("lon".to_string(), -122.0),
+                        ("satellites_visible".to_string(), 12.0),
+                    ]),
+                ),
+                numeric_entry(
+                    5,
+                    2_000_000,
+                    "GPS_RAW_INT",
+                    HashMap::from([("satellites_visible".to_string(), 9.0)]),
+                ),
+            ],
+        );
+
+        let summary = flight_summary(&store);
+
+        assert_eq!(summary.duration_secs, 2.0);
+        assert_eq!(summary.max_alt_m, Some(20.0));
+        assert_eq!(summary.avg_alt_m, Some(15.0));
+        assert_eq!(summary.max_speed_mps, Some(4.0));
+        assert!(
+            summary
+                .total_distance_m
+                .is_some_and(|distance| distance > 0.0)
+        );
+        assert_eq!(summary.battery_start_v, Some(11.5));
+        assert_eq!(summary.gps_sats_min, Some(9));
+    }
+
+    #[test]
+    fn export_csv_bytes_filters_and_sanitizes_headers() {
+        let store = store_from_entries(
+            "export.tlog",
+            LogType::Tlog,
+            vec![
+                stored_entry_with_values(
+                    0,
+                    100,
+                    "=MSG,TYPE",
+                    HashMap::from([
+                        ("field,comma".to_string(), 1.0),
+                        ("field\"quote".to_string(), 2.0),
+                        ("field\nnewline".to_string(), 3.0),
+                        ("=field_formula".to_string(), 4.0),
+                    ]),
+                    BTreeMap::from([
+                        ("field,comma".to_string(), JsonValue::from(1.0)),
+                        ("field\"quote".to_string(), JsonValue::from(2.0)),
+                        ("field\nnewline".to_string(), JsonValue::from(3.0)),
+                        ("=field_formula".to_string(), JsonValue::from(4.0)),
+                    ]),
+                    None,
+                ),
+                numeric_entry(1, 200, "OTHER", HashMap::from([("value".to_string(), 5.0)])),
+            ],
+        );
+        let request = LogExportRequest {
+            entry_id: "entry-tlog".into(),
+            instance_id: "export-strings".into(),
+            format: crate::ipc::logs::LogExportFormat::Csv,
+            destination_path: "ignored.csv".into(),
+            start_usec: None,
+            end_usec: None,
+            message_types: vec!["=MSG,TYPE".into()],
+            text: None,
+            field_filters: vec![],
+        };
+
+        let (bytes, rows_written) = export_csv_bytes(&store, &request).expect("csv bytes");
+        let csv = String::from_utf8(bytes).expect("utf8 csv");
+
+        assert_eq!(rows_written, 1);
+        assert!(csv.contains("\"field,comma\""));
+        assert!(csv.contains("\"field\"\"quote\""));
+        assert!(csv.contains("\"field\nnewline\""));
+        assert!(csv.contains("'=field_formula"));
+        assert!(csv.contains("\"'=MSG,TYPE\""));
+        assert!(!csv.contains("OTHER"));
+    }
+
+    #[test]
+    fn playback_frame_uses_telemetry_vehicle_state() {
+        let store = store_from_entries(
+            "playback.tlog",
+            LogType::Tlog,
+            vec![numeric_entry(
+                0,
+                100,
+                "HEARTBEAT",
+                HashMap::from([
+                    ("custom_mode".to_string(), 4.0),
+                    ("base_mode".to_string(), 128.0),
+                ]),
+            )],
+        );
+
+        let frame = store.playback_frame();
+        let vehicle_state = frame
+            .session
+            .value
+            .as_ref()
+            .and_then(|session| session.vehicle_state.as_ref())
+            .expect("vehicle state");
+
+        assert!(vehicle_state.armed);
+        assert_eq!(vehicle_state.custom_mode, 4);
+        assert_eq!(frame.playback.cursor_usec, Some(100));
+    }
 }

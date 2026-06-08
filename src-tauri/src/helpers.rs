@@ -41,6 +41,7 @@ pub(crate) async fn ensure_live_write_allowed(
     Ok(())
 }
 
+#[cfg(test)]
 pub(crate) fn downsample<T: Clone>(items: Vec<T>, max: usize) -> Vec<T> {
     if max == 0 || items.len() <= max {
         return items;
