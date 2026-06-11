@@ -21,7 +21,7 @@ const NAV_SECTION_GROUPS: ReadonlyArray<{
   {
     id: "hardware",
     title: "Hardware",
-    sectionIds: ["navigation", "battery_monitor", "motors_esc", "servo_outputs", "serial_ports"],
+    sectionIds: ["navigation", "battery_monitor", "motors_esc", "servo_outputs", "serial_ports", "osd"],
   },
   {
     id: "safety",

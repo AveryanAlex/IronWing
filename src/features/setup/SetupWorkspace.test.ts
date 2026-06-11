@@ -113,6 +113,10 @@ describe("SetupWorkspace", () => {
     expect(navigationLink.getAttribute("href")).toBe("/setup/navigation");
     expect(navigationLink.getAttribute("data-sveltekit-preload-code")).toBe("hover");
     expect(navigationLink.getAttribute("data-sveltekit-preload-data")).toBe("hover");
+
+    const osdLink = within(nav).getByTestId(`${setupWorkspaceTestIds.navPrefix}-osd`);
+    expect(osdLink.getAttribute("href")).toBe("/setup/osd");
+    expect(osdLink.getAttribute("data-implemented")).toBe("true");
   });
 
   it("selects a representative setup section from the shell navigation", async () => {
