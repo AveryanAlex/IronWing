@@ -43,6 +43,14 @@ let screenOptions = $derived(
   })),
 );
 
+function stageScreenEnabled(screen: OsdScreenModel, checked: boolean) {
+  if (disabled || !screen.enableParamName || !isParamActionable(screen.enableParamName)) {
+    return;
+  }
+
+  onStageParam(screen.enableParamName, checked ? 1 : 0);
+}
+
 function stageItemEnabled(item: OsdItemModel, checked: boolean) {
   if (disabled || !item.params.enable) {
     return;
@@ -51,7 +59,7 @@ function stageItemEnabled(item: OsdItemModel, checked: boolean) {
   onStageParam(item.params.enable, checked ? 1 : 0);
 }
 
-function stageCoordinate(item: OsdItemModel, axis: "x" | "y", value: string) {
+function stageCoordinate(item: OsdItemModel, screen: OsdScreenModel, axis: "x" | "y", value: string) {
   if (disabled) {
     return;
   }
@@ -66,16 +74,16 @@ function stageCoordinate(item: OsdItemModel, axis: "x" | "y", value: string) {
     return;
   }
 
-  onStageParam(paramName, clampOsdCoordinate(parsed, axis, model.grid));
+  onStageParam(paramName, clampOsdCoordinate(parsed, axis, screen.grid));
 }
 
-function stagePosition(item: OsdItemModel, x: number, y: number) {
+function stagePosition(item: OsdItemModel, screen: OsdScreenModel, x: number, y: number) {
   if (disabled) {
     return;
   }
 
-  const nextX = clampOsdCoordinate(x, "x", model.grid);
-  const nextY = clampOsdCoordinate(y, "y", model.grid);
+  const nextX = clampOsdCoordinate(x, "x", screen.grid);
+  const nextY = clampOsdCoordinate(y, "y", screen.grid);
   if (item.params.x && nextX !== item.x) {
     onStageParam(item.params.x, nextX);
   }
@@ -84,7 +92,7 @@ function stagePosition(item: OsdItemModel, x: number, y: number) {
   }
 }
 
-function dragToPointer(event: PointerEvent, item: OsdItemModel) {
+function dragToPointer(event: PointerEvent, item: OsdItemModel, screen: OsdScreenModel) {
   const target = event.currentTarget;
   if (!(target instanceof HTMLElement)) {
     return;
@@ -96,12 +104,12 @@ function dragToPointer(event: PointerEvent, item: OsdItemModel) {
   }
 
   const bounds = grid.getBoundingClientRect();
-  const x = ((event.clientX - bounds.left) / bounds.width) * model.grid.columns;
-  const y = ((event.clientY - bounds.top) / bounds.height) * model.grid.rows;
-  stagePosition(item, x, y);
+  const x = ((event.clientX - bounds.left) / bounds.width) * screen.grid.columns;
+  const y = ((event.clientY - bounds.top) / bounds.height) * screen.grid.rows;
+  stagePosition(item, screen, x, y);
 }
 
-function handleItemPointerDown(event: PointerEvent, item: OsdItemModel) {
+function handleItemPointerDown(event: PointerEvent, item: OsdItemModel, screen: OsdScreenModel) {
   if (disabled || !item.params.x || !item.params.y) {
     return;
   }
@@ -113,15 +121,15 @@ function handleItemPointerDown(event: PointerEvent, item: OsdItemModel) {
 
   activeDragKey = item.key;
   target.setPointerCapture(event.pointerId);
-  dragToPointer(event, item);
+  dragToPointer(event, item, screen);
 }
 
-function handleItemPointerMove(event: PointerEvent, item: OsdItemModel) {
+function handleItemPointerMove(event: PointerEvent, item: OsdItemModel, screen: OsdScreenModel) {
   if (activeDragKey !== item.key) {
     return;
   }
 
-  dragToPointer(event, item);
+  dragToPointer(event, item, screen);
 }
 
 function handleItemPointerEnd(event: PointerEvent) {
@@ -134,11 +142,17 @@ function handleItemPointerEnd(event: PointerEvent) {
 
 function screenStatus(screen: OsdScreenModel): string {
   const enabled = screen.enabledItems.length;
-  return `${enabled} enabled / ${screen.items.length} detected`;
+  const state = screen.enabled === false ? "screen off" : `${enabled} enabled`;
+  return `${state} / ${screen.items.length} detected`;
+}
+
+function isParamActionable(name: string): boolean {
+  return !disabled && itemIndex.get(name)?.readOnly !== true;
 }
 
 function isActionable(item: OsdItemModel, role: "enable" | "x" | "y"): boolean {
-  return !disabled && item.params[role] !== null && itemIndex.get(item.params[role] ?? "")?.readOnly !== true;
+  const paramName = item.params[role];
+  return paramName !== null && isParamActionable(paramName);
 }
 </script>
 
@@ -173,27 +187,51 @@ function isActionable(item: OsdItemModel, role: "enable" | "x" | "y"): boolean {
             value={String(activeScreen.screen)}
             options={screenOptions}
             class="normal-case tracking-normal"
-            data-testid={setupWorkspaceTestIds.osdScreenSelect}
+            testId={setupWorkspaceTestIds.osdScreenSelect}
             onchange={(event) => onSelectScreen(Number(event.currentTarget.value))}
           />
         </label>
 
         <p class="text-xs text-text-muted">
-          Grid {model.grid.columns} x {model.grid.rows} characters. Drag enabled items or enter X/Y values.
+          Grid {activeScreen.grid.label}. Drag enabled items or enter X/Y values.
         </p>
       </div>
 
+      {#if activeScreen.enableParamName}
+        <div class="rounded-md border border-border bg-bg-secondary px-3 py-2">
+          <Checkbox
+            checked={activeScreen.enabled ?? false}
+            disabled={!isParamActionable(activeScreen.enableParamName)}
+            label={`Enable ${activeScreen.label}`}
+            description="This stages OSDn_ENABLE. Item edits remain available so you can prepare a disabled screen before enabling it."
+            testId={`${setupWorkspaceTestIds.osdInputPrefix}-${activeScreen.enableParamName}`}
+            onCheckedChange={(checked) => stageScreenEnabled(activeScreen, checked)}
+          />
+          {#if activeScreen.enabled === false}
+            <p class="mt-2 text-xs text-warning">
+              {activeScreen.label} is disabled on the vehicle. Position edits can be staged, but this screen will not appear until
+              {activeScreen.enableParamName} is enabled.
+            </p>
+          {/if}
+        </div>
+      {:else}
+        <div class="rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-text-secondary">
+          No OSDn_ENABLE parameter was loaded for {activeScreen.label}. Item layout can still be edited if item parameters are writable.
+        </div>
+      {/if}
+
       <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
         <div
-          class="relative aspect-[30/16] min-h-72 overflow-hidden rounded-lg border border-border bg-bg-primary shadow-inner touch-none"
+          class="relative min-h-72 overflow-hidden rounded-lg border border-border bg-bg-primary shadow-inner touch-none"
           data-osd-grid
           data-testid={setupWorkspaceTestIds.osdGrid}
-          style:--osd-columns={model.grid.columns}
-          style:--osd-rows={model.grid.rows}
+          style:--osd-columns={activeScreen.grid.columns}
+          style:--osd-rows={activeScreen.grid.rows}
+          style={`aspect-ratio: ${activeScreen.grid.columns} / ${activeScreen.grid.rows}`}
         >
           <div class="absolute inset-0 osd-grid-lines"></div>
           <div class="absolute left-2 top-2 rounded bg-bg-primary/85 px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-text-muted">
-            {activeScreen.label}
+            {activeScreen.label} · {activeScreen.grid.label}
           </div>
 
           {#each activeScreen.enabledItems as item (item.key)}
@@ -203,14 +241,15 @@ function isActionable(item: OsdItemModel, role: "enable" | "x" | "y"): boolean {
               class={[
                 "absolute min-h-7 rounded-md border px-2 py-1 font-mono text-xs font-semibold shadow-sm transition",
                 disabled || !item.params.x || !item.params.y ? "cursor-not-allowed border-border bg-bg-secondary text-text-muted" : "cursor-grab border-accent/50 bg-accent/15 text-text-primary active:cursor-grabbing",
+                (item.xOutOfRange || item.yOutOfRange) && "border-warning/70 bg-warning/15",
                 activeDragKey === item.key && "ring-2 ring-accent",
               ].filter(Boolean).join(" ")}
-              style={`left: ${(item.x / model.grid.columns) * 100}%; top: ${(item.y / model.grid.rows) * 100}%`}
+              style={`left: ${(item.displayX / activeScreen.grid.columns) * 100}%; top: ${(item.displayY / activeScreen.grid.rows) * 100}%`}
               testId={`${setupWorkspaceTestIds.osdGridItemPrefix}-${activeScreen.screen}-${item.key}`}
               aria-label={`Move ${item.label}`}
               disabled={disabled || !item.params.x || !item.params.y}
-              onpointerdown={(event) => handleItemPointerDown(event, item)}
-              onpointermove={(event) => handleItemPointerMove(event, item)}
+              onpointerdown={(event) => handleItemPointerDown(event, item, activeScreen)}
+              onpointermove={(event) => handleItemPointerMove(event, item, activeScreen)}
               onpointerup={handleItemPointerEnd}
               onpointercancel={handleItemPointerEnd}
             >
@@ -242,6 +281,11 @@ function isActionable(item: OsdItemModel, role: "enable" | "x" | "y"): boolean {
                     {#if !item.complete}
                       <span class="block text-[10px] text-warning">Partial parameter set</span>
                     {/if}
+                    {#if item.xOutOfRange || item.yOutOfRange}
+                      <span class="block text-[10px] text-warning">
+                        Current coordinate is outside {activeScreen.grid.label}; editing will clamp it to the visible grid.
+                      </span>
+                    {/if}
                     {#if item.staged.enable || item.staged.x || item.staged.y}
                       <span class="mt-1 block" data-testid={`${setupWorkspaceTestIds.osdStagedPrefix}-${activeScreen.screen}-${item.key}`}>
                         <StagedBadge name={`OSD${activeScreen.screen}_${item.key}`} />
@@ -253,21 +297,23 @@ function isActionable(item: OsdItemModel, role: "enable" | "x" | "y"): boolean {
                 <NumberInput
                   class="px-2"
                   min="0"
-                  max={model.grid.columns - 1}
+                  max={activeScreen.grid.columns - 1}
                   value={item.x}
+                  invalid={item.xOutOfRange}
                   disabled={!isActionable(item, "x")}
                   inputTestId={`${setupWorkspaceTestIds.osdInputPrefix}-${item.params.x ?? `${activeScreen.screen}-${item.key}-x`}`}
-                  onchange={(event) => stageCoordinate(item, "x", event.currentTarget.value)}
+                  onchange={(event) => stageCoordinate(item, activeScreen, "x", event.currentTarget.value)}
                 />
 
                 <NumberInput
                   class="px-2"
                   min="0"
-                  max={model.grid.rows - 1}
+                  max={activeScreen.grid.rows - 1}
                   value={item.y}
+                  invalid={item.yOutOfRange}
                   disabled={!isActionable(item, "y")}
                   inputTestId={`${setupWorkspaceTestIds.osdInputPrefix}-${item.params.y ?? `${activeScreen.screen}-${item.key}-y`}`}
-                  onchange={(event) => stageCoordinate(item, "y", event.currentTarget.value)}
+                  onchange={(event) => stageCoordinate(item, activeScreen, "y", event.currentTarget.value)}
                 />
               </div>
             {/each}

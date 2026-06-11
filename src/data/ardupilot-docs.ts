@@ -30,7 +30,7 @@ const COMMON_TOPICS: Record<CommonTopic, string> = {
   optional_hardware: `${COMMON_BASE}/common-optional-hardware.html`,
   tuning: `${COMMON_BASE}/common-tuning.html`,
   serial_ports: `${COMMON_BASE}/common-serial-options.html`,
-  osd: `${COMMON_BASE}/common-msp-osd-overview-4.2.html`,
+  osd: `${COMMON_BASE}/common-osd-overview.html`,
   servo_outputs: `${COMMON_BASE}/common-rcoutput-mapping.html`,
   flight_mode_configuration:
     "https://ardupilot.org/planner/docs/common-rc-transmitter-flight-mode-configuration.html",

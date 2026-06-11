@@ -19,8 +19,12 @@ export type OsdItemModel = {
   enabled: boolean;
   x: number;
   y: number;
+  displayX: number;
+  displayY: number;
   rawX: number | null;
   rawY: number | null;
+  xOutOfRange: boolean;
+  yOutOfRange: boolean;
   params: OsdItemParamNames;
   complete: boolean;
   staged: {
@@ -35,6 +39,10 @@ export type OsdScreenModel = {
   label: string;
   enabled: boolean | null;
   enableParamName: string | null;
+  txtResParamName: string | null;
+  txtResValue: number | null;
+  txtResStaged: boolean;
+  grid: OsdGridModel;
   items: OsdItemModel[];
   enabledItems: OsdItemModel[];
 };
@@ -42,6 +50,7 @@ export type OsdScreenModel = {
 export type OsdGridModel = {
   columns: number;
   rows: number;
+  label: string;
 };
 
 export type ArduPilotOsdModel = {
@@ -59,6 +68,12 @@ type DetectedItem = {
 
 const ITEM_PARAM_PATTERN = /^OSD([1-4])_(.+)_(EN|X|Y)$/;
 const SCREEN_ENABLE_PATTERN = /^OSD([1-4])_ENABLE$/;
+const SCREEN_TEXT_RES_PATTERN = /^OSD([1-4])_TXT_RES$/;
+const DEFAULT_GRID: OsdGridModel = {
+  columns: OSD_DEFAULT_COLUMNS,
+  rows: OSD_DEFAULT_ROWS,
+  label: "SD 30 x 16",
+};
 
 export function buildArduPilotOsdModel(input: {
   paramStore: ParamStore | null;
@@ -67,12 +82,14 @@ export function buildArduPilotOsdModel(input: {
   rows?: number;
 }): ArduPilotOsdModel {
   const stagedEdits = input.stagedEdits ?? {};
-  const grid = {
+  const fallbackGrid = {
     columns: normalizeGridSize(input.columns, OSD_DEFAULT_COLUMNS),
     rows: normalizeGridSize(input.rows, OSD_DEFAULT_ROWS),
+    label: input.columns || input.rows ? `${normalizeGridSize(input.columns, OSD_DEFAULT_COLUMNS)} x ${normalizeGridSize(input.rows, OSD_DEFAULT_ROWS)}` : DEFAULT_GRID.label,
   };
   const screenItems = new Map<number, Map<string, DetectedItem>>();
   const screenEnableNames = new Map<number, string>();
+  const screenTextResNames = new Map<number, string>();
   const params = input.paramStore?.params ?? {};
 
   for (const name of Object.keys(params)) {
@@ -99,14 +116,27 @@ export function buildArduPilotOsdModel(input: {
     const screenMatch = SCREEN_ENABLE_PATTERN.exec(name);
     if (screenMatch) {
       screenEnableNames.set(Number(screenMatch[1]), name);
+      continue;
+    }
+
+    const txtResMatch = SCREEN_TEXT_RES_PATTERN.exec(name);
+    if (txtResMatch) {
+      screenTextResNames.set(Number(txtResMatch[1]), name);
     }
   }
 
-  const screenNumbers = new Set<number>([...screenItems.keys(), ...screenEnableNames.keys()]);
+  const screenNumbers = new Set<number>([
+    ...screenItems.keys(),
+    ...screenEnableNames.keys(),
+    ...screenTextResNames.keys(),
+  ]);
   const screens = [...screenNumbers]
     .sort((left, right) => left - right)
     .map((screen): OsdScreenModel => {
       const enableParamName = screenEnableNames.get(screen) ?? null;
+      const txtResParamName = screenTextResNames.get(screen) ?? null;
+      const txtResValue = txtResParamName ? effectiveParamValue(txtResParamName, params, stagedEdits) : null;
+      const grid = resolveGridForTextResolution(txtResValue, fallbackGrid);
       const items = [...(screenItems.get(screen)?.values() ?? [])]
         .map((item) => buildOsdItem(item, screen, params, stagedEdits, grid))
         .sort((left, right) => left.y - right.y || left.x - right.x || left.label.localeCompare(right.label));
@@ -116,6 +146,10 @@ export function buildArduPilotOsdModel(input: {
         label: `Screen ${screen}`,
         enabled: enableParamName ? numericBoolean(effectiveParamValue(enableParamName, params, stagedEdits)) : null,
         enableParamName,
+        txtResParamName,
+        txtResValue,
+        txtResStaged: txtResParamName ? txtResParamName in stagedEdits : false,
+        grid,
         items,
         enabledItems: items.filter((item) => item.enabled),
       };
@@ -125,7 +159,7 @@ export function buildArduPilotOsdModel(input: {
   const enabledItemCount = screens.reduce((count, screen) => count + screen.enabledItems.length, 0);
 
   return {
-    grid,
+    grid: fallbackGrid,
     screens,
     itemCount,
     enabledItemCount,
@@ -152,16 +186,22 @@ function buildOsdItem(
   const enableValue = item.params.enable ? effectiveParamValue(item.params.enable, params, stagedEdits) : null;
   const rawX = item.params.x ? effectiveParamValue(item.params.x, params, stagedEdits) : null;
   const rawY = item.params.y ? effectiveParamValue(item.params.y, params, stagedEdits) : null;
+  const x = normalizeCoordinateValue(rawX);
+  const y = normalizeCoordinateValue(rawY);
 
   return {
     key: item.key,
     label: formatItemLabel(item.key),
     screen,
     enabled: numericBoolean(enableValue) ?? false,
-    x: clampOsdCoordinate(rawX ?? 0, "x", grid),
-    y: clampOsdCoordinate(rawY ?? 0, "y", grid),
+    x,
+    y,
+    displayX: clampOsdCoordinate(x, "x", grid),
+    displayY: clampOsdCoordinate(y, "y", grid),
     rawX,
     rawY,
+    xOutOfRange: isOutOfRange(x, "x", grid),
+    yOutOfRange: isOutOfRange(y, "y", grid),
     params: item.params,
     complete: item.params.enable !== null && item.params.x !== null && item.params.y !== null,
     staged: {
@@ -205,6 +245,28 @@ function roleFromSuffix(suffix: string | undefined): OsdParamRole | null {
 
 function normalizeGridSize(value: number | undefined, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.round(value) : fallback;
+}
+
+function normalizeCoordinateValue(value: number | null): number {
+  return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : 0;
+}
+
+function isOutOfRange(value: number, axis: "x" | "y", grid: OsdGridModel): boolean {
+  const max = axis === "x" ? grid.columns - 1 : grid.rows - 1;
+  return value < 0 || value > max;
+}
+
+function resolveGridForTextResolution(value: number | null, fallbackGrid: OsdGridModel): OsdGridModel {
+  switch (value) {
+    case 0:
+      return DEFAULT_GRID;
+    case 1:
+      return { columns: 50, rows: 18, label: "HD 50 x 18" };
+    case 3:
+      return { columns: 60, rows: 22, label: "HD 60 x 22" };
+    default:
+      return fallbackGrid;
+  }
 }
 
 function formatItemLabel(key: string): string {

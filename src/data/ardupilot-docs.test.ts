@@ -36,7 +36,7 @@ describe("resolveDocsUrl", () => {
 
     it("resolves osd to the common OSD overview URL", () => {
       expect(resolveDocsUrl("osd")).toBe(
-        "https://ardupilot.org/copter/docs/common-msp-osd-overview-4.2.html",
+        "https://ardupilot.org/copter/docs/common-osd-overview.html",
       );
     });
 

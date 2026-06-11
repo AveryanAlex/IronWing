@@ -91,6 +91,8 @@ describe("ardupilot-osd-model", () => {
     expect(item?.enabled).toBe(true);
     expect(item?.x).toBe(12);
     expect(item?.y).toBe(8);
+    expect(item?.displayX).toBe(12);
+    expect(item?.displayY).toBe(8);
     expect(item?.staged).toEqual({ enable: true, x: true, y: true });
     expect(model.enabledItemCount).toBe(1);
   });
@@ -106,13 +108,77 @@ describe("ardupilot-osd-model", () => {
     const item = model.screens[0]?.items[0];
     expect(item?.complete).toBe(false);
     expect(item?.enabled).toBe(false);
-    expect(item?.x).toBe(29);
-    expect(item?.y).toBe(0);
+    expect(item?.x).toBe(40);
+    expect(item?.y).toBe(-2);
+    expect(item?.displayX).toBe(29);
+    expect(item?.displayY).toBe(0);
+    expect(item?.xOutOfRange).toBe(true);
+    expect(item?.yOutOfRange).toBe(true);
+  });
+
+  it("resolves screen-specific HD grids from OSDn_TXT_RES=1 without clipping valid coordinates", () => {
+    const model = buildArduPilotOsdModel({
+      paramStore: createParamStore({
+        OSD1_TXT_RES: 1,
+        OSD1_ALTITUDE_EN: 1,
+        OSD1_ALTITUDE_X: 40,
+        OSD1_ALTITUDE_Y: 17,
+      }),
+    });
+
+    const screen = model.screens[0];
+    const item = screen?.items[0];
+    expect(screen?.grid).toEqual({ columns: 50, rows: 18, label: "HD 50 x 18" });
+    expect(item?.x).toBe(40);
+    expect(item?.y).toBe(17);
+    expect(item?.displayX).toBe(40);
+    expect(item?.displayY).toBe(17);
+    expect(item?.xOutOfRange).toBe(false);
+    expect(item?.yOutOfRange).toBe(false);
+  });
+
+  it("resolves screen-specific HD grids from staged OSDn_TXT_RES=3", () => {
+    const model = buildArduPilotOsdModel({
+      paramStore: createParamStore({
+        OSD2_TXT_RES: 0,
+        OSD2_GSPEED_EN: 1,
+        OSD2_GSPEED_X: 55,
+        OSD2_GSPEED_Y: 21,
+      }),
+      stagedEdits: {
+        OSD2_TXT_RES: { nextValue: 3 },
+      },
+    });
+
+    const screen = model.screens[0];
+    const item = screen?.items[0];
+    expect(screen?.grid).toEqual({ columns: 60, rows: 22, label: "HD 60 x 22" });
+    expect(screen?.txtResStaged).toBe(true);
+    expect(item?.x).toBe(55);
+    expect(item?.y).toBe(21);
+    expect(item?.displayX).toBe(55);
+    expect(item?.displayY).toBe(21);
+  });
+
+  it("tracks disabled screens separately from item enable state", () => {
+    const model = buildArduPilotOsdModel({
+      paramStore: createParamStore({
+        OSD1_ENABLE: 0,
+        OSD1_ALTITUDE_EN: 1,
+        OSD1_ALTITUDE_X: 3,
+        OSD1_ALTITUDE_Y: 4,
+      }),
+    });
+
+    const screen = model.screens[0];
+    expect(screen?.enabled).toBe(false);
+    expect(screen?.enableParamName).toBe("OSD1_ENABLE");
+    expect(screen?.enabledItems.map((item) => item.key)).toEqual(["ALTITUDE"]);
   });
 
   it("clamps coordinates to the selected grid", () => {
-    expect(clampOsdCoordinate(99, "x", { columns: 20, rows: 10 })).toBe(19);
-    expect(clampOsdCoordinate(-5, "y", { columns: 20, rows: 10 })).toBe(0);
-    expect(clampOsdCoordinate(4.6, "y", { columns: 20, rows: 10 })).toBe(5);
+    expect(clampOsdCoordinate(99, "x", { columns: 20, rows: 10, label: "custom" })).toBe(19);
+    expect(clampOsdCoordinate(-5, "y", { columns: 20, rows: 10, label: "custom" })).toBe(0);
+    expect(clampOsdCoordinate(4.6, "y", { columns: 20, rows: 10, label: "custom" })).toBe(5);
   });
 });

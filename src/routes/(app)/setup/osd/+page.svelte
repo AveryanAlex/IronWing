@@ -91,7 +91,7 @@ function stageParam(name: string, value: number) {
 
       <SetupHint>
         <p>
-          The preview uses a conservative 30 x 16 character grid. Exact font and video-mode parity can be refined once more layout parameters are exposed.
+          The preview follows the loaded screen text resolution when OSDn_TXT_RES is available. Exact font and video-mode parity can be refined once more layout parameters are exposed.
         </p>
       </SetupHint>
     </SetupGuideCard>
