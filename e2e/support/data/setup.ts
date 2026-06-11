@@ -8,6 +8,7 @@ export const setupSections = [
   { id: "motors_esc", label: "Motors & ESC", testId: "setup-workspace-motors-esc-section" },
   { id: "servo_outputs", label: "Servo Outputs", testId: "setup-workspace-servo-outputs-section" },
   { id: "serial_ports", label: "Serial Ports", testId: "setup-workspace-serial-ports-section" },
+  { id: "osd", label: "OSD", testId: "setup-workspace-osd-section" },
   { id: "flight_modes", label: "Flight Modes", testId: "setup-workspace-flight-modes-section" },
   { id: "failsafe", label: "Failsafe", testId: "setup-workspace-failsafe-section" },
   { id: "rtl_return", label: "RTL / Return", testId: "setup-workspace-rtl-return-section" },
