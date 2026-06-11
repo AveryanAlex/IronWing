@@ -3,42 +3,10 @@ import { ChevronDown, ChevronRight } from "lucide-svelte";
 import { resolve } from "$app/paths";
 
 import type { SetupWorkspaceSection, SetupWorkspaceSectionGroup } from "../../../lib/stores/setup-workspace";
-import { setupSectionPath } from "../../../lib/setup-sections";
+import { groupSetupSectionNavigation, setupSectionPath } from "../../../lib/setup-sections";
 import { Button } from "../../../components/ui";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 import SetupSectionIcon from "./SetupSectionIcon.svelte";
-
-const NAV_SECTION_GROUPS: ReadonlyArray<{
-  id: string;
-  title: string;
-  sectionIds: SetupWorkspaceSection["id"][];
-}> = [
-  {
-    id: "essential",
-    title: "Essential Setup",
-    sectionIds: ["overview", "frame_orientation", "calibration", "rc_receiver", "flight_modes"],
-  },
-  {
-    id: "hardware",
-    title: "Hardware",
-    sectionIds: ["navigation", "battery_monitor", "motors_esc", "servo_outputs", "serial_ports", "osd"],
-  },
-  {
-    id: "safety",
-    title: "Safety",
-    sectionIds: ["failsafe", "rtl_return", "geofence", "arming"],
-  },
-  {
-    id: "tuning",
-    title: "Tuning",
-    sectionIds: ["initial_params", "pid_tuning"],
-  },
-  {
-    id: "peripherals",
-    title: "Peripherals",
-    sectionIds: ["peripherals", "full_parameters"],
-  },
-];
 
 let {
   sectionGroups,
@@ -53,12 +21,8 @@ let {
 let collapsedGroups: Record<string, boolean> = $state({});
 
 let navGroups = $derived.by(() => {
-  const sectionsById = new Map(sectionGroups.flatMap((group) => group.sections).map((section) => [section.id, section]));
-
-  return NAV_SECTION_GROUPS.map((group) => ({
-    ...group,
-    sections: group.sectionIds.map((sectionId) => sectionsById.get(sectionId)).filter((section) => section !== undefined),
-  })).filter((group) => group.sections.length > 0);
+  const sections = sectionGroups.flatMap((group) => group.sections).filter((section) => section.implemented);
+  return groupSetupSectionNavigation(sections);
 });
 
 function toggleGroup(groupId: string) {

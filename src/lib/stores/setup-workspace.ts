@@ -30,28 +30,6 @@ type RcSignalState = "disconnected" | "waiting" | "live" | "stale" | "degraded";
 
 type CalibrationActionAvailability = "available" | "blocked" | "unsupported";
 
-const IMPLEMENTED_SECTION_ID_SET = new Set<SetupSectionId>([
-  "overview",
-  "frame_orientation",
-  "calibration",
-  "navigation",
-  "battery_monitor",
-  "motors_esc",
-  "servo_outputs",
-  "serial_ports",
-  "osd",
-  "flight_modes",
-  "failsafe",
-  "rtl_return",
-  "geofence",
-  "arming",
-  "initial_params",
-  "pid_tuning",
-  "peripherals",
-  "rc_receiver",
-  "full_parameters",
-]);
-
 export type SetupWorkspaceReadiness = "bootstrapping" | "unavailable" | "ready" | "degraded";
 export type SetupWorkspaceCheckpointPhase = "idle" | "resume_pending" | "resume_complete" | "scope_changed";
 
@@ -373,7 +351,6 @@ function detailTextForSection(sectionId: SetupSectionId, implemented: boolean): 
 function buildCatalogSections(): SetupWorkspaceSection[] {
   return SETUP_SECTION_CATALOG.map((definition) => {
     const group = getSetupSectionGroupDefinition(definition.groupId);
-    const implemented = IMPLEMENTED_SECTION_ID_SET.has(definition.id);
 
     return {
       id: definition.id,
@@ -382,8 +359,8 @@ function buildCatalogSections(): SetupWorkspaceSection[] {
       kind: definition.kind,
       groupId: group.id,
       groupTitle: group.title,
-      detailText: detailTextForSection(definition.id, implemented),
-      implemented,
+      detailText: detailTextForSection(definition.id, definition.implemented),
+      implemented: definition.implemented,
     } satisfies SetupWorkspaceSection;
   });
 }
