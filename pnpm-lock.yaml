@@ -70,8 +70,8 @@ importers:
         specifier: ^2.4.10
         version: 2.4.10
       '@playwright/test':
-        specifier: ^1.60.0
-        version: 1.60.0
+        specifier: 1.61.0-alpha-2026-06-10
+        version: 1.61.0-alpha-2026-06-10
       '@sveltejs/adapter-static':
         specifier: ^3.0.10
         version: 3.0.10(@sveltejs/kit@2.61.1(@sveltejs/vite-plugin-svelte@6.2.4(svelte@5.55.1)(vite@7.3.2(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)))(svelte@5.55.1)(typescript@5.9.3)(vite@7.3.2(@types/node@25.3.3)(jiti@2.6.1)(lightningcss@1.31.1)(tsx@4.21.0)))
@@ -657,8 +657,8 @@ packages:
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
 
-  '@playwright/test@1.60.0':
-    resolution: {integrity: sha512-O71yZIbAh/PxDMNGns37GHBIfrVkEVyn+AXyIa5dOTfb4/xNvRWV+Vv/NMbNCtODB/pO7vLlF2OTmMVLhmr7Ag==}
+  '@playwright/test@1.61.0-alpha-2026-06-10':
+    resolution: {integrity: sha512-k+48ui5S6L6ULoPnsomYFda9qMO+uMWfiBCVG2nokcZ45fO/bovEVE9psJ2IOB6aLZdGOliUtKOvl6BwlBjiSw==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -2434,13 +2434,13 @@ packages:
     resolution: {integrity: sha512-5gTmgEY/sqK6gFXLIsQNH19lWb4ebPDLA4SdLP7dsWkIXHWlG66oPuVvXSGFPppYZz8ZDZq0dYYrbHfBCVUb1Q==}
     engines: {node: '>=12'}
 
-  playwright-core@1.60.0:
-    resolution: {integrity: sha512-9bW6zvX/m0lEbgTKJ6YppOKx8H3VOPBMOCFh2irXFOT4BbHgrx5hPjwJYLT40Lu+4qtD36qKc/Hn56StUW57IA==}
+  playwright-core@1.61.0-alpha-2026-06-10:
+    resolution: {integrity: sha512-Rjov1mjb2vBz2HiiOCAGwUhgA8bOX468tsxzFM745R/cIDWnoQbqzzwmrG3cvqiLnU40MivNLHuRGDiPnnIZUA==}
     engines: {node: '>=18'}
     hasBin: true
 
-  playwright@1.60.0:
-    resolution: {integrity: sha512-hheHdokM8cdqCb0lcE3s+zT4t4W+vvjpGxsZlDnikarzx8tSzMebh3UiFtgqwFwnTnjYQcsyMF8ei2mCO/tpeA==}
+  playwright@1.61.0-alpha-2026-06-10:
+    resolution: {integrity: sha512-xUKR/gCKL2FJlzJ0sJymhFr2E3AOczRxSy+RJM0wy1vznq3HMP7GKu690utl0sIktxatP91sgspStMQXS94L0w==}
     engines: {node: '>=18'}
     hasBin: true
 
@@ -3596,9 +3596,9 @@ snapshots:
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
-  '@playwright/test@1.60.0':
+  '@playwright/test@1.61.0-alpha-2026-06-10':
     dependencies:
-      playwright: 1.60.0
+      playwright: 1.61.0-alpha-2026-06-10
 
   '@polka/url@1.0.0-next.29': {}
 
@@ -5442,11 +5442,11 @@ snapshots:
 
   picomatch@4.0.3: {}
 
-  playwright-core@1.60.0: {}
+  playwright-core@1.61.0-alpha-2026-06-10: {}
 
-  playwright@1.60.0:
+  playwright@1.61.0-alpha-2026-06-10:
     dependencies:
-      playwright-core: 1.60.0
+      playwright-core: 1.61.0-alpha-2026-06-10
     optionalDependencies:
       fsevents: 2.3.2
 
