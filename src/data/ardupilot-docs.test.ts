@@ -34,6 +34,12 @@ describe("resolveDocsUrl", () => {
       );
     });
 
+    it("resolves osd to the common OSD overview URL", () => {
+      expect(resolveDocsUrl("osd")).toBe(
+        "https://ardupilot.org/copter/docs/common-msp-osd-overview-4.2.html",
+      );
+    });
+
     it("resolves servo_outputs to the common RC output mapping URL", () => {
       expect(resolveDocsUrl("servo_outputs")).toBe(
         "https://ardupilot.org/copter/docs/common-rcoutput-mapping.html",
@@ -240,8 +246,8 @@ describe("isKnownTopic", () => {
 });
 
 describe("topic lists", () => {
-  it("commonTopics returns 12 entries", () => {
-    expect(commonTopics()).toHaveLength(12);
+  it("commonTopics returns 13 entries", () => {
+    expect(commonTopics()).toHaveLength(13);
   });
 
   it("vehicleSpecificTopics returns 14 entries", () => {

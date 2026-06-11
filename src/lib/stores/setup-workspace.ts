@@ -39,6 +39,7 @@ const IMPLEMENTED_SECTION_ID_SET = new Set<SetupSectionId>([
   "motors_esc",
   "servo_outputs",
   "serial_ports",
+  "osd",
   "flight_modes",
   "failsafe",
   "rtl_return",

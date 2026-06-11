@@ -10,6 +10,7 @@ export type SetupSectionId =
   | "motors_esc"
   | "servo_outputs"
   | "serial_ports"
+  | "osd"
   | "flight_modes"
   | "failsafe"
   | "rtl_return"
@@ -31,6 +32,7 @@ export type SetupSectionPath =
   | "/setup/motors-esc"
   | "/setup/servo-outputs"
   | "/setup/serial-ports"
+  | "/setup/osd"
   | "/setup/flight-modes"
   | "/setup/failsafe"
   | "/setup/rtl-return"
@@ -155,6 +157,13 @@ export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
     groupId: "hardware",
   },
   {
+    id: "osd",
+    title: "OSD",
+    description: "Configure ArduPilot on-screen display items by screen and grid position.",
+    kind: "guided",
+    groupId: "hardware",
+  },
+  {
     id: "rc_receiver",
     title: "RC / Receiver",
     description: "Live channel mapping, preset order, and receiver motion checks.",
@@ -238,6 +247,7 @@ const SETUP_SECTION_PATHS: Record<SetupSectionId, SetupSectionPath> = {
   motors_esc: "/setup/motors-esc",
   servo_outputs: "/setup/servo-outputs",
   serial_ports: "/setup/serial-ports",
+  osd: "/setup/osd",
   flight_modes: "/setup/flight-modes",
   failsafe: "/setup/failsafe",
   rtl_return: "/setup/rtl-return",

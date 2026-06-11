@@ -273,6 +273,7 @@ describe("setup workspace store", () => {
       "motors_esc",
       "servo_outputs",
       "serial_ports",
+      "osd",
       "rc_receiver",
       "flight_modes",
       "failsafe",
@@ -286,8 +287,8 @@ describe("setup workspace store", () => {
     ]);
     expect(frameSection?.detailText).toBe("Open this section to inspect settings and queue changes for review.");
     expect(navigationSection?.implemented).toBe(true);
-    expect(hardwareGroup?.sections).toHaveLength(7);
-    expect(hardwareGroup?.implementedCount).toBe(7);
+    expect(hardwareGroup?.sections).toHaveLength(8);
+    expect(hardwareGroup?.implementedCount).toBe(8);
     expect(safetyGroup?.sections).toHaveLength(6);
     expect(safetyGroup?.implementedCount).toBe(6);
     expect(tuningGroup?.sections).toHaveLength(3);

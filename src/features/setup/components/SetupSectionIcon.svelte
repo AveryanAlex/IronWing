@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   Lock,
   Navigation,
+  Monitor,
   Plane,
   Puzzle,
   Radio,
@@ -48,6 +49,8 @@ let { sectionId, size = 14 }: Props = $props();
   <SlidersHorizontal {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "serial_ports"}
   <Cable {size} class="shrink-0" aria-hidden="true" />
+{:else if sectionId === "osd"}
+  <Monitor {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "flight_modes"}
   <Plane {size} class="shrink-0" aria-hidden="true" />
 {:else if sectionId === "failsafe"}

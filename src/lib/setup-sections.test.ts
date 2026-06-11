@@ -20,6 +20,7 @@ describe("setup section routes", () => {
       ["motors_esc", "/setup/motors-esc"],
       ["servo_outputs", "/setup/servo-outputs"],
       ["serial_ports", "/setup/serial-ports"],
+      ["osd", "/setup/osd"],
       ["rc_receiver", "/setup/rc-receiver"],
       ["flight_modes", "/setup/flight-modes"],
       ["failsafe", "/setup/failsafe"],
