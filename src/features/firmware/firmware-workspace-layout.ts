@@ -1,11 +1,13 @@
 import {
   createShellChromeState,
-  deriveShellTier,
-  resolveShellTier,
   shellBreakpoints,
-  type ShellChromeState,
   type ShellTier,
 } from "../../app/shell/chrome-state";
+import {
+  normalizeWorkspaceChromeState,
+  type NormalizedWorkspaceChromeState,
+  type WorkspaceChromeInput,
+} from "../../app/shell/workspace-chrome";
 
 export type FirmwareWorkspaceLayoutMode =
   | "desktop-wide"
@@ -18,9 +20,7 @@ export type FirmwareWorkspaceBlockedReason =
   | "radiomaster_viewport"
   | "phone_viewport";
 
-export type FirmwareWorkspaceChromeInput = Partial<Omit<ShellChromeState, "tier">> & {
-  tier?: string | null;
-};
+export type FirmwareWorkspaceChromeInput = WorkspaceChromeInput;
 
 export type FirmwareWorkspaceLayout = {
   mode: FirmwareWorkspaceLayoutMode;
@@ -44,19 +44,6 @@ export const firmwareWorkspaceFallbackChromeState = createShellChromeState(
   "wide",
 );
 
-function normalizeDimension(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
-function deriveBreakpointFlags(width: number) {
-  return {
-    sm: width >= shellBreakpoints.sm,
-    md: width >= shellBreakpoints.md,
-    lg: width >= shellBreakpoints.lg,
-    xl: width >= shellBreakpoints.xl,
-  };
-}
-
 function blockedCopy(reason: FirmwareWorkspaceBlockedReason) {
   switch (reason) {
     case "viewport_unsettled":
@@ -79,21 +66,8 @@ function blockedCopy(reason: FirmwareWorkspaceBlockedReason) {
 
 export function normalizeFirmwareWorkspaceChromeState(
   chrome: FirmwareWorkspaceChromeInput | null | undefined,
-): ShellChromeState & { tierMismatch: boolean } {
-  const width = normalizeDimension(chrome?.width, firmwareWorkspaceFallbackChromeState.width);
-  const height = normalizeDimension(chrome?.height, firmwareWorkspaceFallbackChromeState.height);
-  const flags = deriveBreakpointFlags(width);
-  const derivedTier = deriveShellTier(flags);
-  const reportedTier = resolveShellTier(chrome?.tier ?? null, derivedTier);
-
-  return {
-    ...flags,
-    width,
-    height,
-    tier: derivedTier,
-    vehiclePanelMode: derivedTier === "phone" ? "drawer" : "docked",
-    tierMismatch: reportedTier !== derivedTier,
-  };
+): NormalizedWorkspaceChromeState {
+  return normalizeWorkspaceChromeState(chrome, firmwareWorkspaceFallbackChromeState);
 }
 
 export function resolveFirmwareWorkspaceLayout(

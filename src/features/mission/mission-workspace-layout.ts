@@ -1,11 +1,12 @@
 import {
   createShellChromeState,
-  deriveShellTier,
-  resolveShellTier,
-  shellBreakpoints,
-  type ShellChromeState,
   type ShellTier,
 } from "../../app/shell/chrome-state";
+import {
+  normalizeWorkspaceChromeState,
+  type NormalizedWorkspaceChromeState,
+  type WorkspaceChromeInput,
+} from "../../app/shell/workspace-chrome";
 import type { MissionPlannerMode } from "../../lib/stores/mission-planner";
 
 export type MissionWorkspaceLayoutMode = "wide" | "compact-wide" | "desktop" | "phone-segmented" | "phone-stack";
@@ -24,9 +25,7 @@ export type MissionWorkspaceLayout = {
   phoneSegmentDefault: MissionWorkspacePhoneSegment | null;
 };
 
-export type MissionWorkspaceChromeInput = Partial<Omit<ShellChromeState, "tier">> & {
-  tier?: string | null;
-};
+export type MissionWorkspaceChromeInput = WorkspaceChromeInput;
 
 const COMPACT_WIDE_HEIGHT_PX = 760;
 
@@ -36,36 +35,10 @@ export const missionWorkspaceFallbackChromeState = createShellChromeState(
   "wide",
 );
 
-function normalizeDimension(value: unknown, fallback: number): number {
-  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
-function deriveBreakpointFlags(width: number) {
-  return {
-    sm: width >= shellBreakpoints.sm,
-    md: width >= shellBreakpoints.md,
-    lg: width >= shellBreakpoints.lg,
-    xl: width >= shellBreakpoints.xl,
-  };
-}
-
 export function normalizeMissionWorkspaceChromeState(
   chrome: MissionWorkspaceChromeInput | null | undefined,
-): ShellChromeState & { tierMismatch: boolean } {
-  const width = normalizeDimension(chrome?.width, missionWorkspaceFallbackChromeState.width);
-  const height = normalizeDimension(chrome?.height, missionWorkspaceFallbackChromeState.height);
-  const flags = deriveBreakpointFlags(width);
-  const derivedTier = deriveShellTier(flags);
-  const reportedTier = resolveShellTier(chrome?.tier ?? null, derivedTier);
-
-  return {
-    ...flags,
-    width,
-    height,
-    tier: derivedTier,
-    vehiclePanelMode: derivedTier === "phone" ? "drawer" : "docked",
-    tierMismatch: reportedTier !== derivedTier,
-  };
+): NormalizedWorkspaceChromeState {
+  return normalizeWorkspaceChromeState(chrome, missionWorkspaceFallbackChromeState);
 }
 
 export function resolveMissionWorkspaceLayout(

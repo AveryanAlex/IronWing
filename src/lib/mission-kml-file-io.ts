@@ -1,4 +1,5 @@
 import type { FencePlan, MissionPlan } from "./mavkit-types";
+import { isBrowserPickerAbortError } from "./browser-picker-errors";
 import { formatUnknownError } from "./error-format";
 import { parseKml, parseKmz, type KmlParseResult } from "./mission-kml-io";
 
@@ -183,7 +184,7 @@ async function openKmlFileWithPicker(
     const file = await handle.getFile();
     return readSelectedFile(file);
   } catch (error) {
-    if (isAbortError(error)) {
+    if (isBrowserPickerAbortError(error)) {
       return null;
     }
 
@@ -290,17 +291,4 @@ export function detectKmlSource(name: string | null | undefined, mimeType: strin
   }
 
   return "kml";
-}
-
-function isAbortError(error: unknown): boolean {
-  if (typeof DOMException !== "undefined" && error instanceof DOMException) {
-    return error.name === "AbortError";
-  }
-
-  return Boolean(
-    error
-      && typeof error === "object"
-      && "name" in error
-      && (error as { name?: string }).name === "AbortError",
-  );
 }
