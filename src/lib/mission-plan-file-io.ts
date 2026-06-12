@@ -6,6 +6,7 @@ import {
   type ParsedSurveyRegion,
 } from "./mission-plan-io";
 import type { FencePlan, HomePosition, MissionPlan, RallyPlan } from "./mavkit-types";
+import { isBrowserPickerAbortError } from "./browser-picker-errors";
 import { formatUnknownError } from "./error-format";
 
 const DEFAULT_PLAN_FILE_NAME = "ironwing-mission.plan";
@@ -312,7 +313,7 @@ async function openTextFileWithPicker(
       contents: await file.text(),
     };
   } catch (error) {
-    if (isAbortError(error)) {
+    if (isBrowserPickerAbortError(error)) {
       return null;
     }
 
@@ -408,23 +409,10 @@ async function saveTextFileWithPicker(
     await writable.close();
     return { name: handle.name ?? suggestedName };
   } catch (error) {
-    if (isAbortError(error)) {
+    if (isBrowserPickerAbortError(error)) {
       return null;
     }
 
     throw new Error(formatError(error));
   }
-}
-
-function isAbortError(error: unknown): boolean {
-  if (typeof DOMException !== "undefined" && error instanceof DOMException) {
-    return error.name === "AbortError";
-  }
-
-  return Boolean(
-    error
-      && typeof error === "object"
-      && "name" in error
-      && (error as { name?: string }).name === "AbortError",
-  );
 }

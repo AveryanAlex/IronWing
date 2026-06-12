@@ -1,3 +1,4 @@
+import { isBrowserPickerAbortError } from "../browser-picker-errors";
 import { formatUnknownError } from "../error-format";
 import { detectKmlSource } from "../mission-kml-file-io";
 
@@ -105,7 +106,7 @@ async function openToolbarImportPickerWithHandle(
 
     return readToolbarImportSelection(await handle.getFile());
   } catch (error) {
-    if (isAbortError(error)) {
+    if (isBrowserPickerAbortError(error)) {
       return null;
     }
 
@@ -171,17 +172,4 @@ function openToolbarImportPickerWithInput(
     document.body.appendChild(input);
     input.click();
   });
-}
-
-function isAbortError(error: unknown): boolean {
-  if (typeof DOMException !== "undefined" && error instanceof DOMException) {
-    return error.name === "AbortError";
-  }
-
-  return Boolean(
-    error
-      && typeof error === "object"
-      && "name" in error
-      && (error as { name?: string }).name === "AbortError",
-  );
 }

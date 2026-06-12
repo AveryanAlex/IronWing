@@ -1,3 +1,4 @@
+import { isBrowserPickerAbortError } from "./browser-picker-errors";
 import { formatUnknownError } from "./error-format";
 
 const DEFAULT_APJ_FILE_NAME = "ironwing-firmware.apj";
@@ -198,7 +199,7 @@ async function openBinaryFileWithPicker(
       bytes: await file.arrayBuffer(),
     };
   } catch (error) {
-    if (isAbortError(error)) {
+    if (isBrowserPickerAbortError(error)) {
       return null;
     }
 
@@ -268,19 +269,6 @@ function openBinaryFileWithInput(
     document.body.appendChild(input);
     input.click();
   });
-}
-
-function isAbortError(error: unknown): boolean {
-  if (typeof DOMException !== "undefined" && error instanceof DOMException) {
-    return error.name === "AbortError";
-  }
-
-  return Boolean(
-    error
-      && typeof error === "object"
-      && "name" in error
-      && (error as { name?: string }).name === "AbortError",
-  );
 }
 
 function fnv1a64Digest(bytes: number[]): string {

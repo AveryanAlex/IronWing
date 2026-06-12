@@ -1,3 +1,5 @@
+import { isBrowserPickerAbortError } from "../../lib/browser-picker-errors";
+
 const DEFAULT_RECORDING_FILE_NAME = "manual-capture.tlog";
 
 export function defaultManualRecordingPath(directory: string): string {
@@ -50,7 +52,7 @@ export function createLogRecordingFileIo(browserWindow: BrowserFilePickerWindow 
         const pickedName = normalizeFileName(handle.name);
         return joinDirectoryAndFile(directoryFromPath(suggestedPath), pickedName);
       } catch (error) {
-        if (isAbortError(error)) {
+        if (isBrowserPickerAbortError(error)) {
           return null;
         }
 
@@ -97,8 +99,4 @@ function joinDirectoryAndFile(directory: string, fileName: string): string {
   const separator = directory.includes("\\") && !directory.includes("/") ? "\\" : "/";
   const trimmedDirectory = directory.replace(/[\\/]+$/, "");
   return `${trimmedDirectory}${separator}${fileName}`;
-}
-
-function isAbortError(error: unknown): boolean {
-  return error instanceof Error && error.name === "AbortError";
 }

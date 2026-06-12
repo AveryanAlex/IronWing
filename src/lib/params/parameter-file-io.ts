@@ -1,5 +1,6 @@
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
+import { isBrowserPickerAbortError } from "../browser-picker-errors";
 import {
   createParamsService,
   type ParamsService,
@@ -248,7 +249,7 @@ export function createParameterFileIo(
         contents: await file.text(),
       };
     } catch (error) {
-      if (isAbortError(error)) {
+      if (isBrowserPickerAbortError(error)) {
         return null;
       }
 
@@ -341,24 +342,11 @@ export function createParameterFileIo(
       await writable.close();
       return { name: handle.name ?? suggestedName };
     } catch (error) {
-      if (isAbortError(error)) {
+      if (isBrowserPickerAbortError(error)) {
         return null;
       }
 
       throw new Error(paramsService.formatError(error));
     }
   }
-}
-
-function isAbortError(error: unknown): boolean {
-  if (typeof DOMException !== "undefined" && error instanceof DOMException) {
-    return error.name === "AbortError";
-  }
-
-  return Boolean(
-    error
-      && typeof error === "object"
-      && "name" in error
-      && (error as { name?: string }).name === "AbortError",
-  );
 }
