@@ -81,8 +81,12 @@ function updateField<
   const patch = { [field]: value } as Partial<SessionConnectionFormState>;
   store.updateConnectionForm(patch);
 
-  if (field === "mode" && (value === "serial" || value === "web_serial")) {
-    void refreshSerialInventoryAndSelectDefault();
+  if (field === "mode") {
+    showValidation = false;
+
+    if (value === "serial" || value === "web_serial") {
+      void refreshSerialInventoryAndSelectDefault();
+    }
   }
 }
 
@@ -91,11 +95,14 @@ async function refreshSerialInventoryAndSelectDefault() {
   selectDefaultPortForCurrentMode();
 }
 
-async function grantWebSerialPort() {
+async function grantWebSerialPortForConnect() {
   const port = await serialInventory.grantWebSerialPort();
   if (port) {
     store.updateConnectionForm({ mode: "web_serial", webSerialPortId: port.portName });
+    return true;
   }
+
+  return false;
 }
 
 function selectDefaultPortForCurrentMode() {
@@ -107,13 +114,6 @@ function selectDefaultPortForCurrentMode() {
       store.updateConnectionForm({ serialPort: nativePort.portName });
     }
   }
-
-  if (form.mode === "web_serial" && form.webSerialPortId.trim().length === 0) {
-    const webSerialPort = inventoryState.ports.find((port) => port.source === "web_serial");
-    if (webSerialPort) {
-      store.updateConnectionForm({ webSerialPortId: webSerialPort.portName });
-    }
-  }
 }
 
 async function onSubmit(event: SubmitEvent) {
@@ -121,6 +121,23 @@ async function onSubmit(event: SubmitEvent) {
 
   const descriptor = $store.transportDescriptors.find((item) => item.kind === $store.connectionForm.mode);
   if (!descriptor) {
+    return;
+  }
+
+  if ($store.connectionForm.mode === "web_serial") {
+    showValidation = false;
+    const granted = await grantWebSerialPortForConnect();
+    if (!granted) {
+      return;
+    }
+
+    const currentForm = get(store).connectionForm;
+    showValidation = true;
+    if (hasConnectionFieldErrors(validateConnectionForm(descriptor, currentForm))) {
+      return;
+    }
+
+    await store.connect();
     return;
   }
 
@@ -152,7 +169,6 @@ async function onSubmit(event: SubmitEvent) {
       onCancelConnect={() => void store.cancelConnect()}
       onDisconnect={() => void store.disconnect()}
       onRefreshBondedDevices={() => void store.refreshBondedDevices()}
-      onGrantWebSerialPort={() => void grantWebSerialPort()}
       onRefreshSerialPorts={() => void refreshSerialInventoryAndSelectDefault()}
       onScanBleDevices={() => void store.scanBleDevices()}
       serialInventory={$serialInventory}

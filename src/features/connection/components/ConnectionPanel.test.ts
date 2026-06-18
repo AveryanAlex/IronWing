@@ -117,6 +117,13 @@ function createTransportDescriptors(): TransportDescriptor[] {
       validation: { port_required: true, baud_required: true },
       default_baud: 57600,
     },
+    {
+      kind: "web_serial",
+      label: "Web Serial",
+      available: true,
+      validation: { chooser_required: true, baud_required: true },
+      default_baud: 57600,
+    },
   ];
 }
 
@@ -141,7 +148,7 @@ function createMockService(overrides: Partial<SessionService> = {}) {
     loadConnectionForm: vi.fn(() => ({ ...defaultConnectionForm })),
     persistConnectionForm: vi.fn(),
     openSessionSnapshot: vi.fn(async () => createSnapshot()),
-    ackSessionSnapshot: vi.fn(async () => ({ result: "accepted" as const })),
+    ackSessionSnapshot: vi.fn(async (envelope) => ({ result: "accepted" as const, envelope })),
     subscribeAll: vi.fn(async (nextHandlers: SessionServiceEventHandlers) => {
       handlers = nextHandlers;
       return () => {
@@ -162,6 +169,12 @@ function createMockService(overrides: Partial<SessionService> = {}) {
         if (value.baud == null) errors.push("baud is required");
         return errors;
       }
+      if (descriptor.kind === "web_serial") {
+        const errors: string[] = [];
+        if (!value.port_id) errors.push("port_id is required");
+        if (value.baud == null) errors.push("baud is required");
+        return errors;
+      }
       return [];
     }),
     buildConnectRequest: vi.fn((descriptor: TransportDescriptor, value) => {
@@ -174,6 +187,15 @@ function createMockService(overrides: Partial<SessionService> = {}) {
             kind: "serial" as const,
             port: value.port ?? "",
             baud: value.baud ?? descriptor.default_baud,
+          },
+        };
+      }
+      if (descriptor.kind === "web_serial") {
+        return {
+          transport: {
+            kind: "web_serial" as const,
+            baud: value.baud ?? descriptor.default_baud,
+            port_id: value.port_id ?? "",
           },
         };
       }
@@ -460,6 +482,8 @@ describe("ConnectionPanel", () => {
 
     await waitFor(() => {
       expect(listPorts).toHaveBeenCalledTimes(1);
+      expect((screen.getByTestId("connection-serial-port") as HTMLSelectElement).value).toBe("/dev/ttyUSB0");
+      expect(screen.getByTestId("connection-serial-refresh-btn")).toBeTruthy();
     });
 
     store.updateConnectionForm({ mode: "udp" });
@@ -473,5 +497,135 @@ describe("ConnectionPanel", () => {
     await waitFor(() => {
       expect(listPorts).toHaveBeenCalledTimes(2);
     });
+  });
+
+  it("opens the browser chooser for WebSerial and connects with the returned internal port id", async () => {
+    const staleGrantedPort = {
+      port_name: "webserial:1",
+      vid: null,
+      pid: null,
+      serial_number: null,
+      manufacturer: null,
+      product: "Previously granted device",
+      location: "webserial:1",
+    };
+    const selectedPort = {
+      port_name: "webserial:2",
+      vid: null,
+      pid: null,
+      serial_number: null,
+      manufacturer: null,
+      product: "Selected device",
+      location: "webserial:2",
+    };
+    let inventoryPorts = [staleGrantedPort];
+    const listPorts = vi.fn(async () => ({
+      kind: "available",
+      ports: inventoryPorts,
+      can_request_web_serial: true,
+    }));
+    const requestWebSerialPort = vi.fn(async () => {
+      inventoryPorts = [selectedPort];
+      return selectedPort;
+    });
+    const serialInventory = createSerialPortInventoryStore({
+      listPorts,
+      requestWebSerialPort,
+      formatError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    });
+    const { service } = createMockService({
+      loadConnectionForm: vi.fn<() => SessionConnectionFormState>(() => ({
+        mode: "web_serial",
+        udpBind: "0.0.0.0:14550",
+        tcpAddress: "127.0.0.1:5760",
+        websocketUrl: "ws://127.0.0.1:14560",
+        serialPort: "",
+        webSerialPortId: "",
+        webBluetoothDeviceId: "",
+        baud: 115200,
+        selectedBtDevice: "",
+        demoVehiclePreset: "quadcopter",
+        takeoffAlt: "10",
+        followVehicle: true,
+      })),
+    });
+    const store = createSessionStore(service);
+
+    await store.initialize();
+    render(withSessionContext(store, ConnectionPanel, { serialInventory }));
+
+    let chooserButton: HTMLButtonElement;
+    await waitFor(() => {
+      chooserButton = screen.getByTestId("connection-web-serial-connect-btn") as HTMLButtonElement;
+      expect(chooserButton.disabled).toBe(false);
+    });
+
+    expect(screen.queryByTestId("connection-web-serial-port")).toBeNull();
+    expect(screen.queryByTestId("connection-web-serial-grant-btn")).toBeNull();
+    expect(document.body.textContent).not.toContain("webserial:1");
+
+    await fireEvent.click(chooserButton!);
+
+    await waitFor(() => {
+      expect(requestWebSerialPort).toHaveBeenCalledTimes(1);
+      expect(service.connectSession).toHaveBeenCalledWith({
+        transport: { kind: "web_serial", baud: 115200, port_id: "webserial:2" },
+      });
+    });
+
+    expect(document.body.textContent).not.toContain("webserial:2");
+    expect(service.persistConnectionForm).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: "web_serial", webSerialPortId: "webserial:2" }),
+    );
+  });
+
+  it("leaves WebSerial unconnected without local port validation when the browser chooser is cancelled", async () => {
+    const listPorts = vi.fn(async () => ({
+      kind: "available",
+      ports: [],
+      can_request_web_serial: true,
+    }));
+    const requestWebSerialPort = vi.fn(async () => null);
+    const serialInventory = createSerialPortInventoryStore({
+      listPorts,
+      requestWebSerialPort,
+      formatError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    });
+    const { service } = createMockService({
+      loadConnectionForm: vi.fn<() => SessionConnectionFormState>(() => ({
+        mode: "web_serial",
+        udpBind: "0.0.0.0:14550",
+        tcpAddress: "127.0.0.1:5760",
+        websocketUrl: "ws://127.0.0.1:14560",
+        serialPort: "",
+        webSerialPortId: "",
+        webBluetoothDeviceId: "",
+        baud: 57600,
+        selectedBtDevice: "",
+        demoVehiclePreset: "quadcopter",
+        takeoffAlt: "10",
+        followVehicle: true,
+      })),
+    });
+    const store = createSessionStore(service);
+
+    await store.initialize();
+    render(withSessionContext(store, ConnectionPanel, { serialInventory }));
+
+    let chooserButton: HTMLButtonElement;
+    await waitFor(() => {
+      chooserButton = screen.getByTestId("connection-web-serial-connect-btn") as HTMLButtonElement;
+      expect(chooserButton.disabled).toBe(false);
+    });
+
+    await fireEvent.click(chooserButton!);
+
+    await waitFor(() => {
+      expect(requestWebSerialPort).toHaveBeenCalledTimes(1);
+    });
+
+    expect(service.connectSession).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("connection-error-message")?.textContent ?? "").not.toContain("port_id is required");
+    expect(toastError).not.toHaveBeenCalled();
   });
 });

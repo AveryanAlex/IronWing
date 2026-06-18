@@ -13,6 +13,8 @@ const ids = {
   recoverySafetyConfirm: "firmware-workspace-recovery-safety-confirm",
   startRecovery: "firmware-workspace-start-recovery",
   root: "firmware-workspace",
+  serialPort: "firmware-workspace-serial-port",
+  serialPortChooser: "firmware-workspace-serial-port-chooser",
 } as const;
 
 export class FirmwareWorkspacePage {
@@ -21,13 +23,17 @@ export class FirmwareWorkspacePage {
     private readonly auditLayout: LayoutAudit = noopLayoutAudit,
   ) {}
 
+  private serialPortControl() {
+    return this.page.getByTestId(ids.serialPort).or(this.page.getByTestId(ids.serialPortChooser));
+  }
+
   async expectInstallSurfaceSane(): Promise<void> {
     await expect(this.page.getByTestId(ids.root)).toBeVisible({ timeout: 15_000 });
     await expect(this.page.getByTestId(ids.mode)).toContainText("firmware-install-update");
     await expect(this.page.getByTestId(ids.layoutMode)).toContainText(/browse|desktop|phone|radiomaster/i);
     await expect(this.page.getByRole("button", { name: /Install or update flight firmware/i })).toBeVisible();
     await expect(this.page.getByRole("heading", { name: "Select controller and prepare bootloader" })).toBeVisible();
-    await expect(this.page.getByLabel("Serial port")).toBeVisible();
+    await expect(this.serialPortControl()).toBeVisible();
     await expect(this.page.getByRole("heading", { name: "Choose firmware" })).toBeVisible();
     await expect(this.page.getByRole("button", { name: "Start firmware update" })).toBeDisabled();
     await this.auditLayout("firmware install surface");
@@ -59,7 +65,7 @@ export class FirmwareWorkspacePage {
         locator: this.page.getByRole("button", { name: /Install or update flight firmware/i }),
         requireEnabled: true,
       },
-      { label: "serial port selector", locator: this.page.getByLabel("Serial port") },
+      { label: "serial port selector", locator: this.serialPortControl() },
       { label: "start update action", locator: this.page.getByRole("button", { name: "Start firmware update" }) },
     ]);
   }
