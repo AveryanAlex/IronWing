@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { writable, type Writable } from "svelte/store";
+import { get, writable, type Writable } from "svelte/store";
 
 import type {
   CatalogEntry,
@@ -221,7 +221,7 @@ async function renderWorkspace(options: {
   chromeStore?: Writable<ShellChromeState>;
   activeSource?: "live" | "playback";
   serialInventory?: SerialPortInventoryStore;
-  expectedInitialSerialPort?: string;
+  expectedInitialSerialPort?: string | null;
 } = {}) {
   const service = options.service ?? createService();
   const fileIo = options.fileIo ?? createFileIo();
@@ -297,9 +297,11 @@ async function renderWorkspace(options: {
     expect(screen.getByTestId(firmwareWorkspaceTestIds.root)).toBeTruthy();
   });
 
-  await waitFor(() => {
-    expect((screen.getByTestId(firmwareWorkspaceTestIds.serialPort) as HTMLSelectElement).value).toBe(options.expectedInitialSerialPort ?? "/dev/ttyACM0");
-  });
+  if (options.expectedInitialSerialPort !== null) {
+    await waitFor(() => {
+      expect((screen.getByTestId(firmwareWorkspaceTestIds.serialPort) as HTMLSelectElement).value).toBe(options.expectedInitialSerialPort ?? "/dev/ttyACM0");
+    });
+  }
 
   return { service, fileIo, chromeStore, store, sessionState, sessionStore, serialInventory };
 }
@@ -566,6 +568,61 @@ describe("FirmwareWorkspace", () => {
     });
   });
 
+  it("uses a browser chooser for WebSerial firmware selection while storing the internal port id", async () => {
+    const staleGrantedPort: PortInfo = {
+      port_name: "webserial:1",
+      vid: 0x2dae,
+      pid: 0x1058,
+      serial_number: "APP1",
+      manufacturer: "Hex",
+      product: "Previously granted controller",
+      location: "webserial:1",
+    };
+    const selectedPort: PortInfo = {
+      port_name: "webserial:2",
+      vid: 0x2dae,
+      pid: 0x1059,
+      serial_number: "BL1",
+      manufacturer: "Hex",
+      product: "Selected browser controller",
+      location: "webserial:2",
+    };
+    let inventoryPorts = [staleGrantedPort];
+    const requestWebSerialPort = vi.fn(async () => {
+      inventoryPorts = [selectedPort];
+      return selectedPort;
+    });
+    const serialInventory = createSerialPortInventoryStore({
+      listPorts: vi.fn(async () => ({ kind: "available", ports: inventoryPorts, can_request_web_serial: true })),
+      requestWebSerialPort,
+      formatError: (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    });
+
+    const { service, store } = await renderWorkspace({ serialInventory, expectedInitialSerialPort: null });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.serialPortChooser)).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId(firmwareWorkspaceTestIds.serialPort)).toBeNull();
+    expect(document.body.textContent).not.toContain("webserial:1");
+
+    const preflightCallsBeforeGrant = vi.mocked(service.installPreflight).mock.calls.length;
+    const readinessCallsBeforeGrant = vi.mocked(service.installReadiness).mock.calls.length;
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.serialPortChooser));
+
+    await waitFor(() => {
+      expect(requestWebSerialPort).toHaveBeenCalledTimes(1);
+      expect(get(store).serial.port).toBe("webserial:2");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.serialPortStatus).textContent).toContain("Browser port selected");
+      expect(vi.mocked(service.installPreflight).mock.calls.length).toBeGreaterThan(preflightCallsBeforeGrant);
+      expect(vi.mocked(service.installReadiness).mock.calls.length).toBeGreaterThan(readinessCallsBeforeGrant);
+    });
+
+    expect(document.body.textContent).not.toContain("webserial:2");
+  });
+
   it("requires explicit reboot before starting when the selected serial port is the active live link", async () => {
     const service = createService({}, {
       bootloaderStatus: { kind: "not_in_bootloader", can_reboot: true },
@@ -611,7 +668,9 @@ describe("FirmwareWorkspace", () => {
       location: "webserial:2",
     };
     let inventoryPorts = [applicationPort];
-    const requestWebSerialPort = vi.fn(async () => bootloaderPort);
+    const requestWebSerialPort = vi.fn()
+      .mockImplementationOnce(async () => applicationPort)
+      .mockImplementationOnce(async () => bootloaderPort);
     const serialInventory = createSerialPortInventoryStore({
       listPorts: vi.fn(async () => ({ kind: "available", ports: inventoryPorts, can_request_web_serial: true })),
       requestWebSerialPort,
@@ -622,7 +681,21 @@ describe("FirmwareWorkspace", () => {
     }, {
       bootloaderStatus: { kind: "not_in_bootloader", can_reboot: true },
     });
-    await renderWorkspace({ service, serialInventory, expectedInitialSerialPort: "webserial:1" });
+    const { store } = await renderWorkspace({ service, serialInventory, expectedInitialSerialPort: null });
+
+    await waitFor(() => {
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.serialPortChooser)).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.serialPortChooser));
+
+    await waitFor(() => {
+      expect(requestWebSerialPort).toHaveBeenCalledTimes(1);
+      expect(get(store).serial.port).toBe("webserial:1");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.serialPortStatus).textContent).toContain("Browser port selected");
+    });
+
+    expect(document.body.textContent).not.toContain("webserial:1");
 
     await fireEvent.click(screen.getByRole("button", { name: /reboot to bootloader/i }));
 
@@ -636,10 +709,13 @@ describe("FirmwareWorkspace", () => {
     await fireEvent.click(screen.getByRole("button", { name: /grant\/select bootloader port/i }));
 
     await waitFor(() => {
-      expect(requestWebSerialPort).toHaveBeenCalledTimes(1);
-      expect((screen.getByTestId(firmwareWorkspaceTestIds.serialPort) as HTMLSelectElement).value).toBe("webserial:2");
+      expect(requestWebSerialPort).toHaveBeenCalledTimes(2);
+      expect(get(store).serial.port).toBe("webserial:2");
       expect(screen.queryByTestId(firmwareWorkspaceTestIds.serialBootloaderGrant)).toBeNull();
     });
+
+    expect(screen.queryByTestId(firmwareWorkspaceTestIds.serialPort)).toBeNull();
+    expect(document.body.textContent).not.toContain("webserial:2");
   });
 
   it("sorts catalog firmware versions by descending semver", async () => {

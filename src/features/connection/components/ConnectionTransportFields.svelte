@@ -57,7 +57,7 @@ const transportHelpCopy: Record<TransportType, { title: string; description: str
   },
   web_serial: {
     title: "Web Serial connection",
-    description: "Grant a browser serial port first, then choose it from the granted-port list. Set baud first if the default does not match your device.",
+    description: "Open the browser serial chooser when connecting. Set baud first if the default does not match your device.",
   },
   web_bluetooth: {
     title: "Web Bluetooth connection",
@@ -84,7 +84,6 @@ let {
   onCancelConnect,
   onDisconnect,
   onRefreshSerialPorts,
-  onGrantWebSerialPort,
   onScanBleDevices,
   onRefreshBondedDevices,
 }: {
@@ -102,7 +101,6 @@ let {
   onCancelConnect: () => void;
   onDisconnect: () => void;
   onRefreshSerialPorts: () => void;
-  onGrantWebSerialPort: () => void;
   onScanBleDevices: () => void;
   onRefreshBondedDevices: () => void;
 } = $props();
@@ -112,7 +110,6 @@ let bluetoothDevices = $derived(
 );
 let activeTransportHelp = $derived(transportHelpCopy[form.mode]);
 let nativeSerialPorts = $derived(serialInventory.ports.filter((port) => port.source === "native"));
-let webSerialPorts = $derived(serialInventory.ports.filter((port) => port.source === "web_serial"));
 let serialInventoryRefreshing = $derived(serialInventory.phase === "refreshing");
 let webSerialGranting = $derived(serialInventory.phase === "granting");
 let transportOptions = $derived(
@@ -127,10 +124,6 @@ let transportOptions = $derived(
 let serialPortOptions = $derived([
   { value: "", label: nativeSerialPorts.length === 0 ? "No ports detected" : "Select a port" },
   ...nativeSerialPorts.map((port) => ({ value: port.portName, label: port.label })),
-]);
-let webSerialPortOptions = $derived([
-  { value: "", label: webSerialPorts.length === 0 ? "No granted WebSerial ports" : "Select a granted port" },
-  ...webSerialPorts.map((port) => ({ value: port.portName, label: port.label })),
 ]);
 let bluetoothDeviceOptions = $derived([
   { value: "", label: bluetoothDevices.length === 0 ? "No devices available" : "Select a device" },
@@ -191,6 +184,43 @@ function parseBaud(value: string) {
         <PlugZap aria-hidden="true" size={16} />
       </Button>
     </Tooltip>
+  {/if}
+{/snippet}
+
+{#snippet webSerialActionButton()}
+  {#if isConnecting}
+    <Button
+      class="w-full"
+      testId="connection-cancel-btn"
+      onclick={onCancelConnect}
+      type="button"
+      variant="warning"
+    >
+      <span class="connection-cancel-btn__spinner" aria-hidden="true"></span>
+      Cancel connection
+    </Button>
+  {:else if connected}
+    <Button
+      class="w-full"
+      testId="connection-disconnect-btn"
+      onclick={onDisconnect}
+      type="button"
+      variant="outline"
+    >
+      <Unplug aria-hidden="true" size={16} />
+      Disconnect
+    </Button>
+  {:else}
+    <Button
+      class="w-full"
+      testId="connection-web-serial-connect-btn"
+      disabled={connectDisabled || webSerialGranting || !serialInventory.canGrantWebSerial}
+      loading={webSerialGranting}
+      type="submit"
+    >
+      <PlugZap aria-hidden="true" size={16} />
+      {webSerialGranting ? "Opening browser chooser…" : "Select port and connect"}
+    </Button>
   {/if}
 {/snippet}
 
@@ -384,34 +414,12 @@ function parseBaud(value: string) {
 
 {#if form.mode === "web_serial"}
   <Field.Root invalid={Boolean(errors.webSerialPortId)}>
-    <div class={connectionActionRowWithExtraClass} data-connection-action-row>
-      <Field.Root class="min-w-0" invalid={Boolean(errors.webSerialPortId)}>
-        <Field.Label variant="eyebrow" for="connection-web-serial-port">Web Serial port</Field.Label>
-        <NativeSelect
-          disabled={formLocked}
-          id="connection-web-serial-port"
-          invalid={Boolean(errors.webSerialPortId)}
-          name="webSerialPortId"
-          onchange={(event) => onFieldChange("webSerialPortId", (event.currentTarget as HTMLSelectElement).value)}
-          options={webSerialPortOptions}
-          testId="connection-web-serial-port"
-          value={form.webSerialPortId}
-        />
-      </Field.Root>
-      {@render primaryActionButton()}
-
-      <Tooltip label={webSerialGranting ? "Granting WebSerial port" : "Grant WebSerial port"}>
-        <IconButton
-          ariaLabel={webSerialGranting ? "Granting WebSerial port" : "Grant WebSerial port"}
-          testId="connection-web-serial-grant-btn"
-          disabled={formLocked || webSerialGranting || !serialInventory.canGrantWebSerial}
-          onclick={onGrantWebSerialPort}
-          title=""
-          type="button"
-        >
-          <PlugZap aria-hidden="true" size={16} />
-        </IconButton>
-      </Tooltip>
+    <div class="grid gap-2" data-connection-action-row>
+      <div class="min-w-0 space-y-1">
+        <Eyebrow as="span">Web Serial</Eyebrow>
+        <p class="m-0 text-xs text-text-secondary">The browser chooser opens when you connect.</p>
+      </div>
+      {@render webSerialActionButton()}
     </div>
     <Field.Error message={errors.webSerialPortId} />
     {#if serialInventory.error}

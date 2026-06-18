@@ -10,6 +10,8 @@ export const firmwareWorkspaceTestIds = {
   serialPanel: "firmware-workspace-serial-panel",
   serialState: "firmware-workspace-serial-state",
   serialPort: "firmware-workspace-serial-port",
+  serialPortChooser: "firmware-workspace-serial-port-chooser",
+  serialPortStatus: "firmware-workspace-serial-port-status",
   serialPortRefresh: "firmware-workspace-serial-port-refresh",
   serialBaud: "firmware-workspace-serial-baud",
   selectedTargetState: "firmware-workspace-selected-target-state",

@@ -627,7 +627,7 @@ async function selectPreferredFirmwarePortFromInventory() {
     return;
   }
 
-  const nextPort = ports[0]?.portName;
+  const nextPort = ports.find((port) => port.source === "native")?.portName;
   if (nextPort) {
     await store.setFirmwareInstallPort(nextPort);
   }
@@ -696,7 +696,15 @@ let effectiveSourceMode = $derived(usingLocalSource ? "local" : selectedSourceMo
 let catalogTargetChosen = $derived(effectiveSourceMode !== "catalog" || workspaceState.serial.target !== null);
 let catalogVehicleTypeChosen = $derived(effectiveSourceMode !== "catalog" || selectedCatalogVehicleType.trim().length > 0);
 let catalogVersionChosen = $derived(effectiveSourceMode !== "catalog" || selectedCatalogEntry !== null);
-let firmwareSerialPorts = $derived(serialInventoryState.ports);
+let selectedFirmwarePort = $derived(workspaceState.serial.port.trim());
+let selectedFirmwareInventoryPort = $derived(
+  serialInventoryState.ports.find((port) => port.portName === selectedFirmwarePort) ?? null,
+);
+let selectedFirmwarePortIsWebSerial = $derived(
+  selectedFirmwareInventoryPort?.source === "web_serial" || isWebSerialPort(selectedFirmwarePort),
+);
+let showWebSerialChooser = $derived(serialInventoryState.canGrantWebSerial || selectedFirmwarePortIsWebSerial);
+let firmwareSerialPorts = $derived(serialInventoryState.ports.filter((port) => port.source === "native"));
 let serialInventoryBusy = $derived(serialInventoryState.phase === "refreshing" || serialInventoryState.phase === "granting");
 let showBootloaderGrantPrompt = $derived(
   workspaceState.serial.bootloaderReboot.phase === "requested" && serialInventoryState.canGrantWebSerial,
@@ -1005,23 +1013,41 @@ $effect(() => {
       </div>
 
       <div class="mt-3 flex flex-wrap items-center gap-3">
-        <label class="flex min-w-[13rem] flex-1 flex-col">
-          <span class={fieldLabelClass}>Serial port</span>
-          <NativeSelect
-            class="mt-2"
-            testId={firmwareWorkspaceTestIds.serialPort}
-            disabled={isSerialActive}
-            onchange={(event) => void store.setFirmwareInstallPort((event.currentTarget as HTMLSelectElement).value)}
-            value={workspaceState.serial.port}
-          >
-            {#if firmwareSerialPorts.length === 0}
-              <option value="">No serial ports available</option>
-            {/if}
-            {#each firmwareSerialPorts as port (port.id)}
-              <option value={port.portName}>{port.label}</option>
-            {/each}
-          </NativeSelect>
-        </label>
+        {#if showWebSerialChooser}
+          <div class="flex min-w-[13rem] flex-1 flex-col">
+            <span class={fieldLabelClass}>Browser serial port</span>
+            <Button
+              class="mt-2 w-full"
+              testId={firmwareWorkspaceTestIds.serialPortChooser}
+              disabled={isSerialActive || serialInventoryState.phase === "granting" || !serialInventoryState.canGrantWebSerial}
+              loading={serialInventoryState.phase === "granting"}
+              onclick={() => void handleGrantWebSerialPort()}
+            >
+              {serialInventoryState.phase === "granting" ? "Opening browser chooser…" : "Select browser serial port"}
+            </Button>
+            <HelperText class="mt-2" size="xs" testId={firmwareWorkspaceTestIds.serialPortStatus}>
+              {selectedFirmwarePortIsWebSerial ? "Browser port selected" : "Use the browser chooser to select the controller port."}
+            </HelperText>
+          </div>
+        {:else}
+          <label class="flex min-w-[13rem] flex-1 flex-col">
+            <span class={fieldLabelClass}>Serial port</span>
+            <NativeSelect
+              class="mt-2"
+              testId={firmwareWorkspaceTestIds.serialPort}
+              disabled={isSerialActive}
+              onchange={(event) => void store.setFirmwareInstallPort((event.currentTarget as HTMLSelectElement).value)}
+              value={workspaceState.serial.port}
+            >
+              {#if firmwareSerialPorts.length === 0}
+                <option value="">No serial ports available</option>
+              {/if}
+              {#each firmwareSerialPorts as port (port.id)}
+                <option value={port.portName}>{port.label}</option>
+              {/each}
+            </NativeSelect>
+          </label>
+        {/if}
 
         <label class="flex w-full flex-col sm:w-40">
           <span class={fieldLabelClass}>Baud</span>
@@ -1044,13 +1070,6 @@ $effect(() => {
           onclick={() => void handleRefreshSerialPorts()}
         >
           Refresh ports
-        </Button>
-
-        <Button
-          disabled={isSerialActive || serialInventoryState.phase === "granting" || !serialInventoryState.canGrantWebSerial}
-          onclick={() => void handleGrantWebSerialPort()}
-        >
-          Grant WebSerial port
         </Button>
       </div>
 
