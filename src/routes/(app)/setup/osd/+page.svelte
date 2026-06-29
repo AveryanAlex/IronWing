@@ -5,6 +5,7 @@ import { fromStore } from "svelte/store";
 import { getParamsStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import OsdEditor from "../../../../features/setup/components/osd/OsdEditor.svelte";
+import OsdSetupGuide from "../../../../features/setup/components/osd/OsdSetupGuide.svelte";
 import {
   getSetupWorkspaceRouteContext,
   setupRouteSection,
@@ -16,6 +17,7 @@ import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.sve
 import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
 import { buildArduPilotOsdModel } from "../../../../lib/osd/ardupilot-osd-model";
 import { buildParameterItemIndex } from "../../../../lib/params/parameter-item-model";
+import { buildSerialPortModel } from "../../../../lib/setup/serial-port-model";
 
 const route = getSetupWorkspaceRouteContext();
 const viewStore = fromStore(route.viewStore);
@@ -30,6 +32,13 @@ let itemIndex = $derived(buildParameterItemIndex(params.paramStore, params.metad
 let model = $derived(
   buildArduPilotOsdModel({
     paramStore: params.paramStore,
+    stagedEdits: params.stagedEdits,
+  }),
+);
+let serialModel = $derived(
+  buildSerialPortModel({
+    paramStore: params.paramStore,
+    metadata: params.metadata,
     stagedEdits: params.stagedEdits,
   }),
 );
@@ -53,6 +62,14 @@ function stageParam(name: string, value: number) {
 
   paramsStore.stageParameterEdit(item, value);
 }
+
+function discardParam(name: string) {
+  if (actionsBlocked) {
+    return;
+  }
+
+  paramsStore.discardStagedEdit(name);
+}
 </script>
 
 <SetupSectionShell
@@ -69,6 +86,18 @@ function stageParam(name: string, value: number) {
         OSD edits are staged as ArduPilot parameter changes. Use the global parameter review tray to inspect and apply them.
       </p>
     </SetupNotice>
+
+    <OsdSetupGuide
+      osdModel={model}
+      {serialModel}
+      selectedScreen={activeScreenNumber}
+      paramStore={params.paramStore}
+      stagedEdits={params.stagedEdits}
+      {itemIndex}
+      disabled={actionsBlocked}
+      onStageParam={stageParam}
+      onDiscardParam={discardParam}
+    />
 
     <OsdEditor
       {model}
@@ -91,7 +120,7 @@ function stageParam(name: string, value: number) {
 
       <SetupHint>
         <p>
-          The preview follows the loaded screen text resolution when OSDn_TXT_RES is available. Exact font and video-mode parity can be refined once more layout parameters are exposed.
+          The setup card can stage OSDn_TXT_RES for DisplayPort screens when that parameter is available, and the preview follows the staged grid before you apply changes.
         </p>
       </SetupHint>
     </SetupGuideCard>
