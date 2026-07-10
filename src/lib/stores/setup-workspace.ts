@@ -377,6 +377,20 @@ function buildSectionGroups(sections: SetupWorkspaceSection[]): SetupWorkspaceSe
   });
 }
 
+function freezeCatalogSections(sections: SetupWorkspaceSection[]): SetupWorkspaceSection[] {
+  return Object.freeze(sections.map((section) => Object.freeze(section))) as unknown as SetupWorkspaceSection[];
+}
+
+function freezeSectionGroups(groups: SetupWorkspaceSectionGroup[]): SetupWorkspaceSectionGroup[] {
+  return Object.freeze(groups.map((group) => Object.freeze({
+    ...group,
+    sections: Object.freeze(group.sections),
+  }))) as unknown as SetupWorkspaceSectionGroup[];
+}
+
+const CATALOG_SECTIONS = freezeCatalogSections(buildCatalogSections());
+const CATALOG_SECTION_GROUPS = freezeSectionGroups(buildSectionGroups(CATALOG_SECTIONS));
+
 function resolveStatusNotices(
   entries: CompactStatusNotice[],
   previous: CompactStatusNotice[],
@@ -807,8 +821,6 @@ function normalizeCheckpointInput(input: SetupWorkspaceCheckpointInput): SetupWo
 }
 
 function createInitialWorkspaceState(): SetupWorkspaceStoreState {
-  const sections = buildCatalogSections();
-
   return {
     readiness: "bootstrapping",
     stateText: "Bootstrapping setup",
@@ -823,8 +835,8 @@ function createInitialWorkspaceState(): SetupWorkspaceStoreState {
     metadataText: "Metadata idle",
     noticeText: "Preparing setup workspace.",
     selectedSectionId: "overview",
-    sections,
-    sectionGroups: buildSectionGroups(sections),
+    sections: CATALOG_SECTIONS,
+    sectionGroups: CATALOG_SECTION_GROUPS,
     checkpoint: createIdleCheckpoint(),
     statusNotices: [],
     rcReceiver: createInitialRcReceiverState(),
@@ -940,7 +952,7 @@ export function createSetupWorkspaceStore(
       }
     }
 
-    const sections = buildCatalogSections();
+    const sections = CATALOG_SECTIONS;
     if (uiState && activeFamily && activeFamily !== previousFamilyForRestore) {
       const storedSectionId = uiState.getSetupSection(activeFamily);
       if (storedSectionId && isSetupSectionId(storedSectionId) && sections.some((section) => section.id === storedSectionId)) {
@@ -989,7 +1001,7 @@ export function createSetupWorkspaceStore(
       }),
       selectedSectionId,
       sections,
-      sectionGroups: buildSectionGroups(sections),
+      sectionGroups: CATALOG_SECTION_GROUPS,
       checkpoint: checkpointState,
       statusNotices,
       rcReceiver,

@@ -4,6 +4,12 @@ import { Grip, Monitor, Plus, X } from "lucide-svelte";
 import type { ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import type { ArduPilotOsdModel, OsdItemModel, OsdScreenModel } from "../../../../lib/osd/ardupilot-osd-model";
 import { clampOsdCoordinate } from "../../../../lib/osd/ardupilot-osd-model";
+import {
+  captureOsdGrabOffset,
+  osdDropToGrid,
+  osdPointerToGrid,
+  type OsdGrabOffset,
+} from "../../../../lib/osd/osd-placement";
 import { Button, Checkbox, EmptyState, NativeSelect, NumberInput, StagedBadge } from "../../../../components/ui";
 import SetupSectionCard from "../../shared/SetupSectionCard.svelte";
 import SetupStatusPill from "../../shared/SetupStatusPill.svelte";
@@ -21,6 +27,16 @@ type Props = {
 const OSD_DRAG_ITEM_MIME = "application/x-ironwing-osd-item-key";
 const OSD_DRAG_SOURCE_MIME = "application/x-ironwing-osd-source";
 type OsdDragSource = "library" | "placed";
+type PointerDragSession = {
+  key: string;
+  pointerId: number;
+  grab: OsdGrabOffset;
+};
+type NativeGridDragSession = {
+  key: string;
+  screen: number;
+  grab: OsdGrabOffset;
+};
 
 let {
   model,
@@ -31,7 +47,8 @@ let {
   onStageParam,
 }: Props = $props();
 
-let activeDragKey = $state<string | null>(null);
+let pointerDrag = $state<PointerDragSession | null>(null);
+let nativeGridDrag = $state<NativeGridDragSession | null>(null);
 let draggedLibraryKey = $state<string | null>(null);
 
 let activeScreen = $derived.by(() => {
@@ -117,37 +134,41 @@ function placeItem(item: OsdItemModel, screen: OsdScreenModel, x?: number, y?: n
   stagePosition(item, screen, position.x, position.y);
 }
 
-function dragToPointer(event: PointerEvent, item: OsdItemModel, screen: OsdScreenModel) {
-  const target = event.currentTarget;
-  if (!(target instanceof HTMLElement)) {
-    return;
-  }
-
-  const grid = target.closest<HTMLElement>("[data-osd-grid]");
-  if (!grid) {
-    return;
-  }
-
-  const bounds = grid.getBoundingClientRect();
-  const x = ((event.clientX - bounds.left) / bounds.width) * screen.grid.columns;
-  const y = ((event.clientY - bounds.top) / bounds.height) * screen.grid.rows;
-  stagePosition(item, screen, x, y);
-}
-
 function dropPointToGrid(event: DragEvent, screen: OsdScreenModel): { x: number; y: number } | null {
-  const target = event.currentTarget;
-  if (!(target instanceof HTMLElement)) {
+  const grid = gridElementForTarget(event.currentTarget);
+  if (!grid) {
     return null;
   }
 
-  const bounds = target.getBoundingClientRect();
-  return {
-    x: ((event.clientX - bounds.left) / bounds.width) * screen.grid.columns,
-    y: ((event.clientY - bounds.top) / bounds.height) * screen.grid.rows,
-  };
+  return osdDropToGrid({
+    clientX: event.clientX,
+    clientY: event.clientY,
+    bounds: grid.getBoundingClientRect(),
+    grid: screen.grid,
+  });
+}
+
+function grabbedPointToGrid(
+  event: PointerEvent | DragEvent,
+  screen: OsdScreenModel,
+  grab: OsdGrabOffset,
+): { x: number; y: number } | null {
+  const grid = gridElementForTarget(event.currentTarget);
+  if (!grid) {
+    return null;
+  }
+
+  return osdPointerToGrid({
+    clientX: event.clientX,
+    clientY: event.clientY,
+    bounds: grid.getBoundingClientRect(),
+    grid: screen.grid,
+    grab,
+  });
 }
 
 function handleLibraryDragStart(event: DragEvent, item: OsdItemModel) {
+  clearNativeGridDrag();
   if (disabled || !canPlaceItem(item)) {
     event.preventDefault();
     return;
@@ -172,6 +193,8 @@ function handleGridDragOver(event: DragEvent) {
 }
 
 function handleGridDrop(event: DragEvent, screen: OsdScreenModel) {
+  const nativeDrag = nativeGridDrag;
+  clearNativeGridDrag();
   if (disabled) {
     return;
   }
@@ -179,7 +202,10 @@ function handleGridDrop(event: DragEvent, screen: OsdScreenModel) {
   event.preventDefault();
   const key = dragItemKey(event);
   const item = screen.items.find((candidate) => candidate.key === key);
-  const point = dropPointToGrid(event, screen);
+  const point =
+    nativeDrag?.key === key && nativeDrag.screen === screen.screen && dragSource(event) === "placed"
+      ? grabbedPointToGrid(event, screen, nativeDrag.grab)
+      : dropPointToGrid(event, screen);
   draggedLibraryKey = null;
   if (!item || !point) {
     return;
@@ -189,6 +215,7 @@ function handleGridDrop(event: DragEvent, screen: OsdScreenModel) {
 }
 
 function handleLibraryDrop(event: DragEvent, screen: OsdScreenModel) {
+  clearNativeGridDrag();
   if (disabled) {
     return;
   }
@@ -217,15 +244,45 @@ function handleItemPointerDown(event: PointerEvent, item: OsdItemModel, screen: 
     return;
   }
 
-  activeDragKey = item.key;
+  const grid = gridElementForTarget(target);
+  if (!grid) {
+    return;
+  }
+
+  const grab = captureOsdGrabOffset({
+    clientX: event.clientX,
+    clientY: event.clientY,
+    bounds: grid.getBoundingClientRect(),
+    grid: screen.grid,
+    item: { x: item.displayX, y: item.displayY },
+  });
+  if (!grab) {
+    return;
+  }
+
+  pointerDrag = { key: item.key, pointerId: event.pointerId, grab };
   target.setPointerCapture(event.pointerId);
-  dragToPointer(event, item, screen);
 }
 
-function handleGridChipDragStart(event: DragEvent, item: OsdItemModel) {
+function handleGridChipDragStart(event: DragEvent, item: OsdItemModel, screen: OsdScreenModel) {
+  clearNativeGridDrag();
   if (disabled || !canMoveItem(item)) {
     event.preventDefault();
     return;
+  }
+
+  const grid = gridElementForTarget(event.currentTarget);
+  const grab = grid
+    ? captureOsdGrabOffset({
+        clientX: event.clientX,
+        clientY: event.clientY,
+        bounds: grid.getBoundingClientRect(),
+        grid: screen.grid,
+        item: { x: item.displayX, y: item.displayY },
+      })
+    : null;
+  if (grab) {
+    nativeGridDrag = { key: item.key, screen: item.screen, grab };
   }
 
   setDragPayload(event, item, "placed");
@@ -235,6 +292,7 @@ function handleGridChipDragStart(event: DragEvent, item: OsdItemModel) {
 }
 
 function handleGridItemDragStart(event: DragEvent, item: OsdItemModel) {
+  clearNativeGridDrag();
   if (disabled || !isActionable(item, "enable")) {
     event.preventDefault();
     return;
@@ -247,19 +305,35 @@ function handleGridItemDragStart(event: DragEvent, item: OsdItemModel) {
 }
 
 function handleItemPointerMove(event: PointerEvent, item: OsdItemModel, screen: OsdScreenModel) {
-  if (activeDragKey !== item.key) {
+  const session = pointerDrag;
+  if (!session || session.key !== item.key || session.pointerId !== event.pointerId) {
     return;
   }
 
-  dragToPointer(event, item, screen);
+  const point = grabbedPointToGrid(event, screen, session.grab);
+  if (point) {
+    stagePosition(item, screen, point.x, point.y);
+  }
 }
 
 function handleItemPointerEnd(event: PointerEvent) {
+  if (!pointerDrag || pointerDrag.pointerId !== event.pointerId) {
+    return;
+  }
+
   const target = event.currentTarget;
   if (target instanceof HTMLElement && target.hasPointerCapture(event.pointerId)) {
     target.releasePointerCapture(event.pointerId);
   }
-  activeDragKey = null;
+  pointerDrag = null;
+}
+
+function clearNativeGridDrag() {
+  nativeGridDrag = null;
+}
+
+function gridElementForTarget(target: EventTarget | null): HTMLElement | null {
+  return target instanceof HTMLElement ? target.closest<HTMLElement>("[data-osd-grid]") : null;
 }
 
 function screenStatus(screen: OsdScreenModel): string {
@@ -494,7 +568,7 @@ function compactLabel(value: string): string {
                   "osd-grid-chip absolute min-h-7 justify-start overflow-hidden rounded-md border px-2 py-1 font-mono text-xs font-semibold shadow-sm transition",
                   !canMoveItem(item) ? "cursor-not-allowed border-border bg-bg-secondary text-text-muted" : "cursor-grab border-accent/50 bg-accent/15 text-text-primary active:cursor-grabbing",
                   (item.xOutOfRange || item.yOutOfRange) && "border-warning/70 bg-warning/15",
-                  activeDragKey === item.key && "ring-2 ring-accent",
+                  pointerDrag?.key === item.key && "ring-2 ring-accent",
                 ].filter(Boolean).join(" ")}
                 style={`--osd-chip-x: ${(item.displayX / activeScreen.grid.columns) * 100}; --osd-chip-y: ${(item.displayY / activeScreen.grid.rows) * 100}`}
                 testId={`${setupWorkspaceTestIds.osdGridItemPrefix}-${activeScreen.screen}-${item.key}`}
@@ -504,7 +578,8 @@ function compactLabel(value: string): string {
                 {...itemDataAttributes(item)}
                 data-grid-x={item.displayX}
                 data-grid-y={item.displayY}
-                ondragstart={(event) => handleGridChipDragStart(event, item)}
+                ondragstart={(event) => handleGridChipDragStart(event, item, activeScreen)}
+                ondragend={clearNativeGridDrag}
                 onpointerdown={(event) => handleItemPointerDown(event, item, activeScreen)}
                 onpointermove={(event) => handleItemPointerMove(event, item, activeScreen)}
                 onpointerup={handleItemPointerEnd}

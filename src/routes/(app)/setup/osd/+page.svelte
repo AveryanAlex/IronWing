@@ -62,14 +62,6 @@ function stageParam(name: string, value: number) {
 
   paramsStore.stageParameterEdit(item, value);
 }
-
-function discardParam(name: string) {
-  if (actionsBlocked) {
-    return;
-  }
-
-  paramsStore.discardStagedEdit(name);
-}
 </script>
 
 <SetupSectionShell
@@ -96,7 +88,6 @@ function discardParam(name: string) {
       {itemIndex}
       disabled={actionsBlocked}
       onStageParam={stageParam}
-      onDiscardParam={discardParam}
     />
 
     <OsdEditor

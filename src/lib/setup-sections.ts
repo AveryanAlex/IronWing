@@ -1,47 +1,26 @@
 import { pathFromSvelteKitRouteId } from "./sveltekit-route-path";
 
-export type SetupSectionId =
+export type SetupSectionKind = "overview" | "guided" | "recovery";
+export type SetupSectionIconKey =
   | "overview"
-  | "frame_orientation"
+  | "frame"
   | "calibration"
-  | "rc_receiver"
+  | "receiver"
   | "navigation"
-  | "battery_monitor"
-  | "motors_esc"
-  | "servo_outputs"
-  | "serial_ports"
+  | "battery"
+  | "motors"
+  | "servos"
+  | "serial"
   | "osd"
   | "flight_modes"
   | "failsafe"
-  | "rtl_return"
+  | "return"
   | "geofence"
   | "arming"
-  | "initial_params"
-  | "pid_tuning"
+  | "calculator"
+  | "tuning"
   | "peripherals"
-  | "full_parameters";
-
-export type SetupSectionKind = "overview" | "guided" | "recovery";
-export type SetupSectionPath =
-  | "/setup"
-  | "/setup/frame-orientation"
-  | "/setup/calibration"
-  | "/setup/rc-receiver"
-  | "/setup/navigation"
-  | "/setup/battery-monitor"
-  | "/setup/motors-esc"
-  | "/setup/servo-outputs"
-  | "/setup/serial-ports"
-  | "/setup/osd"
-  | "/setup/flight-modes"
-  | "/setup/failsafe"
-  | "/setup/rtl-return"
-  | "/setup/geofence"
-  | "/setup/arming"
-  | "/setup/initial-params"
-  | "/setup/pid-tuning"
-  | "/setup/peripherals"
-  | "/setup/full-parameters";
+  | "parameters";
 
 export type SetupSectionGroupId =
   | "workspace"
@@ -66,12 +45,12 @@ export type SetupSectionNavGroupDefinition = {
   order: number;
 };
 
-export type SetupSectionDefinition = {
-  id: SetupSectionId;
+type SetupSectionDescriptor = {
   title: string;
   description: string;
   kind: SetupSectionKind;
-  path: SetupSectionPath;
+  path: `/setup${string}`;
+  iconKey: SetupSectionIconKey;
   implemented: boolean;
   groupId: Exclude<SetupSectionGroupId, "other">;
   navGroupId: SetupSectionNavGroupId;
@@ -119,223 +98,229 @@ export const SETUP_SECTION_NAV_GROUPS: ReadonlyArray<SetupSectionNavGroupDefinit
   { id: "peripherals", title: "Peripherals", order: 4 },
 ];
 
-export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = [
-  {
-    id: "overview",
+export const SETUP_SECTIONS = {
+  overview: {
     title: "Overview",
     description: "Grouped setup dashboard with current vehicle readiness and next steps.",
     kind: "overview",
     path: "/setup",
+    iconKey: "overview",
     implemented: true,
     groupId: "workspace",
     navGroupId: "essential",
     navOrder: 0,
   },
-  {
-    id: "frame_orientation",
+  frame_orientation: {
     title: "Frame & Orientation",
     description: "Vehicle layout, VTOL settings, and board orientation.",
     kind: "guided",
     path: "/setup/frame-orientation",
+    iconKey: "frame",
     implemented: true,
     groupId: "hardware",
     navGroupId: "essential",
     navOrder: 1,
   },
-  {
-    id: "calibration",
+  calibration: {
     title: "Calibration",
     description: "Accelerometer, compass, radio, and sensor calibration actions.",
     kind: "guided",
     path: "/setup/calibration",
+    iconKey: "calibration",
     implemented: true,
     groupId: "hardware",
     navGroupId: "essential",
     navOrder: 2,
   },
-  {
-    id: "navigation",
+  navigation: {
     title: "Navigation",
     description: "Primary GNSS receiver, compass heading, altitude reference, and navigation guidance settings.",
     kind: "guided",
     path: "/setup/navigation",
+    iconKey: "navigation",
     implemented: true,
     groupId: "hardware",
     navGroupId: "hardware",
     navOrder: 0,
   },
-  {
-    id: "battery_monitor",
+  battery_monitor: {
     title: "Battery Monitor",
     description: "Battery monitor presets, live power telemetry, and manual calibration settings.",
     kind: "guided",
     path: "/setup/battery-monitor",
+    iconKey: "battery",
     implemented: true,
     groupId: "hardware",
     navGroupId: "hardware",
     navOrder: 1,
   },
-  {
-    id: "motors_esc",
+  motors_esc: {
     title: "Motors & ESC",
     description: "Motor layout, direction checks, and guarded test readiness.",
     kind: "guided",
     path: "/setup/motors-esc",
+    iconKey: "motors",
     implemented: true,
     groupId: "hardware",
     navGroupId: "hardware",
     navOrder: 2,
   },
-  {
-    id: "servo_outputs",
+  servo_outputs: {
     title: "Servo Outputs",
     description: "Function-aware output inspection, reversal staging, and live readback.",
     kind: "guided",
     path: "/setup/servo-outputs",
+    iconKey: "servos",
     implemented: true,
     groupId: "hardware",
     navGroupId: "hardware",
     navOrder: 3,
   },
-  {
-    id: "serial_ports",
+  serial_ports: {
     title: "Serial Ports",
     description: "Serial protocols, baud rates, and reboot-required port changes.",
     kind: "guided",
     path: "/setup/serial-ports",
+    iconKey: "serial",
     implemented: true,
     groupId: "hardware",
     navGroupId: "hardware",
     navOrder: 4,
   },
-  {
-    id: "osd",
+  osd: {
     title: "OSD",
     description: "Configure ArduPilot on-screen display items by screen and grid position.",
     kind: "guided",
     path: "/setup/osd",
+    iconKey: "osd",
     implemented: true,
     groupId: "hardware",
     navGroupId: "hardware",
     navOrder: 5,
   },
-  {
-    id: "rc_receiver",
+  rc_receiver: {
     title: "RC / Receiver",
     description: "Live channel mapping, preset order, and receiver motion checks.",
     kind: "guided",
     path: "/setup/rc-receiver",
+    iconKey: "receiver",
     implemented: true,
     groupId: "safety",
     navGroupId: "essential",
     navOrder: 3,
   },
-  {
-    id: "flight_modes",
+  flight_modes: {
     title: "Flight Modes",
     description: "Mode switch channel, six mode slots, and vehicle defaults.",
     kind: "guided",
     path: "/setup/flight-modes",
+    iconKey: "flight_modes",
     implemented: true,
     groupId: "safety",
     navGroupId: "essential",
     navOrder: 4,
   },
-  {
-    id: "failsafe",
+  failsafe: {
     title: "Failsafe",
     description: "Loss-of-link behavior and protective defaults for the active vehicle family.",
     kind: "guided",
     path: "/setup/failsafe",
+    iconKey: "failsafe",
     implemented: true,
     groupId: "safety",
     navGroupId: "safety",
     navOrder: 0,
   },
-  {
-    id: "rtl_return",
+  rtl_return: {
     title: "RTL / Return",
     description: "Return-home altitude, descent, landing, and final behavior.",
     kind: "guided",
     path: "/setup/rtl-return",
+    iconKey: "return",
     implemented: true,
     groupId: "safety",
     navGroupId: "safety",
     navOrder: 1,
   },
-  {
-    id: "geofence",
+  geofence: {
     title: "Geofence",
     description: "Fence type, boundary limits, and breach actions.",
     kind: "guided",
     path: "/setup/geofence",
+    iconKey: "geofence",
     implemented: true,
     groupId: "safety",
     navGroupId: "safety",
     navOrder: 2,
   },
-  {
-    id: "arming",
+  arming: {
     title: "Arming",
     description: "Pre-arm checks, current blockers, and arm/disarm controls.",
     kind: "guided",
     path: "/setup/arming",
+    iconKey: "arming",
     implemented: true,
     groupId: "safety",
     navGroupId: "safety",
     navOrder: 3,
   },
-  {
-    id: "initial_params",
+  initial_params: {
     title: "Initial Parameters",
     description: "Calculator-style startup batches and recommended baseline settings.",
     kind: "guided",
     path: "/setup/initial-params",
+    iconKey: "calculator",
     implemented: true,
     groupId: "tuning",
     navGroupId: "tuning",
     navOrder: 0,
   },
-  {
-    id: "pid_tuning",
+  pid_tuning: {
     title: "PID Tuning",
     description: "Rate controllers and vehicle-specific tuning groups.",
     kind: "guided",
     path: "/setup/pid-tuning",
+    iconKey: "tuning",
     implemented: true,
     groupId: "tuning",
     navGroupId: "tuning",
     navOrder: 1,
   },
-  {
-    id: "peripherals",
+  peripherals: {
     title: "Peripherals",
     description: "Optional hardware families and configured peripheral settings.",
     kind: "guided",
     path: "/setup/peripherals",
+    iconKey: "peripherals",
     implemented: true,
     groupId: "tuning",
     navGroupId: "peripherals",
     navOrder: 0,
   },
-  {
-    id: "full_parameters",
+  full_parameters: {
     title: "Full Parameters",
     description: "Search and edit the complete parameter catalog for the active vehicle.",
     kind: "recovery",
     path: "/setup/full-parameters",
+    iconKey: "parameters",
     implemented: true,
     groupId: "recovery",
     navGroupId: "peripherals",
     navOrder: 1,
   },
-];
+} as const satisfies Record<string, SetupSectionDescriptor>;
 
-export const SECTION_IDS: SetupSectionId[] = SETUP_SECTION_CATALOG.map((section) => section.id);
+export type SetupSectionId = keyof typeof SETUP_SECTIONS;
+export type SetupSectionPath = (typeof SETUP_SECTIONS)[SetupSectionId]["path"];
+export type SetupSectionDefinition = {
+  [Id in SetupSectionId]: { id: Id } & (typeof SETUP_SECTIONS)[Id];
+}[SetupSectionId];
 
-const SETUP_SECTION_PATHS = Object.fromEntries(
-  SETUP_SECTION_CATALOG.map((section) => [section.id, section.path]),
-) as Record<SetupSectionId, SetupSectionPath>;
+export const SETUP_SECTION_CATALOG: ReadonlyArray<SetupSectionDefinition> = Object.entries(SETUP_SECTIONS).map(
+  ([id, descriptor]) => ({ id, ...descriptor }),
+) as SetupSectionDefinition[];
+
+export const SECTION_IDS: SetupSectionId[] = Object.keys(SETUP_SECTIONS) as SetupSectionId[];
 
 const SETUP_SECTION_IDS_BY_PATH = new Map(
   SETUP_SECTION_CATALOG.map((section) => [section.path, section.id]),
@@ -360,7 +345,7 @@ export function setupSectionIdFromSlug(slug: string): SetupSectionId | null {
 }
 
 export function setupSectionPath(sectionId: SetupSectionId): SetupSectionPath {
-  return SETUP_SECTION_PATHS[sectionId];
+  return SETUP_SECTIONS[sectionId].path;
 }
 
 export function setupSectionForPath(pathname: string): SetupSectionId | null {
@@ -389,17 +374,7 @@ const FALLBACK_GROUP: SetupSectionGroupDefinition = {
 };
 
 export function getSetupSectionDefinition(id: SetupSectionId): SetupSectionDefinition {
-  return SECTION_DEFINITION_MAP.get(id) ?? {
-    id,
-    title: id,
-    description: "Setup section details are unavailable for this section.",
-    kind: id === "overview" ? "overview" : id === "full_parameters" ? "recovery" : "guided",
-    path: id === "overview" ? "/setup" : `/setup/${setupSectionSlug(id)}` as SetupSectionPath,
-    implemented: false,
-    groupId: id === "full_parameters" ? "recovery" : "hardware",
-    navGroupId: id === "full_parameters" ? "peripherals" : "hardware",
-    navOrder: Number.MAX_SAFE_INTEGER,
-  };
+  return SECTION_DEFINITION_MAP.get(id)!;
 }
 
 export function getSetupSectionGroupDefinition(groupId: SetupSectionGroupId): SetupSectionGroupDefinition {
@@ -407,11 +382,7 @@ export function getSetupSectionGroupDefinition(groupId: SetupSectionGroupId): Se
 }
 
 export function getSetupSectionNavGroupDefinition(groupId: SetupSectionNavGroupId): SetupSectionNavGroupDefinition {
-  return SECTION_NAV_GROUP_MAP.get(groupId) ?? {
-    id: groupId,
-    title: groupId,
-    order: Number.MAX_SAFE_INTEGER,
-  };
+  return SECTION_NAV_GROUP_MAP.get(groupId)!;
 }
 
 export type GroupedSetupSections<TSection> = {

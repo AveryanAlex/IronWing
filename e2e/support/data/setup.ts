@@ -1,24 +1,32 @@
-export const setupSections = [
-  { id: "overview", label: "Overview", testId: "setup-workspace-overview-section" },
-  { id: "frame_orientation", label: "Frame & Orientation", testId: "setup-workspace-frame-section" },
-  { id: "calibration", label: "Calibration", testId: "setup-workspace-calibration-section" },
-  { id: "rc_receiver", label: "RC / Receiver", testId: "setup-workspace-rc-section" },
-  { id: "navigation", label: "Navigation", testId: "setup-workspace-navigation-section" },
-  { id: "battery_monitor", label: "Battery Monitor", testId: "setup-workspace-battery-section" },
-  { id: "motors_esc", label: "Motors & ESC", testId: "setup-workspace-motors-esc-section" },
-  { id: "servo_outputs", label: "Servo Outputs", testId: "setup-workspace-servo-outputs-section" },
-  { id: "serial_ports", label: "Serial Ports", testId: "setup-workspace-serial-ports-section" },
-  { id: "osd", label: "OSD", testId: "setup-workspace-osd-section" },
-  { id: "flight_modes", label: "Flight Modes", testId: "setup-workspace-flight-modes-section" },
-  { id: "failsafe", label: "Failsafe", testId: "setup-workspace-failsafe-section" },
-  { id: "rtl_return", label: "RTL / Return", testId: "setup-workspace-rtl-return-section" },
-  { id: "geofence", label: "Geofence", testId: "setup-workspace-geofence-section" },
-  { id: "arming", label: "Arming", testId: "setup-workspace-arming-section" },
-  { id: "initial_params", label: "Initial Parameters", testId: "setup-workspace-initial-params-section" },
-  { id: "pid_tuning", label: "PID Tuning", testId: "setup-workspace-pid-tuning-section" },
-  { id: "peripherals", label: "Peripherals", testId: "setup-workspace-peripherals-section" },
-  { id: "full_parameters", label: "Full Parameters", testId: "setup-workspace-full-parameters" },
-] as const;
+import { SETUP_SECTION_CATALOG, type SetupSectionId } from "../../../src/lib/setup-sections";
+
+const setupSectionTestIds = {
+  overview: "setup-workspace-overview-section",
+  frame_orientation: "setup-workspace-frame-section",
+  calibration: "setup-workspace-calibration-section",
+  rc_receiver: "setup-workspace-rc-section",
+  navigation: "setup-workspace-navigation-section",
+  battery_monitor: "setup-workspace-battery-section",
+  motors_esc: "setup-workspace-motors-esc-section",
+  servo_outputs: "setup-workspace-servo-outputs-section",
+  serial_ports: "setup-workspace-serial-ports-section",
+  osd: "setup-workspace-osd-section",
+  flight_modes: "setup-workspace-flight-modes-section",
+  failsafe: "setup-workspace-failsafe-section",
+  rtl_return: "setup-workspace-rtl-return-section",
+  geofence: "setup-workspace-geofence-section",
+  arming: "setup-workspace-arming-section",
+  initial_params: "setup-workspace-initial-params-section",
+  pid_tuning: "setup-workspace-pid-tuning-section",
+  peripherals: "setup-workspace-peripherals-section",
+  full_parameters: "setup-workspace-full-parameters",
+} satisfies Record<SetupSectionId, string>;
+
+export const setupSections = SETUP_SECTION_CATALOG.map((section) => ({
+  id: section.id,
+  label: section.title,
+  testId: setupSectionTestIds[section.id],
+}));
 
 export type SetupSection = (typeof setupSections)[number];
 

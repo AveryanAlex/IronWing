@@ -21,7 +21,35 @@ import {
   SlidersVertical,
 } from "lucide-svelte";
 
-import type { SetupSectionId } from "../../../lib/setup-sections";
+import {
+  getSetupSectionDefinition,
+  type SetupSectionIconKey,
+  type SetupSectionId,
+} from "../../../lib/setup-sections";
+
+type IconComponent = typeof LayoutDashboard;
+
+const icons = {
+  overview: LayoutDashboard,
+  frame: Box,
+  calibration: Compass,
+  receiver: Radio,
+  navigation: Navigation,
+  battery: Battery,
+  motors: Cog,
+  servos: SlidersHorizontal,
+  serial: Cable,
+  osd: Monitor,
+  flight_modes: Plane,
+  failsafe: ShieldAlert,
+  return: Home,
+  geofence: Fence,
+  arming: Lock,
+  calculator: Calculator,
+  tuning: Activity,
+  peripherals: Puzzle,
+  parameters: SlidersVertical,
+} satisfies Record<SetupSectionIconKey, IconComponent>;
 
 type Props = {
   sectionId: SetupSectionId;
@@ -29,44 +57,7 @@ type Props = {
 };
 
 let { sectionId, size = 14 }: Props = $props();
+let Icon = $derived(icons[getSetupSectionDefinition(sectionId).iconKey]);
 </script>
 
-{#if sectionId === "overview"}
-  <LayoutDashboard {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "frame_orientation"}
-  <Box {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "calibration"}
-  <Compass {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "rc_receiver"}
-  <Radio {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "navigation"}
-  <Navigation {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "battery_monitor"}
-  <Battery {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "motors_esc"}
-  <Cog {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "servo_outputs"}
-  <SlidersHorizontal {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "serial_ports"}
-  <Cable {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "osd"}
-  <Monitor {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "flight_modes"}
-  <Plane {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "failsafe"}
-  <ShieldAlert {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "rtl_return"}
-  <Home {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "geofence"}
-  <Fence {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "arming"}
-  <Lock {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "initial_params"}
-  <Calculator {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "pid_tuning"}
-  <Activity {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "peripherals"}
-  <Puzzle {size} class="shrink-0" aria-hidden="true" />
-{:else if sectionId === "full_parameters"}
-  <SlidersVertical {size} class="shrink-0" aria-hidden="true" />
-{/if}
+<Icon {size} class="shrink-0" aria-hidden="true" />

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   SECTION_IDS,
   SETUP_SECTION_CATALOG,
+  getSetupSectionDefinition,
   groupSetupSectionNavigation,
   setupSectionForPath,
   setupSectionForRouteId,
@@ -10,6 +11,7 @@ import {
   setupSectionPath,
   setupSectionSlug,
 } from "./setup-sections";
+import { setupSections } from "../../e2e/support/data/setup";
 
 describe("setup section routes", () => {
   it("maps every setup section to a stable URL", () => {
@@ -62,6 +64,30 @@ describe("setup section routes", () => {
 });
 
 describe("setup section navigation", () => {
+  it("keeps setup paths and navigation slots unique", () => {
+    expect(new Set(SETUP_SECTION_CATALOG.map((section) => section.path)).size)
+      .toBe(SETUP_SECTION_CATALOG.length);
+    expect(new Set(SETUP_SECTION_CATALOG.map((section) => `${section.navGroupId}:${section.navOrder}`)).size)
+      .toBe(SETUP_SECTION_CATALOG.length);
+  });
+
+  it("provides icon metadata for every setup section", () => {
+    expect(SETUP_SECTION_CATALOG.every((section) => section.iconKey.length > 0)).toBe(true);
+  });
+
+  it("returns the catalog descriptor for every valid setup section ID", () => {
+    for (const section of SETUP_SECTION_CATALOG) {
+      expect(getSetupSectionDefinition(section.id)).toBe(section);
+    }
+  });
+
+  it("keeps the E2E section adapter exhaustive and unique", () => {
+    const e2eIds = setupSections.map((section) => section.id);
+
+    expect(new Set(e2eIds).size).toBe(SETUP_SECTION_CATALOG.length);
+    expect([...e2eIds].sort()).toEqual([...SECTION_IDS].sort());
+  });
+
   it("keeps every implemented catalog section in derived navigation exactly once", () => {
     const navGroups = groupSetupSectionNavigation(SETUP_SECTION_CATALOG.filter((section) => section.implemented));
     const implementedIds = SETUP_SECTION_CATALOG.filter((section) => section.implemented).map((section) => section.id);

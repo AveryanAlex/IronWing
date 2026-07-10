@@ -1,24 +1,16 @@
 <script lang="ts">
 import { Cable, CheckCircle2, Monitor, RadioTower, Tv } from "lucide-svelte";
 
-import { NativeSelect, StagedBadge } from "../../../../components/ui";
+import { Button, NativeSelect, StagedBadge } from "../../../../components/ui";
 import type { ParamStore } from "../../../../params";
 import type { ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import type { ArduPilotOsdModel } from "../../../../lib/osd/ardupilot-osd-model";
 import {
-  OSD_TYPE_DISPLAYPORT,
-  OSD_TYPE_MSP,
   OSD_VIDEO_SYSTEM_PROFILE_LIST,
   OSD_VIDEO_SYSTEM_PROFILES,
-  SERIAL_BAUD_115200,
-  SERIAL_PROTOCOL_DJI_FPV,
-  SERIAL_PROTOCOL_DISPLAYPORT,
-  SERIAL_PROTOCOL_NONE,
-  buildMspPortStagePlan,
-  buildOsdProfileStagePlan,
-  effectiveParamValue,
+  buildOsdConfigurationPlan,
+  detectOsdConfiguration,
   isMspOsdProtocol,
-  type MspPortStageTarget,
   type OsdSetupStageTarget,
   type OsdVideoSystemId,
 } from "../../../../lib/osd/ardupilot-osd-setup";
@@ -44,7 +36,6 @@ type Props = {
   itemIndex: Map<string, ParameterItemModel>;
   disabled?: boolean;
   onStageParam: (name: string, value: number) => void;
-  onDiscardParam: (name: string) => void;
 };
 
 let {
@@ -56,46 +47,54 @@ let {
   itemIndex,
   disabled = false,
   onStageParam,
-  onDiscardParam,
 }: Props = $props();
 
-let selectedProfileOverride = $state<OsdVideoSystemId | null>(null);
+let selectedProfileId = $state<OsdVideoSystemId | null>(null);
 let selectedPortByProfile = $state<Partial<Record<OsdVideoSystemId, string>>>({});
-let resolutionDraftByScreen = $state<Record<number, string>>({});
-let autoStagedProfileNames = $state<string[]>([]);
-let autoStagedSerialNames = $state<string[]>([]);
 
-let currentOsdType = $derived(effectiveParamValue({ paramStore, stagedEdits }, "OSD_TYPE"));
-let detectedProfileId = $derived(detectProfileId());
-let selectedProfileId = $derived(selectedProfileOverride ?? detectedProfileId);
-let profile = $derived(OSD_VIDEO_SYSTEM_PROFILES[selectedProfileId]);
+let detected = $derived(detectOsdConfiguration({ paramStore, stagedEdits }));
+let draftProfileId = $derived(selectedProfileId ?? (
+  detected.state === "analog" || detected.state === "dji" || detected.state === "walksnail"
+    ? detected.state
+    : null
+));
+let profile = $derived(draftProfileId ? OSD_VIDEO_SYSTEM_PROFILES[draftProfileId] : null);
 let profileOptions = $derived(
   OSD_VIDEO_SYSTEM_PROFILE_LIST.map((entry) => ({
     value: entry.id,
     label: entry.label,
   })),
 );
-let profileTargets = $derived(
-  buildOsdProfileStagePlan({
-    profileId: selectedProfileId,
-    paramStore,
-    stagedEdits,
-  }),
+let profilePlaceholder = $derived(
+  detected.state === "disabled"
+    ? "OSD disabled — select a video system"
+    : detected.state === "unknown"
+      ? "OSD profile unavailable — select a video system"
+      : "Select a video system",
+);
+let noProfileMessage = $derived(
+  detected.state === "disabled"
+    ? "OSD is disabled on the vehicle. Select a video system to prepare a setup transaction."
+    : "The vehicle does not expose a recognized OSD backend. Select a video system to prepare a setup transaction.",
 );
 let currentProfilePorts = $derived.by(() => {
-  if (profile.serialProtocol === null) {
+  if (profile?.serialProtocol === null || profile === null) {
     return [];
   }
 
   return serialModel.ports.filter((row) => row.protocolValue === profile.serialProtocol);
 });
 let selectedPortPrefix = $derived.by(() => {
-  const manual = selectedPortByProfile[selectedProfileId];
-  if (manual !== undefined) {
-    return manual;
+  if (!draftProfileId || profile?.serialProtocol === null) {
+    return null;
   }
 
-  return currentProfilePorts[0]?.prefix ?? "";
+  const manual = selectedPortByProfile[draftProfileId];
+  if (manual !== undefined) {
+    return manual || null;
+  }
+
+  return currentProfilePorts[0]?.prefix ?? null;
 });
 let portOptions = $derived(
   serialModel.ports.map((row) => ({
@@ -105,21 +104,34 @@ let portOptions = $derived(
     disabled: !row.hasProtocolParam,
   })),
 );
-let portTargets = $derived.by((): MspPortStageTarget[] => {
-  if (profile.serialProtocol === null) {
-    return [];
-  }
-
-  return buildMspPortStagePlan({
-    ports: serialPortsForStaging(),
-    selectedPortPrefix,
-    protocol: profile.serialProtocol,
-    protocolLabel: profile.serialProtocolLabel ?? `Protocol ${profile.serialProtocol}`,
-  });
-});
-let combinedTargets = $derived([...profileTargets, ...portTargets]);
-let actionableChangeCount = $derived(combinedTargets.filter((target) => target.willChange && canStageTarget(target)).length);
-let digitalProfileNeedsPort = $derived(profile.serialProtocol !== null && selectedPortPrefix.length === 0);
+let configurationPlan = $derived.by(() => draftProfileId
+  ? buildOsdConfigurationPlan({
+      profileId: draftProfileId,
+      selectedPortPrefix,
+      ports: serialModel.ports,
+      paramStore,
+      stagedEdits,
+    })
+  : null,
+);
+let planTargets = $derived(configurationPlan?.targets ?? []);
+let proposedTargets = $derived(planTargets.filter((target) => target.willChange));
+let targetActionabilityIssues = $derived(
+  proposedTargets.flatMap((target) => [targetActionabilityIssue(target)]).filter((issue): issue is string => issue !== null),
+);
+let configurationIssues = $derived([
+  ...(configurationPlan?.issues ?? []),
+  ...targetActionabilityIssues,
+]);
+let canStageConfiguration = $derived(
+  !disabled
+  && configurationPlan?.canStage === true
+  && proposedTargets.length > 0
+  && targetActionabilityIssues.length === 0,
+);
+let proposedTargetCount = $derived(proposedTargets.length);
+let stagedTargetCount = $derived(planTargets.filter((target) => isTargetAlreadyStaged(target)).length);
+let alreadyStagedTargetNames = $derived(new Set(planTargets.filter((target) => isTargetAlreadyStaged(target)).map((target) => target.name)));
 let selectedScreenModel = $derived.by(() => {
   if (osdModel.screens.length === 0) {
     return null;
@@ -132,150 +144,35 @@ let resolutionOptions = $derived([
   { value: "1", label: "HD 50 x 18" },
   { value: "3", label: "HD 60 x 22" },
 ]);
-let resolutionSelectValue = $derived.by(() => {
-  if (!selectedScreenModel) {
-    return "1";
-  }
-
-  return resolutionDraftByScreen[selectedScreenModel.screen] ?? String(selectedScreenModel.txtResValue ?? 1);
-});
-let visibleSerialStageNames = $derived(new Set([...autoStagedSerialNames, ...portTargets.map((target) => target.name)]));
-let stagedSerialRows = $derived(serialModel.ports.flatMap((row) => stagedSerialChanges(row, visibleSerialStageNames)));
+let resolutionSelectValue = $derived(String(selectedScreenModel?.txtResValue ?? 1));
+let stagedSerialRows = $derived(
+  serialModel.ports.flatMap((row) => stagedSerialChanges(row, alreadyStagedTargetNames)),
+);
 let mspOsdPorts = $derived(serialModel.ports.filter((row) => isMspOsdProtocol(row.protocolValue)));
 
 function handleProfileChange(value: string) {
-  if (isProfileId(value)) {
-    selectedProfileOverride = value;
-    stageProfileSelection(value);
-
-    const nextProfile = OSD_VIDEO_SYSTEM_PROFILES[value];
-    if (nextProfile.serialProtocol === null) {
-      discardStagedNames(autoStagedSerialNames);
-      autoStagedSerialNames = [];
-      return;
-    }
-
-    const nextPort = selectedPortByProfile[value] ?? firstPortForProtocol(nextProfile.serialProtocol);
-    if (nextPort) {
-      stagePortSelection(nextPort, value);
-    }
-  }
-}
-
-function detectProfileId(): OsdVideoSystemId {
-  if (currentOsdType === OSD_TYPE_DISPLAYPORT) {
-    return "walksnail";
-  }
-
-  if (currentOsdType === OSD_TYPE_MSP) {
-    return "dji";
-  }
-
-  if (currentOsdType !== null) {
-    return "analog";
-  }
-
-  if (serialModel.ports.some((row) => row.protocolValue === SERIAL_PROTOCOL_DISPLAYPORT)) {
-    return "walksnail";
-  }
-
-  if (serialModel.ports.some((row) => row.protocolValue === SERIAL_PROTOCOL_DJI_FPV)) {
-    return "dji";
-  }
-
-  return "analog";
+  selectedProfileId = isProfileId(value) ? value : null;
 }
 
 function handlePortChange(value: string) {
+  if (!draftProfileId) {
+    return;
+  }
+
   selectedPortByProfile = {
     ...selectedPortByProfile,
-    [selectedProfileId]: value,
+    [draftProfileId]: value,
   };
-  stagePortSelection(value, selectedProfileId);
 }
 
-function stageProfileSelection(profileId: OsdVideoSystemId) {
-  if (disabled) {
+function stageConfiguration() {
+  if (!configurationPlan || !canStageConfiguration) {
     return;
   }
 
-  const targets = buildOsdProfileStagePlan({
-    profileId,
-    paramStore,
-    stagedEdits,
-  });
-  const targetNames = new Set(targets.map((target) => target.name));
-  discardStagedNames(autoStagedProfileNames.filter((name) => !targetNames.has(name)));
-  stageTargets(targets);
-  autoStagedProfileNames = targets.map((target) => target.name);
-}
-
-function stagePortSelection(prefix: string, profileId: OsdVideoSystemId) {
-  const selectedProfile = OSD_VIDEO_SYSTEM_PROFILES[profileId];
-  if (disabled || selectedProfile.serialProtocol === null || prefix.length === 0) {
-    return;
+  for (const target of proposedTargets) {
+    onStageParam(target.name, target.value);
   }
-
-  const targets = buildMspPortStagePlan({
-    ports: serialPortsForStaging(),
-    selectedPortPrefix: prefix,
-    protocol: selectedProfile.serialProtocol,
-    protocolLabel: selectedProfile.serialProtocolLabel ?? `Protocol ${selectedProfile.serialProtocol}`,
-  });
-  const targetNames = new Set(targets.map((target) => target.name));
-  discardStagedNames(uniqueNames([
-    ...autoStagedSerialNames.filter((name) => !targetNames.has(name)),
-    ...staleSerialStageNames(targetNames, selectedProfile.serialProtocol),
-  ]));
-  stageTargets(targets);
-  autoStagedSerialNames = targets.map((target) => target.name);
-}
-
-function stageTargets(targets: OsdSetupStageTarget[]) {
-  for (const target of targets) {
-    stageTarget(target);
-  }
-}
-
-function stageTarget(target: OsdSetupStageTarget) {
-  if (!canStageTarget(target)) {
-    return;
-  }
-
-  onStageParam(target.name, target.value);
-}
-
-function discardStagedNames(names: string[]) {
-  for (const name of names) {
-    if (stagedEdits[name]) {
-      onDiscardParam(name);
-    }
-  }
-}
-
-function staleSerialStageNames(targetNames: Set<string>, protocol: number): string[] {
-  return serialModel.ports.flatMap((row) => {
-    const names: string[] = [];
-    const protocolEdit = stagedEdits[row.protocolParamName];
-    if (
-      protocolEdit
-      && !targetNames.has(row.protocolParamName)
-      && (protocolEdit.nextValue === protocol || protocolEdit.nextValue === SERIAL_PROTOCOL_NONE)
-    ) {
-      names.push(row.protocolParamName);
-    }
-
-    const baudEdit = stagedEdits[row.baudParamName];
-    if (baudEdit && !targetNames.has(row.baudParamName) && baudEdit.nextValue === SERIAL_BAUD_115200) {
-      names.push(row.baudParamName);
-    }
-
-    return names;
-  });
-}
-
-function uniqueNames(names: string[]): string[] {
-  return [...new Set(names)];
 }
 
 function stageResolution(value: string) {
@@ -285,39 +182,31 @@ function stageResolution(value: string) {
     return;
   }
 
-  resolutionDraftByScreen = {
-    ...resolutionDraftByScreen,
-    [screen.screen]: value,
-  };
-  stageTarget({
-    name: screen.txtResParamName,
-    value: parsed,
-    currentValue: screen.txtResValue,
-    label: `${screen.label} text resolution`,
-    detail: "Set the DisplayPort character grid for this OSD screen.",
-    willChange: screen.txtResValue !== parsed,
-  });
+  if (!canStageTarget({ name: screen.txtResParamName })) {
+    return;
+  }
+
+  onStageParam(screen.txtResParamName, parsed);
 }
 
 function canStageTarget(target: Pick<OsdSetupStageTarget, "name">): boolean {
-  return !disabled && itemIndex.get(target.name)?.readOnly !== true && itemIndex.has(target.name);
+  return !disabled && targetActionabilityIssue(target) === null;
 }
 
-function serialPortsForStaging(): SerialPortRow[] {
-  return serialModel.ports.map((row) => ({
-    ...row,
-    protocolValue: actualParamValue(row.protocolParamName) ?? row.protocolValue,
-    baudValue: actualParamValue(row.baudParamName) ?? row.baudValue,
-  }));
+function targetActionabilityIssue(target: Pick<OsdSetupStageTarget, "name">): string | null {
+  const item = itemIndex.get(target.name);
+  if (!item) {
+    return `${target.name} is unavailable in the loaded parameter metadata.`;
+  }
+  if (item.readOnly) {
+    return `${target.name} is read-only and cannot be staged here.`;
+  }
+
+  return null;
 }
 
-function actualParamValue(name: string): number | null {
-  const value = paramStore?.params[name]?.value;
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function firstPortForProtocol(protocol: number): string {
-  return serialModel.ports.find((row) => row.protocolValue === protocol)?.prefix ?? "";
+function isTargetAlreadyStaged(target: OsdSetupStageTarget): boolean {
+  return stagedEdits[target.name]?.nextValue === target.value;
 }
 
 function isProfileId(value: string): value is OsdVideoSystemId {
@@ -356,23 +245,34 @@ function stagedSerialChanges(row: SerialPortRow, visibleNames: Set<string>): Sta
 }
 
 function mspStatusText(): string {
+  if (!profile) {
+    return "Select a video system to review the OSD setup transaction.";
+  }
   if (profile.serialProtocol === null) {
     return "Analog onboard OSD uses the flight controller video overlay chip and does not need a SERIAL/MSP port.";
   }
-
   if (serialModel.ports.length === 0) {
     return "No SERIALn_* ports are loaded yet. Download parameters before assigning the video UART.";
   }
-
   if (currentProfilePorts.length === 0) {
-    return `No ${profile.serialProtocolLabel} UART is configured yet. Pick the UART wired to the video system to stage protocol and baud changes.`;
+    return `No ${profile.serialProtocolLabel} UART is configured yet. Pick the UART wired to the video system before staging protocol and baud changes.`;
   }
 
-  return `${profile.serialProtocolLabel} is currently assigned to ${currentProfilePorts.map((row) => row.prefix).join(", ")}. Selecting another UART stages the old assignment to None and enables the new port.`;
+  return `${profile.serialProtocolLabel} is currently assigned to ${currentProfilePorts.map((row) => row.prefix).join(", ")}. Choose another UART to include reassignment in the proposed transaction.`;
 }
 
 function backendStatusText(): string {
-  return currentOsdType === null ? "OSD_TYPE unavailable" : `OSD_TYPE=${currentOsdType}`;
+  if (detected.osdType === null) {
+    return "OSD_TYPE unavailable";
+  }
+  if (detected.state === "disabled") {
+    return "OSD disabled (OSD_TYPE=0)";
+  }
+  if (detected.state === "unknown") {
+    return `Unknown OSD_TYPE=${detected.osdType}`;
+  }
+
+  return `OSD_TYPE=${detected.osdType}`;
 }
 
 function targetValueText(target: OsdSetupStageTarget): string {
@@ -388,7 +288,9 @@ function targetValueText(target: OsdSetupStageTarget): string {
   testId={setupWorkspaceTestIds.osdSetup}
 >
   {#snippet status()}
-    {#if profile.serialProtocol === null}
+    {#if !profile}
+      <SetupStatusPill tone="muted">No profile</SetupStatusPill>
+    {:else if profile.serialProtocol === null}
       <SetupStatusPill tone="success">No UART</SetupStatusPill>
     {:else if currentProfilePorts.length > 0}
       <SetupStatusPill tone="success">UART ready</SetupStatusPill>
@@ -402,8 +304,9 @@ function targetValueText(target: OsdSetupStageTarget): string {
       <label class="grid gap-1 text-xs font-medium uppercase tracking-wide text-text-muted">
         Video system
         <NativeSelect
-          value={selectedProfileId}
+          value={draftProfileId ?? ""}
           options={profileOptions}
+          placeholder={profilePlaceholder}
           disabled={disabled}
           testId={setupWorkspaceTestIds.osdSetupProfileSelect}
           onchange={(event) => handleProfileChange(event.currentTarget.value)}
@@ -413,24 +316,28 @@ function targetValueText(target: OsdSetupStageTarget): string {
       <div class="rounded-lg border border-border bg-bg-secondary p-3">
         <div class="flex flex-wrap items-center gap-2">
           <Tv size={16} class="text-accent" aria-hidden="true" />
-          <h3 class="text-sm font-semibold text-text-primary">{profile.label}</h3>
+          <h3 class="text-sm font-semibold text-text-primary">{profile?.label ?? "No OSD profile selected"}</h3>
           <SetupStatusPill tone="muted">{backendStatusText()}</SetupStatusPill>
         </div>
-        <p class="mt-2 text-sm leading-6 text-text-secondary">{profile.summary}</p>
-        <div class="mt-3 flex flex-wrap gap-2">
-          {#each profile.keyParams as param (param)}
-            <span class="rounded-full border border-border bg-bg-primary px-2 py-1 font-mono text-[10px] text-text-muted">{param}</span>
-          {/each}
-        </div>
+        {#if profile}
+          <p class="mt-2 text-sm leading-6 text-text-secondary">{profile.summary}</p>
+          <div class="mt-3 flex flex-wrap gap-2">
+            {#each profile.keyParams as param (param)}
+              <span class="rounded-full border border-border bg-bg-primary px-2 py-1 font-mono text-[10px] text-text-muted">{param}</span>
+            {/each}
+          </div>
+        {:else}
+          <p class="mt-2 text-sm leading-6 text-text-secondary">{noProfileMessage}</p>
+        {/if}
       </div>
 
-      {#if profile.serialProtocol !== null}
+      {#if profile && profile.serialProtocol !== null}
         <div class="rounded-lg border border-border bg-bg-primary p-3">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <label class="grid min-w-0 flex-1 gap-1 text-xs font-medium uppercase tracking-wide text-text-muted">
               UART wired to video system
               <NativeSelect
-                value={selectedPortPrefix}
+                value={selectedPortPrefix ?? ""}
                 options={portOptions}
                 placeholder={`No ${profile.shortLabel} MSP port selected`}
                 disabled={disabled || serialModel.ports.length === 0}
@@ -444,7 +351,7 @@ function targetValueText(target: OsdSetupStageTarget): string {
 
           {#if stagedSerialRows.length > 0}
             <div class="mt-3 rounded-md border border-warning/30 bg-warning/10 p-2">
-              <p class="text-[10px] font-semibold uppercase tracking-wide text-warning">Staged serial changes</p>
+              <p class="text-[10px] font-semibold uppercase tracking-wide text-warning">Already staged serial changes</p>
               <div class="mt-2 flex flex-col gap-1.5">
                 {#each stagedSerialRows as row (row.key)}
                   <div class="flex flex-wrap items-center gap-2 text-xs text-text-secondary" data-testid={`${setupWorkspaceTestIds.osdSetupSerialStagedPrefix}-${row.name}`}>
@@ -457,12 +364,16 @@ function targetValueText(target: OsdSetupStageTarget): string {
             </div>
           {/if}
         </div>
-      {:else}
+      {:else if profile}
         <div class="rounded-lg border border-success/30 bg-success/10 p-3 text-sm leading-6 text-text-secondary">
           <div class="flex items-start gap-2">
             <CheckCircle2 class="mt-0.5 shrink-0 text-success" size={16} aria-hidden="true" />
             <p>Analog OSD is configured through OSD parameters and the layout editor. There is no MSP UART to assign for this video path.</p>
           </div>
+        </div>
+      {:else}
+        <div class="rounded-lg border border-dashed border-border bg-bg-primary p-3 text-sm leading-6 text-text-muted">
+          Select a profile before assigning a UART or reviewing the parameters that will change.
         </div>
       {/if}
     </div>
@@ -473,23 +384,27 @@ function targetValueText(target: OsdSetupStageTarget): string {
           <RadioTower size={16} class="text-accent" aria-hidden="true" />
           <h3 class="text-sm font-semibold text-text-primary">Operator checklist</h3>
         </div>
-        <ul class="mt-3 grid gap-2 text-xs leading-5 text-text-secondary">
-          {#each profile.operatorNotes as note (note)}
-            <li class="flex gap-2">
-              <span class="mt-2 size-1.5 shrink-0 rounded-full bg-accent"></span>
-              <span>{note}</span>
-            </li>
-          {/each}
-          {#if mspOsdPorts.length > 0 && profile.serialProtocol !== null}
-            <li class="flex gap-2">
-              <span class="mt-2 size-1.5 shrink-0 rounded-full bg-text-muted"></span>
-              <span>Detected MSP/OSD protocols on {mspOsdPorts.map((row) => row.prefix).join(", ")}.</span>
-            </li>
-          {/if}
-        </ul>
+        {#if profile}
+          <ul class="mt-3 grid gap-2 text-xs leading-5 text-text-secondary">
+            {#each profile.operatorNotes as note (note)}
+              <li class="flex gap-2">
+                <span class="mt-2 size-1.5 shrink-0 rounded-full bg-accent"></span>
+                <span>{note}</span>
+              </li>
+            {/each}
+            {#if mspOsdPorts.length > 0 && profile.serialProtocol !== null}
+              <li class="flex gap-2">
+                <span class="mt-2 size-1.5 shrink-0 rounded-full bg-text-muted"></span>
+                <span>Detected MSP/OSD protocols on {mspOsdPorts.map((row) => row.prefix).join(", ")}.</span>
+              </li>
+            {/if}
+          </ul>
+        {:else}
+          <p class="mt-3 text-xs leading-5 text-text-muted">Pick Analog, DJI, or Walksnail to see wiring and display guidance.</p>
+        {/if}
       </div>
 
-      {#if selectedProfileId === "walksnail"}
+      {#if draftProfileId === "walksnail"}
         <div class="rounded-lg border border-border bg-bg-primary p-3">
           <label class="grid gap-1 text-xs font-medium uppercase tracking-wide text-text-muted">
             DisplayPort grid for active screen
@@ -516,29 +431,51 @@ function targetValueText(target: OsdSetupStageTarget): string {
 
       <div class="rounded-lg border border-border bg-bg-secondary p-3">
         <div class="flex flex-wrap items-center justify-between gap-2">
-          <h3 class="text-sm font-semibold text-text-primary">Auto-staged setup</h3>
-          <SetupStatusPill tone={actionableChangeCount > 0 ? "accent" : "muted"}>
-            {actionableChangeCount} pending
+          <h3 class="text-sm font-semibold text-text-primary">OSD setup transaction</h3>
+          <SetupStatusPill tone={proposedTargetCount > 0 ? "accent" : "muted"}>
+            {proposedTargetCount} will change
           </SetupStatusPill>
         </div>
         <p class="mt-2 text-xs leading-5 text-text-muted">
-          Changing the video system, UART, or DisplayPort grid stages the matching parameters immediately for the global review tray.
+          Review the complete backend and UART transaction, then stage it in one explicit action. DisplayPort grid resolution is staged only from its own selector above.
         </p>
 
-        {#if combinedTargets.length === 0}
+        <div class="mt-3 flex flex-wrap gap-2 text-xs text-text-secondary">
+          <span class="rounded-full border border-border bg-bg-primary px-2 py-1">{proposedTargetCount} will change</span>
+          <span class="rounded-full border border-border bg-bg-primary px-2 py-1">{stagedTargetCount} already staged</span>
+        </div>
+
+        {#if !configurationPlan}
           <p class="mt-3 rounded-md border border-dashed border-border px-3 py-4 text-sm text-text-muted">
-            Required setup parameters are not loaded yet. Download parameters or use Full Parameters if this firmware exposes the values elsewhere.
+            Select a video system to build an OSD setup transaction.
           </p>
         {:else}
+          {#if configurationIssues.length > 0}
+            <div class="mt-3 rounded-md border border-warning/30 bg-warning/10 p-3">
+              <p class="text-xs font-semibold text-warning">OSD setup cannot be staged yet</p>
+              <ul class="mt-2 grid gap-1 text-xs leading-5 text-text-secondary">
+                {#each configurationIssues as issue (issue)}
+                  <li>{issue}</li>
+                {/each}
+              </ul>
+            </div>
+          {/if}
+
+          {#if planTargets.length === 0 && configurationIssues.length === 0}
+            <p class="mt-3 rounded-md border border-dashed border-border px-3 py-4 text-sm text-text-muted">
+              This OSD profile does not expose any configurable backend parameters on this vehicle.
+            </p>
+          {/if}
+
           <div class="mt-3 grid gap-2">
-            {#each combinedTargets as target (`${target.name}-${target.value}`)}
+            {#each planTargets as target (`${target.name}-${target.value}`)}
               <div class="rounded-md border border-border bg-bg-primary p-2 text-xs" data-testid={`${setupWorkspaceTestIds.osdSetupTargetPrefix}-${target.name}`}>
                 <div class="flex flex-wrap items-start justify-between gap-2">
                   <div class="min-w-0">
                     <p class="font-medium text-text-primary">{target.label}</p>
                     <p class="mt-1 leading-5 text-text-muted">{target.detail}</p>
                   </div>
-                  {#if stagedEdits[target.name]}
+                  {#if isTargetAlreadyStaged(target)}
                     <StagedBadge name={target.name} testId={`${setupWorkspaceTestIds.osdSetupStagedPrefix}-${target.name}`} />
                   {:else if !target.willChange}
                     <span class="rounded-full bg-success/10 px-2 py-0.5 text-[10px] font-semibold text-success">set</span>
@@ -547,8 +484,8 @@ function targetValueText(target: OsdSetupStageTarget): string {
                 <div class="mt-2 flex flex-wrap items-center gap-2 font-mono text-[10px] text-text-muted">
                   <span>{target.name}</span>
                   <span>{targetValueText(target)}</span>
-                  {#if !canStageTarget(target)}
-                    <span class="font-sans text-warning">read-only or unavailable</span>
+                  {#if targetActionabilityIssue(target)}
+                    <span class="font-sans text-warning">{targetActionabilityIssue(target)}</span>
                   {/if}
                 </div>
               </div>
@@ -556,9 +493,9 @@ function targetValueText(target: OsdSetupStageTarget): string {
           </div>
         {/if}
 
-        {#if digitalProfileNeedsPort}
-          <p class="mt-3 text-xs leading-5 text-warning">Select the UART wired to the video system before staging this digital OSD setup.</p>
-        {/if}
+        <Button class="mt-3 w-full" disabled={!canStageConfiguration} onclick={stageConfiguration}>
+          Stage OSD setup
+        </Button>
       </div>
     </div>
   </div>
