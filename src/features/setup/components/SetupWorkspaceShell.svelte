@@ -205,9 +205,9 @@ function clearCheckpoint() {
 {/snippet}
 
 {#snippet selectedSectionDetail()}
-  <div class="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 md:p-5" data-testid={setupWorkspaceTestIds.detail}>
+  <div class="min-h-0 min-w-0 flex-1 overflow-y-auto" data-testid={setupWorkspaceTestIds.detail}>
     {#if useSectionDrawer}
-      <div class="mb-3 flex items-center gap-3">
+      <div class="sticky top-0 z-20 flex items-center gap-3 border-b border-border bg-bg-primary/95 px-4 py-3 backdrop-blur md:px-5">
         <IconButton
           aria-controls={sectionDrawerId}
           aria-expanded={sectionDrawerOpen}
@@ -232,7 +232,9 @@ function clearCheckpoint() {
       </div>
     {/if}
 
-    {@render children?.()}
+    <div class="p-4 md:p-5">
+      {@render children?.()}
+    </div>
   </div>
 {/snippet}
 
