@@ -1,5 +1,6 @@
 import * as THREE from "three";
 
+import { createNumberSmoother } from "../../../lib/telemetry-smoothing";
 import { attitudeQuaternion } from "./attitude-orientation";
 import {
   createVehicleModel,
@@ -33,6 +34,19 @@ const DEFAULT_PALETTE: AttitudeScenePalette = {
   surface: "#202a36",
 };
 
+const COMPASS_RADIUS = 3.12;
+const MIN_CAMERA_ZOOM = 0.74;
+const MAX_CAMERA_ZOOM = 1;
+
+export function cameraZoomForViewport(width: number, height: number): number {
+  const aspectRatio = Math.max(1, width) / Math.max(1, height);
+
+  // A near-square viewport is constrained by the compass diameter. Wider
+  // cards can use more of their height, but the cap preserves room for the
+  // projected near edge and the degree labels.
+  return THREE.MathUtils.clamp(0.74 + Math.max(0, aspectRatio - 1) * 0.21, MIN_CAMERA_ZOOM, MAX_CAMERA_ZOOM);
+}
+
 function readPalette(canvas: HTMLCanvasElement): AttitudeScenePalette {
   const styles = getComputedStyle(canvas);
   const color = (token: string, fallback: string) => styles.getPropertyValue(token).trim() || fallback;
@@ -46,6 +60,34 @@ function readPalette(canvas: HTMLCanvasElement): AttitudeScenePalette {
   };
 }
 
+function createCompassLabel(
+  text: string,
+  color: string,
+  position: THREE.Vector3,
+  scale = 0.34,
+): THREE.Sprite {
+  const labelCanvas = document.createElement("canvas");
+  labelCanvas.width = 192;
+  labelCanvas.height = 96;
+  const context = labelCanvas.getContext("2d");
+  if (!context) {
+    throw new Error("Unable to create compass label");
+  }
+
+  context.fillStyle = color;
+  context.font = "700 56px sans-serif";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(text, labelCanvas.width / 2, labelCanvas.height / 2 + 2);
+
+  const texture = new THREE.CanvasTexture(labelCanvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
+  label.position.copy(position);
+  label.scale.set(scale * 2, scale, 1);
+  return label;
+}
+
 function createReferencePlane(palette: AttitudeScenePalette): THREE.Group {
   const root = new THREE.Group();
   const grid = new THREE.GridHelper(7, 14, palette.border, palette.border);
@@ -57,7 +99,7 @@ function createReferencePlane(palette: AttitudeScenePalette): THREE.Group {
   root.add(grid);
 
   const ring = new THREE.Mesh(
-    new THREE.RingGeometry(3.08, 3.12, 96),
+    new THREE.RingGeometry(COMPASS_RADIUS - 0.04, COMPASS_RADIUS, 96),
     new THREE.MeshBasicMaterial({
       color: palette.secondary,
       opacity: 0.48,
@@ -68,6 +110,35 @@ function createReferencePlane(palette: AttitudeScenePalette): THREE.Group {
   ring.rotation.x = -Math.PI / 2;
   ring.position.y = 0.018;
   root.add(ring);
+
+  const tickMaterial = new THREE.MeshBasicMaterial({
+    color: palette.secondary,
+    opacity: 0.7,
+    transparent: true,
+  });
+  const majorTickMaterial = new THREE.MeshBasicMaterial({ color: palette.primary, opacity: 0.82, transparent: true });
+  for (let degrees = 0; degrees < 360; degrees += 15) {
+    const radians = degrees * Math.PI / 180;
+    const isMajor = degrees % 45 === 0;
+    const tickLength = isMajor ? 0.24 : 0.12;
+    const radius = COMPASS_RADIUS - tickLength / 2;
+    const tick = new THREE.Mesh(
+      new THREE.BoxGeometry(isMajor ? 0.045 : 0.028, 0.024, tickLength),
+      isMajor ? majorTickMaterial : tickMaterial,
+    );
+    tick.position.set(Math.sin(radians) * radius, 0.045, -Math.cos(radians) * radius);
+    tick.rotation.y = radians;
+    root.add(tick);
+
+    if (isMajor && degrees !== 0) {
+      const labelRadius = COMPASS_RADIUS + 0.34;
+      root.add(createCompassLabel(`${degrees}°`, palette.secondary, new THREE.Vector3(
+        Math.sin(radians) * labelRadius,
+        0.16,
+        -Math.cos(radians) * labelRadius,
+      ), 0.23));
+    }
+  }
 
   const northLine = new THREE.Mesh(
     new THREE.BoxGeometry(0.055, 0.035, 0.72),
@@ -83,24 +154,7 @@ function createReferencePlane(palette: AttitudeScenePalette): THREE.Group {
   northArrow.position.set(0, 0.06, -3.28);
   northArrow.rotation.x = -Math.PI / 2;
   root.add(northArrow);
-
-  const labelCanvas = document.createElement("canvas");
-  labelCanvas.width = 128;
-  labelCanvas.height = 128;
-  const labelContext = labelCanvas.getContext("2d");
-  if (labelContext) {
-    labelContext.fillStyle = palette.accent;
-    labelContext.font = "700 76px sans-serif";
-    labelContext.textAlign = "center";
-    labelContext.textBaseline = "middle";
-    labelContext.fillText("N", 64, 68);
-    const labelTexture = new THREE.CanvasTexture(labelCanvas);
-    labelTexture.colorSpace = THREE.SRGBColorSpace;
-    const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTexture, transparent: true }));
-    label.position.set(0, 0.25, -3.52);
-    label.scale.set(0.46, 0.46, 0.46);
-    root.add(label);
-  }
+  root.add(createCompassLabel("N", palette.accent, new THREE.Vector3(0, 0.2, -3.58), 0.34));
 
   const shadow = new THREE.Mesh(
     new THREE.CircleGeometry(1.15, 40),
@@ -115,6 +169,22 @@ function createReferencePlane(palette: AttitudeScenePalette): THREE.Group {
   shadow.position.y = 0.025;
   root.add(shadow);
   return root;
+}
+
+function createHeadingIndicator(palette: AttitudeScenePalette): THREE.ArrowHelper {
+  const indicator = new THREE.ArrowHelper(
+    new THREE.Vector3(0, 0, -1),
+    new THREE.Vector3(0, 0.12, 0),
+    COMPASS_RADIUS - 0.36,
+    new THREE.Color(palette.accent),
+    0.3,
+    0.16,
+  );
+  return indicator;
+}
+
+function finiteYaw(yawDeg: number | null | undefined): yawDeg is number {
+  return typeof yawDeg === "number" && Number.isFinite(yawDeg);
 }
 
 function vehicleTypeKey(vehicleType: string | null | undefined): string {
@@ -137,8 +207,12 @@ export function createAttitudeScene(
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-  camera.position.set(4.6, 3.7, -6.4);
-  camera.lookAt(0, 0.62, 0);
+  // Looking north from the south keeps north at the top of the screen and
+  // gives a level, north-facing vehicle an intuitive up-screen heading. The
+  // below-plane target compensates for perspective so the projected compass,
+  // rather than only its world origin, stays vertically centered.
+  camera.position.set(0, 4.6, 7.2);
+  camera.lookAt(0, -0.7, 0);
 
   const hemisphere = new THREE.HemisphereLight(palette.primary, palette.surface, 2.2);
   const keyLight = new THREE.DirectionalLight(palette.primary, 3.4);
@@ -149,17 +223,21 @@ export function createAttitudeScene(
 
   const referencePlane = createReferencePlane(palette);
   scene.add(referencePlane);
+  const headingIndicator = createHeadingIndicator(palette);
+  scene.add(headingIndicator);
 
   let model: VehicleModel | null = null;
   let modelKey = "";
   let frame: number | null = null;
-  let lastFrameTime = 0;
   let disposed = false;
   let contextLost = false;
-  let hasAttitude = false;
   let reducedMotion = false;
-  const currentQuaternion = new THREE.Quaternion();
-  const targetQuaternion = new THREE.Quaternion();
+  let hasYaw = false;
+  const attitudeSmoothers = {
+    pitch: createNumberSmoother({ durationMs: 160, maxJump: 45 }),
+    roll: createNumberSmoother({ durationMs: 160, circularRange: 360, maxJump: 90 }),
+    yaw: createNumberSmoother({ durationMs: 300, circularRange: 360 }),
+  };
 
   const render = () => {
     if (!disposed && !contextLost) {
@@ -174,31 +252,32 @@ export function createAttitudeScene(
     }
   };
 
-  const applyQuaternion = () => {
-    model?.root.quaternion.copy(currentQuaternion);
+  const renderAttitude = (timestampMs: number) => {
+    const rollDeg = attitudeSmoothers.roll.valueAt(timestampMs);
+    const pitchDeg = attitudeSmoothers.pitch.valueAt(timestampMs);
+    const yawDeg = attitudeSmoothers.yaw.valueAt(timestampMs);
+    const attitude = attitudeQuaternion(rollDeg, pitchDeg, yawDeg);
+    model?.root.quaternion.set(attitude.x, attitude.y, attitude.z, attitude.w);
+
+    headingIndicator.visible = hasYaw && yawDeg != null;
+    if (hasYaw && yawDeg != null) {
+      const yawRadians = yawDeg * Math.PI / 180;
+      headingIndicator.setDirection(new THREE.Vector3(Math.sin(yawRadians), 0, -Math.cos(yawRadians)));
+    }
+
+    render();
+  };
+
+  const attitudeIsAnimating = (timestampMs: number) => {
+    return Object.values(attitudeSmoothers).some((smoother) => smoother.isAnimating(timestampMs));
   };
 
   const animate = (time: number) => {
     frame = null;
     if (disposed || contextLost) return;
 
-    const deltaSeconds = lastFrameTime === 0 ? 1 / 60 : Math.min(0.05, Math.max(0, (time - lastFrameTime) / 1000));
-    lastFrameTime = time;
-    const remainingAngle = currentQuaternion.angleTo(targetQuaternion);
-
-    if (remainingAngle <= 0.001 || reducedMotion) {
-      currentQuaternion.copy(targetQuaternion);
-      applyQuaternion();
-      render();
-      lastFrameTime = 0;
-      return;
-    }
-
-    const alpha = 1 - Math.exp(-deltaSeconds / 0.045);
-    currentQuaternion.slerp(targetQuaternion, alpha);
-    applyQuaternion();
-    render();
-    frame = requestAnimationFrame(animate);
+    renderAttitude(time);
+    if (attitudeIsAnimating(time)) scheduleRender();
   };
 
   const scheduleRender = () => {
@@ -216,7 +295,6 @@ export function createAttitudeScene(
       disposeObject3D(model.root);
     }
     model = createVehicleModel(vehicleType, palette);
-    model.root.quaternion.copy(currentQuaternion);
     modelKey = nextKey;
     scene.add(model.root);
   };
@@ -230,7 +308,7 @@ export function createAttitudeScene(
   const handleContextRestored = () => {
     contextLost = false;
     onStateChange("ready");
-    render();
+    renderAttitude(performance.now());
     scheduleRender();
   };
 
@@ -242,17 +320,17 @@ export function createAttitudeScene(
     update(config) {
       reducedMotion = config.reducedMotion;
       replaceModel(config.vehicleType);
+      hasYaw = finiteYaw(config.yawDeg);
 
-      const target = attitudeQuaternion(config.rollDeg, config.pitchDeg, config.yawDeg);
-      targetQuaternion.set(target.x, target.y, target.z, target.w);
-      if (!hasAttitude || reducedMotion) {
-        currentQuaternion.copy(targetQuaternion);
-        applyQuaternion();
-        hasAttitude = true;
-        render();
-        return;
-      }
-      scheduleRender();
+      const timestampMs = performance.now();
+      const targetOptions = { instant: reducedMotion };
+      attitudeSmoothers.pitch.setTarget(config.pitchDeg, timestampMs, targetOptions);
+      attitudeSmoothers.roll.setTarget(config.rollDeg, timestampMs, targetOptions);
+      attitudeSmoothers.yaw.setTarget(config.yawDeg, timestampMs, targetOptions);
+      renderAttitude(timestampMs);
+
+      if (reducedMotion) cancelFrame();
+      else if (attitudeIsAnimating(timestampMs)) scheduleRender();
     },
     resize(width, height, devicePixelRatio) {
       if (disposed) return;
@@ -262,6 +340,7 @@ export function createAttitudeScene(
       renderer.setPixelRatio(pixelRatio);
       renderer.setSize(resolvedWidth, resolvedHeight, false);
       camera.aspect = resolvedWidth / resolvedHeight;
+      camera.zoom = cameraZoomForViewport(resolvedWidth, resolvedHeight);
       camera.updateProjectionMatrix();
       render();
     },
@@ -277,6 +356,7 @@ export function createAttitudeScene(
         model = null;
       }
       disposeObject3D(referencePlane);
+      disposeObject3D(headingIndicator);
       renderer.dispose();
       renderer.forceContextLoss();
     },

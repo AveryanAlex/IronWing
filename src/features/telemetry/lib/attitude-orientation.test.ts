@@ -6,6 +6,7 @@ import {
   resolveAttitudeModelKind,
   rotateVectorByQuaternion,
 } from "./attitude-orientation";
+import { cameraZoomForViewport } from "./attitude-three-scene";
 
 function expectVector(
   actual: { x: number; y: number; z: number },
@@ -41,6 +42,14 @@ describe("attitudeQuaternion", () => {
   it("normalizes wrapped angles and replaces unavailable axes with zero", () => {
     expect(attitudeQuaternion(360, null, Number.NaN)).toEqual(attitudeQuaternion(0, 0, 0));
     expect(attitudeQuaternion(-720, undefined, Number.POSITIVE_INFINITY)).toEqual(attitudeQuaternion(0, 0, 0));
+  });
+});
+
+describe("cameraZoomForViewport", () => {
+  it("fits the compass labels in square panels and caps wide-panel zoom", () => {
+    expect(cameraZoomForViewport(260, 260)).toBeCloseTo(0.74);
+    expect(cameraZoomForViewport(560, 238)).toBeCloseTo(1);
+    expect(cameraZoomForViewport(960, 240)).toBeCloseTo(1);
   });
 });
 
