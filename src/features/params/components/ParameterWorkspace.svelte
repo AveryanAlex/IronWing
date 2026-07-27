@@ -1,4 +1,5 @@
 <script lang="ts">
+import { untrack } from "svelte";
 import { fromStore } from "svelte/store";
 
 import {
@@ -49,11 +50,15 @@ let {
   fileIo = createParameterFileIo(),
   defaultMode = "workflow",
   embedded = false,
+  initialExpertSearchText = "",
+  initialExpertFilter = "standard",
   onReviewStaged,
 }: {
   fileIo?: ParameterFileIo;
   defaultMode?: "workflow" | "expert";
   embedded?: boolean;
+  initialExpertSearchText?: string;
+  initialExpertFilter?: ParameterExpertFilter;
   onReviewStaged?: () => void;
 } = $props();
 
@@ -65,8 +70,8 @@ let showAdvancedOverride = $state(false);
 let batteryCellCountInput = $state("4");
 let batteryChemistryIndex = $state(0);
 let flightPropSizeInput = $state("9");
-let expertSearchText = $state("");
-let expertFilter = $state<ParameterExpertFilter>("standard");
+let expertSearchText = $state(untrack(() => initialExpertSearchText));
+let expertFilter = $state<ParameterExpertFilter>(untrack(() => initialExpertFilter));
 let expertHighlightRequest = $state<ExpertHighlightRequest | null>(null);
 let lastValidBatteryInputs = $state<ResolvedBatteryWorkflowInputs>({
 	cellCount: 4,

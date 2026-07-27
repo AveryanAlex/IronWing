@@ -283,11 +283,15 @@ function createHarnessStore(initialState: ParamsStoreState): ParamsStore {
 function renderWorkspace(options: {
     state?: ParamsStoreState;
     defaultMode?: "workflow" | "expert";
+    initialExpertSearchText?: string;
+    initialExpertFilter?: "standard" | "all" | "modified";
 } = {}) {
     return render(
         withParameterWorkspaceContext(createHarnessStore(options.state ?? createState()), ParameterWorkspace),
         {
             defaultMode: options.defaultMode,
+            initialExpertSearchText: options.initialExpertSearchText,
+            initialExpertFilter: options.initialExpertFilter,
         },
     );
 }
@@ -343,6 +347,20 @@ describe("ParameterWorkspace", () => {
 
         expect(screen.getByTestId(parameterWorkspaceTestIds.expertRoot)).toBeTruthy();
         expect(screen.queryByTestId(parameterWorkspaceTestIds.advancedEntry)).toBeNull();
+    });
+
+    it("initializes the raw browser from a deep-linked search and filter", () => {
+        renderWorkspace({
+            defaultMode: "expert",
+            initialExpertSearchText: "LOG_",
+            initialExpertFilter: "all",
+        });
+
+        expect((screen.getByTestId(parameterWorkspaceTestIds.expertSearch) as HTMLInputElement).value).toBe("LOG_");
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`).getAttribute("data-variant"))
+            .toBe("soft");
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeTruthy();
+        expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-ARMING_CHECK`)).toBeNull();
     });
 
     it("supports compact raw rows and high-bit checkbox bitmask editing", async () => {

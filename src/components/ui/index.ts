@@ -4,6 +4,7 @@ export { default as Button } from "./Button.svelte";
 export { default as IconButton } from "./IconButton.svelte";
 export { default as ButtonGroup } from "./ButtonGroup.svelte";
 export { default as ExternalLink } from "./ExternalLink.svelte";
+export { default as InternalLink } from "./InternalLink.svelte";
 export * as Card from "./card";
 export { default as Panel } from "./Panel.svelte";
 export { default as Badge } from "./Badge.svelte";
