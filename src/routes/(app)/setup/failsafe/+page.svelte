@@ -8,6 +8,7 @@ import { buildParameterItemIndex, type ParameterItemModel } from "../../../../li
 import { buildFailsafeSectionModel, type SafetyVehicleFamily } from "../../../../lib/setup/failsafe-model";
 import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
 import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
+import SetupParamBitmaskSection from "../../../../features/setup/shared/SetupParamBitmaskSection.svelte";
 import SetupParamSection from "../../../../features/setup/shared/SetupParamSection.svelte";
 import SetupPreviewStagePanel from "../../../../features/setup/shared/SetupPreviewStagePanel.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
@@ -32,6 +33,11 @@ const paramsState = fromStore(paramsStore);
 const sessionState = fromStore(sessionStore);
 
 let defaultsPreviewOpen = $state(false);
+
+const vtolFailsafeOptionBits = [
+  { bit: 5, label: "Use QRTL instead of QLAND after VTOL link loss" },
+  { bit: 20, label: "Use fixed-wing RTL after VTOL link loss (overrides QRTL)" },
+] as const;
 
 let params = $derived(paramsState.current);
 let session = $derived(sessionState.current);
@@ -276,6 +282,20 @@ function stageDefaults() {
         testIdPrefix="setup-workspace-failsafe"
       />
     {/each}
+
+    {#if model.family === "plane"}
+      <SetupParamBitmaskSection
+        id="vtol-link-loss"
+        icon={ShieldAlert}
+        title="VTOL link-loss outcome"
+        description="Choose whether a QuadPlane in a VTOL mode lands immediately, enters QRTL, or transitions to fixed-wing RTL after link loss."
+        param={{ id: "Q_OPTIONS" }}
+        bitmaskOptions={vtolFailsafeOptionBits}
+        disabled={actionsBlocked}
+        surface="elevated"
+        testIdPrefix="setup-workspace-failsafe"
+      />
+    {/if}
 
     <SetupGuideCard title="Failsafe review" description="Before flight, verify the radio link, battery thresholds, and GCS loss action against the current operating plan.">
       <p>Use battery low and critical actions as separate escalation points, and keep loss-of-link behavior aligned with the vehicle family.</p>

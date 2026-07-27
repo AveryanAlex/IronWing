@@ -20,21 +20,28 @@ test("setup workspace opens every section and persists a safe parameter edit", a
     await app.setup.expectReviewContains([guidedEdit.name]);
   });
 
+  let vtolEdit: Awaited<ReturnType<typeof app.setup.stageVtolAssistSpeedEdit>>;
+  await test.step("Stage fixed-wing assistance from the VTOL / QuadPlane workflow", async () => {
+    vtolEdit = await app.setup.stageVtolAssistSpeedEdit();
+    await app.setup.expectReviewContains([guidedEdit.name, vtolEdit.name]);
+  });
+
   let edit: Awaited<ReturnType<typeof app.setup.stageFirstAvailableSafeParameterEdit>>;
   await test.step("Stage one safe numeric parameter edit through Parameters", async () => {
     edit = await app.setup.stageFirstAvailableSafeParameterEdit(
       safeParameterEditCandidates.filter((candidate) => candidate !== guidedEdit.name),
     );
-    await app.setup.expectReviewContains([guidedEdit.name, edit.name]);
+    await app.setup.expectReviewContains([guidedEdit.name, vtolEdit.name, edit.name]);
   });
 
   await test.step("Apply staged parameters to the demo vehicle", async () => {
-    await app.setup.applyStagedParameters([guidedEdit.name, edit.name]);
+    await app.setup.applyStagedParameters([guidedEdit.name, vtolEdit.name, edit.name]);
   });
 
   await test.step("Reload parameters from the vehicle and verify the edit persisted", async () => {
     await app.setup.reloadParametersFromVehicle();
     await app.setup.expectParameterValue(guidedEdit.name, guidedEdit.next);
+    await app.setup.expectParameterValue(vtolEdit.name, vtolEdit.next);
     await app.setup.expectParameterValue(edit.name, edit.next);
   });
 });

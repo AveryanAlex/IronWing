@@ -22,8 +22,15 @@ import {
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import MotorDiagram from "../../../../features/setup/shared/MotorDiagram.svelte";
-import { SetupFieldStack, SetupGuideCard, SetupNotice, SetupSectionCard } from "../../../../features/setup/shared";
+import {
+  SetupFieldStack,
+  SetupGuideCard,
+  SetupNotice,
+  SetupParamSection,
+  SetupSectionCard,
+} from "../../../../features/setup/shared";
 import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
+import type { SetupParamRef } from "../../../../features/setup/shared/setup-param-refs";
 import { Alert, Badge, Button, Card, Eyebrow, HelperText } from "../../../../components/ui";
 import {
   getSetupWorkspaceRouteContext,
@@ -48,6 +55,24 @@ type ScopedLayoutSummary = {
 
 const MOTOR_TEST_THROTTLE_PCT = 5;
 const MOTOR_TEST_DURATION_S = 2;
+const vtolEscOutputParams = [
+  { id: "Q_M_PWM_TYPE" },
+  { id: "Q_M_PWM_MIN" },
+  { id: "Q_M_PWM_MAX" },
+  { id: "Q_M_SPIN_ARM" },
+  { id: "Q_M_SPIN_MIN" },
+  { id: "Q_M_SPIN_MAX" },
+] satisfies readonly SetupParamRef[];
+const vtolThrustParams = [
+  { id: "Q_M_THST_EXPO" },
+  { id: "Q_M_THST_HOVER" },
+  { id: "Q_M_HOVER_LEARN" },
+  { id: "Q_M_BAT_IDX" },
+  { id: "Q_M_BAT_VOLT_MAX" },
+  { id: "Q_M_BAT_VOLT_MIN" },
+  { id: "Q_M_BAT_CURR_MAX" },
+] satisfies readonly SetupParamRef[];
+const vtolEscCalibrationParams = [{ id: "Q_ESC_CAL" }] satisfies readonly SetupParamRef[];
 
 const paramsStore = getParamsStoreContext();
 const sessionStore = getSessionStoreContext();
@@ -341,7 +366,7 @@ function unresolvedLayoutDetail(profile: VehicleProfile): string {
         return "Only part of the Q_FRAME family is present. Finish the refresh before trusting any direction-dependent motor guidance here.";
       case "plain-plane":
       default:
-        return "Plane firmware is still in plain fixed-wing mode. Enable VTOL in Frame & Orientation first, then refresh parameters before opening motor-direction work here.";
+        return "Plane firmware is still in plain fixed-wing mode. Enable VTOL in VTOL / QuadPlane first, then refresh parameters before opening motor-direction work here.";
     }
   }
 
@@ -538,8 +563,8 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
 <SetupSectionShell
   sectionId={section.id}
   eyebrow={section.title}
-  title="Motor order and direction checks with one shared unlock"
-  description="Remove props before motor/ESC tests. Confirm ArduPilot motor order, expected spin direction, and SERVOx_REVERSED staging from the applied layout, then stage any reversal fix for review."
+  title="Motor, ESC, and lift-powertrain setup"
+  description="Configure QuadPlane ESC output and thrust response, then remove props before confirming motor order, expected spin direction, and SERVOx_REVERSED staging from the applied layout."
   testId={setupWorkspaceTestIds.motorsEscSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.motorsEscDocsLink }]}
 >
@@ -600,6 +625,40 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
 
   <SetupNoticeList notices={banners} testIdPrefix={setupWorkspaceTestIds.motorsEscBannerPrefix} />
 
+  <SetupParamSection
+    id="vtol-esc-output"
+    icon={Power}
+    title="VTOL ESC output and idle"
+    description="Match the lift-motor protocol and usable ESC range, then set armed and minimum spin points before hover testing."
+    params={vtolEscOutputParams}
+    disabled={view.checkpoint.blocksActions}
+    surface="elevated"
+    testIdPrefix="setup-workspace-motors-esc"
+  />
+
+  <SetupParamSection
+    id="vtol-thrust"
+    icon={Fan}
+    title="VTOL thrust and battery compensation"
+    description="Linearize lift thrust, select the VTOL battery monitor, and keep hover-throttle learning within the proven propulsion envelope."
+    params={vtolThrustParams}
+    disabled={view.checkpoint.blocksActions}
+    surface="elevated"
+    testIdPrefix="setup-workspace-motors-esc"
+  />
+
+  <SetupParamSection
+    id="vtol-esc-calibration"
+    icon={Power}
+    title="VTOL ESC calibration mode"
+    description="Props must be removed. This stages Q_ESC_CAL for normal review; follow the ArduPilot ESC calibration procedure before applying it."
+    params={vtolEscCalibrationParams}
+    disabled={view.checkpoint.blocksActions || testUnlocked}
+    compact
+    surface="elevated"
+    testIdPrefix="setup-workspace-motors-esc"
+  />
+
   <SetupSectionCard icon={Power} title="Motor test gate" surface="elevated" compact>
     {#snippet actions()}
       <Button
@@ -629,7 +688,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
 
   {#if rows.length === 0}
     <SetupNotice tone="info">
-      No matching motor settings are available for this firmware. Use Frame & Orientation to refresh layout settings before testing.
+      No matching motor settings are available for this firmware. Use VTOL / QuadPlane or Frame & Orientation to refresh the applicable layout before testing.
     </SetupNotice>
   {:else}
     <div class="space-y-3">

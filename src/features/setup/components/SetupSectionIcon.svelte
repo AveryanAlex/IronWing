@@ -14,6 +14,7 @@ import {
   Navigation,
   Monitor,
   Plane,
+  PlaneTakeoff,
   Radio,
   ShieldAlert,
   SlidersHorizontal,
@@ -31,6 +32,7 @@ type IconComponent = typeof LayoutDashboard;
 const icons = {
   overview: LayoutDashboard,
   frame: Box,
+  vtol: PlaneTakeoff,
   calibration: Compass,
   receiver: Radio,
   navigation: Navigation,

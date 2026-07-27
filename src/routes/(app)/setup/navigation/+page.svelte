@@ -1,5 +1,14 @@
 <script lang="ts">
-import { Compass, Gauge, MapPin, Navigation as NavigationIcon, Radio, Route, Satellite } from "lucide-svelte";
+import {
+  Compass,
+  Gauge,
+  MapPin,
+  Navigation as NavigationIcon,
+  PlaneTakeoff,
+  Radio,
+  Route,
+  Satellite,
+} from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
@@ -76,6 +85,15 @@ const waypointParams = [
   { id: "WP_SPD_UP", aliases: ["WPNAV_SPEED_UP"] },
   { id: "WP_SPD_DN", aliases: ["WPNAV_SPEED_DN"] },
   { id: "WP_RADIUS_M", aliases: ["WP_RADIUS"] },
+] satisfies readonly SetupParamRef[];
+
+const vtolWaypointParams = [
+  { id: "Q_WP_SPD", aliases: ["Q_WP_SPEED"] },
+  { id: "Q_WP_ACC", aliases: ["Q_WP_ACCEL"] },
+  { id: "Q_WP_SPD_UP", aliases: ["Q_WP_SPEED_UP"] },
+  { id: "Q_WP_SPD_DN", aliases: ["Q_WP_SPEED_DN"] },
+  { id: "Q_WP_RADIUS_M", aliases: ["Q_WP_RADIUS"] },
+  { id: "Q_GUIDED_MODE" },
 ] satisfies readonly SetupParamRef[];
 
 const paramsStore = getParamsStoreContext();
@@ -476,6 +494,16 @@ function formatHdop(value: number | null): string {
     title="Waypoint guidance"
     description="Review speed, acceleration, and arrival-radius settings used by guided and waypoint navigation."
     params={waypointParams}
+    disabled={actionsBlocked}
+    testIdPrefix="setup-workspace-navigation"
+  />
+
+  <SetupParamSection
+    id="vtol-waypoint"
+    icon={PlaneTakeoff}
+    title="VTOL waypoint guidance"
+    description="Configure horizontal, climb, descent, and arrival behavior for VTOL mission legs without changing fixed-wing waypoint speeds."
+    params={vtolWaypointParams}
     disabled={actionsBlocked}
     testIdPrefix="setup-workspace-navigation"
   />

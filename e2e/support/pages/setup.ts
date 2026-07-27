@@ -42,6 +42,8 @@ const ids = {
   osdSetupTargetPrefix: "setup-workspace-osd-setup-target",
   osdSetupUartSelect: "setup-workspace-osd-setup-uart-select",
   osdSummary: "setup-workspace-osd-summary",
+  vtolAssistInput: "setup-workspace-vtol-input-Q_ASSIST_SPEED",
+  vtolAssistStaged: "setup-workspace-vtol-staged-Q_ASSIST_SPEED",
 } as const;
 
 export class SetupWorkspacePage {
@@ -119,6 +121,26 @@ export class SetupWorkspacePage {
     });
     await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-${name}`)).toHaveCount(1, { timeout: 10_000 });
     await this.auditLayout("setup staged RTL_ALTITUDE");
+    return { name, current, next };
+  }
+
+  async stageVtolAssistSpeedEdit(): Promise<ParameterEdit> {
+    await this.openSectionById("vtol");
+    const name = "Q_ASSIST_SPEED";
+    const input = this.page.getByTestId(ids.vtolAssistInput);
+    await expect(input).toBeVisible({ timeout: 10_000 });
+    await expect(input).toBeEnabled();
+
+    const current = Number(await input.inputValue());
+    if (!Number.isFinite(current) || current <= 0) {
+      throw new Error(`Q_ASSIST_SPEED has an invalid automatic threshold: ${await input.inputValue()}`);
+    }
+
+    const next = Number(Math.max(0.1, current - 0.5).toFixed(1));
+    await fillAndBlur(input, String(next));
+    await expect(this.page.getByTestId(ids.vtolAssistStaged)).toBeVisible({ timeout: 10_000 });
+    await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-${name}`)).toHaveCount(1, { timeout: 10_000 });
+    await this.auditLayout("setup staged Q_ASSIST_SPEED");
     return { name, current, next };
   }
 

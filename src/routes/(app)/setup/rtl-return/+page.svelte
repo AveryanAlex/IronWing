@@ -9,6 +9,7 @@ import { buildRtlReturnModel, type SafetyVehicleFamily } from "../../../../lib/s
 import { Eyebrow, HelperText, Input } from "../../../../components/ui";
 import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
 import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
+import SetupParamBitmaskSection from "../../../../features/setup/shared/SetupParamBitmaskSection.svelte";
 import SetupParamEditCard from "../../../../features/setup/shared/SetupParamEditCard.svelte";
 import SetupParamEditGrid from "../../../../features/setup/shared/SetupParamEditGrid.svelte";
 import SetupParamSection from "../../../../features/setup/shared/SetupParamSection.svelte";
@@ -92,6 +93,20 @@ const planeReturnParams = [
   { id: "Q_RTL_MODE" },
   { id: "Q_RTL_ALT_MIN" },
 ] satisfies readonly SetupParamRef[];
+
+const vtolLandingParams = [
+  { id: "Q_LAND_FINAL_ALT" },
+  { id: "Q_LAND_FINAL_SPD" },
+  { id: "Q_LAND_ALTCHG" },
+  { id: "Q_FW_LND_APR_RAD" },
+  { id: "Q_LAND_ICE_CUT" },
+] satisfies readonly SetupParamRef[];
+
+const vtolReturnOptionBits = [
+  { bit: 15, label: "Allow pilot descent control during VTOL auto-land" },
+  { bit: 16, label: "Use pure VTOL QRTL instead of fixed-wing approach" },
+  { bit: 17, label: "Allow pilot horizontal repositioning during VTOL auto-land" },
+] as const;
 
 let paramSections = $derived.by(() => buildParamSections(model.family));
 let legacyCards = $derived.by(() =>
@@ -469,6 +484,31 @@ function unstage(name: string) {
         testIdPrefix="setup-workspace-rtl-return"
       />
     {/each}
+
+    {#if model.family === "plane"}
+      <SetupParamSection
+        id="vtol-landing"
+        icon={Home}
+        title="VTOL approach and final descent"
+        description="Configure the handoff to vertical landing, final descent threshold and speed, and optional engine cutoff."
+        params={vtolLandingParams}
+        disabled={actionsBlocked}
+        surface="elevated"
+        testIdPrefix="setup-workspace-rtl-return"
+      />
+
+      <SetupParamBitmaskSection
+        id="vtol-return-options"
+        icon={Route}
+        title="VTOL return and landing options"
+        description="Only QRTL and VTOL auto-land bits are exposed here; transition, assist, and failsafe bits are preserved."
+        param={{ id: "Q_OPTIONS" }}
+        bitmaskOptions={vtolReturnOptionBits}
+        disabled={actionsBlocked}
+        surface="elevated"
+        testIdPrefix="setup-workspace-rtl-return"
+      />
+    {/if}
 
     {#each legacyCards as card (card.id)}
       <SetupSectionCard

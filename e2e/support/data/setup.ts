@@ -3,6 +3,7 @@ import { SETUP_SECTION_CATALOG, type SetupSectionId } from "../../../src/lib/set
 const setupSectionTestIds = {
   overview: "setup-workspace-overview-section",
   frame_orientation: "setup-workspace-frame-section",
+  vtol: "setup-workspace-vtol-section",
   calibration: "setup-workspace-calibration-section",
   rc_receiver: "setup-workspace-rc-section",
   navigation: "setup-workspace-navigation-section",

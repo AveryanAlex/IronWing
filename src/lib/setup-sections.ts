@@ -4,6 +4,7 @@ export type SetupSectionKind = "overview" | "guided" | "recovery";
 export type SetupSectionIconKey =
   | "overview"
   | "frame"
+  | "vtol"
   | "calibration"
   | "receiver"
   | "navigation"
@@ -111,7 +112,7 @@ export const SETUP_SECTIONS = {
   },
   frame_orientation: {
     title: "Frame & Orientation",
-    description: "Vehicle layout, VTOL settings, and board orientation.",
+    description: "Conventional airframe layout and physical board orientation.",
     kind: "guided",
     path: "/setup/frame-orientation",
     iconKey: "frame",
@@ -119,6 +120,17 @@ export const SETUP_SECTIONS = {
     groupId: "hardware",
     navGroupId: "essential",
     navOrder: 1,
+  },
+  vtol: {
+    title: "VTOL / QuadPlane",
+    description: "QuadPlane activation, lift-frame geometry, transitions, fixed-wing assistance, and wind hold.",
+    kind: "guided",
+    path: "/setup/vtol",
+    iconKey: "vtol",
+    implemented: true,
+    groupId: "hardware",
+    navGroupId: "essential",
+    navOrder: 2,
   },
   calibration: {
     title: "Calibration",
@@ -129,7 +141,7 @@ export const SETUP_SECTIONS = {
     implemented: true,
     groupId: "hardware",
     navGroupId: "essential",
-    navOrder: 2,
+    navOrder: 3,
   },
   navigation: {
     title: "Navigation",
@@ -206,7 +218,7 @@ export const SETUP_SECTIONS = {
     implemented: true,
     groupId: "safety",
     navGroupId: "essential",
-    navOrder: 3,
+    navOrder: 4,
   },
   flight_modes: {
     title: "Flight Modes",
@@ -217,7 +229,7 @@ export const SETUP_SECTIONS = {
     implemented: true,
     groupId: "safety",
     navGroupId: "essential",
-    navOrder: 4,
+    navOrder: 5,
   },
   failsafe: {
     title: "Failsafe",

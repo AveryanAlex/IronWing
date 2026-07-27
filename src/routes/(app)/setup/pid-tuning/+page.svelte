@@ -174,13 +174,6 @@ const QUADPLANE_GROUP_DEFINITIONS: ReadonlyArray<{
       "Q_A_THR_MIX_MAN",
     ],
   },
-  {
-    id: "vtol-motor",
-    title: "Lift-motor response",
-    description:
-      "Lift-thrust response and compensation remain tied to Q_M_* instead of falling through to generic multirotor rows.",
-    names: ["Q_M_THST_EXPO", "Q_M_THST_HOVER", "Q_M_BAT_VOLT_MAX", "Q_M_BAT_VOLT_MIN"],
-  },
 ];
 
 const paramsStore = getParamsStoreContext();
@@ -259,7 +252,7 @@ function buildCuratedView(): CuratedPidView {
 
   if (profile.isPlane && profile.quadPlaneEnabled && profile.planeVtolState !== "vtol-ready") {
     recoveryReasons.push(
-      "QuadPlane hover tuning appears after the vehicle exposes the VTOL-specific Q_A_* and Q_M_* parameter families.",
+      "QuadPlane hover tuning appears after the vehicle exposes the VTOL-specific Q_A_* controller family.",
     );
     return {
       familyStateText: "QuadPlane refresh required",
@@ -269,7 +262,7 @@ function buildCuratedView(): CuratedPidView {
       banners: [
         {
           id: "quadplane-refresh",
-          text: "QuadPlane hover tuning needs Q_A_* and Q_M_* settings from the refreshed vehicle parameter list.",
+          text: "QuadPlane hover tuning needs Q_A_* settings from the refreshed vehicle parameter list.",
           tone: "warning",
         },
       ],
@@ -287,12 +280,11 @@ function buildCuratedView(): CuratedPidView {
     groups = buildGroups(COPTER_GROUP_DEFINITIONS);
   } else if (profile.isPlane && profile.planeVtolState === "vtol-ready") {
     familyStateText = "QuadPlane VTOL tuning";
-    familyDetailText = "VTOL hover and lift-motor tuning use the Q_A_* and Q_M_* families.";
+    familyDetailText = "VTOL hover controllers use Q_A_* here; lift-motor and thrust setup lives in Motors & ESC.";
     groups = buildGroups(QUADPLANE_GROUP_DEFINITIONS);
 
     const missingFamilies = [
       groups.some((group) => group.id === "vtol-rate") ? null : "Q_A_* hover rate tuning",
-      groups.some((group) => group.id === "vtol-motor") ? null : "Q_M_* lift-motor tuning",
     ].filter((value): value is string => value !== null);
 
     if (missingFamilies.length > 0) {
@@ -387,7 +379,7 @@ function stageCardValue(row: ParameterCatalogItem, value: string | number | bool
           <p class="text-xs font-semibold uppercase tracking-widest text-text-muted">Tuning groups</p>
           <p class="mt-2 text-sm font-semibold text-text-primary">{curated.groups.length}</p>
           <p class="mt-1 text-sm text-text-secondary">
-            Rate controller, outer-loop, servo, speed, and lift-motor groups appear when their settings exist for this firmware.
+            Rate controller, outer-loop, servo, and speed groups appear when their settings exist for this firmware.
           </p>
         </div>
         <div>

@@ -50,6 +50,12 @@ export type VehicleSpecificTopic =
   | "arming"
   | "mandatory_hardware_config"
   | "simple_super_simple_modes"
+  | "quadplane_setup"
+  | "quadplane_assist"
+  | "quadplane_transitions"
+  | "quadplane_weathervaning"
+  | "quadplane_tiltrotor"
+  | "quadplane_tailsitter"
   | "full_parameter_list";
 
 const VEHICLE_TOPICS: Record<
@@ -119,6 +125,36 @@ const VEHICLE_TOPICS: Record<
   simple_super_simple_modes: {
     copter: "https://ardupilot.org/copter/docs/simpleandsuper-simple-modes.html",
     plane: null,
+    rover: null,
+  },
+  quadplane_setup: {
+    copter: null,
+    plane: "https://ardupilot.org/plane/docs/quadplane-setup.html",
+    rover: null,
+  },
+  quadplane_assist: {
+    copter: null,
+    plane: "https://ardupilot.org/plane/docs/assisted_fixed_wing_flight.html",
+    rover: null,
+  },
+  quadplane_transitions: {
+    copter: null,
+    plane: "https://ardupilot.org/plane/docs/quadplane-transitions.html",
+    rover: null,
+  },
+  quadplane_weathervaning: {
+    copter: null,
+    plane: "https://ardupilot.org/plane/docs/quadplane-weathervaning.html",
+    rover: null,
+  },
+  quadplane_tiltrotor: {
+    copter: null,
+    plane: "https://ardupilot.org/plane/docs/guide-tilt-rotor.html",
+    rover: null,
+  },
+  quadplane_tailsitter: {
+    copter: null,
+    plane: "https://ardupilot.org/plane/docs/guide-tailsitter.html",
     rover: null,
   },
   full_parameter_list: {

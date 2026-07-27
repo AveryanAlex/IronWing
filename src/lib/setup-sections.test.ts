@@ -18,6 +18,7 @@ describe("setup section routes", () => {
     expect(SECTION_IDS.map((sectionId) => [sectionId, setupSectionPath(sectionId)])).toEqual([
       ["overview", "/setup"],
       ["frame_orientation", "/setup/frame-orientation"],
+      ["vtol", "/setup/vtol"],
       ["calibration", "/setup/calibration"],
       ["navigation", "/setup/navigation"],
       ["battery_monitor", "/setup/battery-monitor"],
@@ -100,7 +101,7 @@ describe("setup section navigation", () => {
     const navGroups = groupSetupSectionNavigation(SETUP_SECTION_CATALOG.filter((section) => section.implemented));
 
     expect(navGroups.map((group) => [group.title, group.sections.map((section) => section.id)])).toEqual([
-      ["Essential Setup", ["overview", "frame_orientation", "calibration", "rc_receiver", "flight_modes"]],
+      ["Essential Setup", ["overview", "frame_orientation", "vtol", "calibration", "rc_receiver", "flight_modes"]],
       ["Hardware", ["navigation", "battery_monitor", "motors_esc", "servo_outputs", "serial_ports", "osd"]],
       ["Safety", ["failsafe", "rtl_return", "geofence", "arming"]],
       ["Tuning", ["initial_params", "pid_tuning"]],

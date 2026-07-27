@@ -126,6 +126,20 @@ describe("resolveDocsUrl", () => {
       );
     });
 
+    it("resolves QuadPlane workflow topics only for Plane", () => {
+      expect(resolveDocsUrl("quadplane_setup", "plane")).toBe(
+        "https://ardupilot.org/plane/docs/quadplane-setup.html",
+      );
+      expect(resolveDocsUrl("quadplane_assist", "plane")).toContain(
+        "/plane/docs/assisted_fixed_wing_flight.html",
+      );
+      expect(resolveDocsUrl("quadplane_transitions", "plane")).toContain(
+        "/plane/docs/quadplane-transitions.html",
+      );
+      expect(resolveDocsUrl("quadplane_setup", "copter")).toBeNull();
+      expect(resolveDocsUrl("quadplane_setup", "rover")).toBeNull();
+    });
+
     it("returns null for full_parameter_list without a vehicle slug", () => {
       expect(resolveDocsUrl("full_parameter_list")).toBeNull();
       expect(resolveDocsUrl("full_parameter_list", null)).toBeNull();
@@ -251,7 +265,7 @@ describe("topic lists", () => {
   });
 
   it("vehicleSpecificTopics returns 14 entries", () => {
-    expect(vehicleSpecificTopics()).toHaveLength(14);
+    expect(vehicleSpecificTopics()).toHaveLength(20);
   });
 
   it("no overlap between common and vehicle-specific topics", () => {
