@@ -183,7 +183,7 @@ describe("OsdEditor", () => {
     expect(screen.getByTestId(`${setupWorkspaceTestIds.osdLibraryItemPrefix}-1-GPSLAT`)).toBeTruthy();
     expect(screen.queryByTestId(`${setupWorkspaceTestIds.osdLibraryItemPrefix}-1-GSPEED`)).toBeNull();
     expect(screen.getByTestId(setupWorkspaceTestIds.osdAdvancedParametersLink).getAttribute("href"))
-      .toBe("/setup/full-parameters?search=OSD1_&filter=all");
+      .toBe("/setup/parameters?search=OSD1_&filter=all");
   });
 
   it("places an available item from its compact chip with only changed default coordinates", async () => {

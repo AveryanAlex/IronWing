@@ -101,6 +101,7 @@ let tabItems = $derived(
     return item;
   }),
 );
+let replayReadonly = $derived(activeSource === "playback");
 
 function connectionIndicatorClass(tone: ConnectionTone): string {
   switch (tone) {
@@ -198,6 +199,13 @@ function mobileWorkspaceLabel(tab: ShellTabItem): string {
             data-testid={appShellTestIds.connectionIndicator}
           ></span>
           <span class="app-shell-phone-nav__label">Vehicle</span>
+          {#if replayReadonly}
+            <span
+              class="app-shell-phone-nav__badge app-shell-header__mode-pill"
+              data-testid={appShellTestIds.replayReadonlyBanner}
+              title="Replay is read-only"
+            >Replay</span>
+          {/if}
         </button>
       {/if}
 
@@ -229,6 +237,13 @@ function mobileWorkspaceLabel(tab: ShellTabItem): string {
             class={`app-shell-header__connection-indicator ${connectionIndicatorClass(connectionTone)}`}
             data-testid={appShellTestIds.connectionIndicator}
           ></span>
+          {#if replayReadonly}
+            <span
+              class="app-shell-header__mode-pill"
+              data-testid={appShellTestIds.replayReadonlyBanner}
+              title="Vehicle-changing actions are unavailable during replay"
+            >Replay · read-only</span>
+          {/if}
         </div>
       </div>
 

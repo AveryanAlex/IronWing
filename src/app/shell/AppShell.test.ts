@@ -385,7 +385,7 @@ describe("AppShell", () => {
       }),
     });
 
-    expect(screen.getByTestId(appShellTestIds.replayReadonlyBanner).textContent).toContain("Replay is read-only");
+    expect(screen.getByTestId(appShellTestIds.replayReadonlyBanner).textContent).toContain("Replay");
   });
 
   it("uses a phone-only vehicle drawer while keeping the route viewport mounted", async () => {

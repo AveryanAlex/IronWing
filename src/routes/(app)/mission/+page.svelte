@@ -26,6 +26,7 @@ import type { ReplayMapOverlayState } from "../../../lib/replay-map-overlay";
 import { createMissionTerrainState } from "../../../lib/mission-terrain-state";
 import type { FenceRegion, GeoPoint2d, GeoPoint3d } from "../../../lib/mavkit-types";
 import type { FenceRegionType } from "../../../lib/mission-draft-typed";
+import { notifyError, notifyInfo, notifySuccess, notifyWarning } from "../../../lib/notifications";
 import { settings, type Settings } from "../../../lib/stores/settings";
 import { createUiStateStore } from "../../../lib/ui-state/ui-state";
 import type { SurveyPatternType } from "../../../lib/survey-region";
@@ -132,6 +133,7 @@ let missionPhoneSegment = $state<MissionWorkspacePhoneSegment>(
     resolveMissionWorkspaceLayout(missionWorkspaceFallbackChromeState, "mission").phoneSegmentDefault ??
     "plan",
 );
+let issuesOpen = $state(false);
 
 let planner = $derived(missionPlannerState.current);
 let view = $derived(missionPlannerView.current);
@@ -332,7 +334,7 @@ const workspaceActions: MissionWorkspaceActions = {
   onSetSurveyRegionCollapsed: missionPlannerStore.setSurveyRegionCollapsed,
   onUpdateSurveyRegion: missionPlannerStore.updateAuthoredSurveyRegion,
   onMarkSurveyRegionItemAsEdited: missionPlannerStore.markSurveyRegionItemAsEdited,
-  onConfirmSurveyPrompt: missionPlannerStore.confirmSurveyPrompt,
+  onConfirmSurveyPrompt: handleConfirmSurveyPrompt,
   onDismissSurveyPrompt: missionPlannerStore.dismissSurveyPrompt,
   onPersistPlanningSpeeds: handlePersistPlanningSpeeds,
   onSetPlanningSpeeds: missionPlannerStore.setPlanningSpeeds,
@@ -357,6 +359,7 @@ const workspaceActions: MissionWorkspaceActions = {
   onUpdateRallyAltitude: handleUpdateRallyAltitude,
   onUpdateRallyAltitudeFrame: handleUpdateRallyAltitudeFrame,
   onMoveRallyPointFromMap: handleMoveRallyPointFromMap,
+  onDismissReplayMapOverlay: () => onDismissReplayMapOverlay(),
 };
 let phoneState = $derived<MissionWorkspacePhoneState>({
   missionMapVisible,
@@ -437,6 +440,17 @@ async function handleRetryTerrain() {
   await terrainStateStore.retry();
 }
 
+function plannerProblemDescription(fallback: string): string {
+  return missionPlannerState.current.lastError ?? missionPlannerState.current.blockedReason ?? fallback;
+}
+
+function notifyPlannerFailure(id: string, title: string, fallback: string) {
+  notifyError(title, {
+    description: plannerProblemDescription(fallback),
+    id,
+  });
+}
+
 function handleSelectTerrainWarning(index: number) {
   const target = missionItems.find((item) => item.index === index) ?? null;
   if (!target) {
@@ -448,15 +462,42 @@ function handleSelectTerrainWarning(index: number) {
 }
 
 async function handleReadFromVehicle() {
-  await missionPlannerStore.downloadFromVehicle();
+  const result = await missionPlannerStore.downloadFromVehicle();
+  if (result.status === "success") {
+    notifySuccess("Planning state read from vehicle", { id: "mission-download" });
+  } else if (result.status === "error") {
+    notifyPlannerFailure(
+      "mission-download",
+      "Could not read planning state",
+      "The vehicle did not return its planning state.",
+    );
+  } else if (result.status === "blocked") {
+    notifyWarning("Planning state is unavailable", {
+      description: plannerProblemDescription("Connect a live vehicle before reading planning state."),
+      id: "mission-download",
+    });
+  }
 }
 
 async function handleToolbarImport() {
-  await (
+  const result = await (
     missionPlannerStore as MissionPlannerStore & {
-      importAnyFromPicker: () => Promise<unknown>;
+      importAnyFromPicker: () => Promise<{
+        status: "cancelled" | "error" | "prompted" | "stale" | "success";
+        fileName?: string;
+        warningCount?: number;
+      }>;
     }
   ).importAnyFromPicker();
+
+  if (result.status === "success") {
+    notifySuccess("Mission file imported", {
+      description: result.fileName ?? undefined,
+      id: "mission-import",
+    });
+  } else if (result.status === "error") {
+    notifyPlannerFailure("mission-import", "Mission import failed", "The selected mission file could not be imported.");
+  }
 }
 
 function handleNewMission() {
@@ -612,23 +653,79 @@ function handleUpdateFenceCircleRadiusFromMap(uiId: number, radiusM: number) {
 }
 
 async function handleExportPlan() {
-  await missionPlannerStore.exportToPicker();
+  const result = await missionPlannerStore.exportToPicker();
+  if (result.status === "success") {
+    notifySuccess("Mission file exported", {
+      description: result.fileName ?? undefined,
+      id: "mission-export",
+    });
+  } else if (result.status === "error") {
+    notifyPlannerFailure("mission-export", "Mission export failed", "The mission file could not be saved.");
+  }
 }
 
 async function handleConfirmImportReview() {
-  await missionPlannerStore.confirmImportReview();
+  const result = await missionPlannerStore.confirmImportReview();
+  if (result.status === "applied") {
+    notifySuccess("Mission import applied", {
+      description:
+        result.warningCount > 0
+          ? `${result.warningCount} import warning${result.warningCount === 1 ? "" : "s"} remain in Mission issues.`
+          : (result.fileName ?? undefined),
+      id: "mission-import",
+    });
+  }
 }
 
 async function handleConfirmExportReview() {
-  await missionPlannerStore.confirmExportReview();
+  const result = await missionPlannerStore.confirmExportReview();
+  if (result.status === "success") {
+    notifySuccess("Mission file exported", {
+      description: result.fileName ?? undefined,
+      id: "mission-export",
+    });
+  } else if (result.status === "blocked") {
+    notifyWarning("Choose a domain to export", {
+      description: plannerProblemDescription("Select at least one planner domain."),
+      id: "mission-export",
+    });
+  } else if (result.status === "error") {
+    notifyPlannerFailure("mission-export", "Mission export failed", "The mission file could not be saved.");
+  }
 }
 
 async function handleUploadToVehicle() {
-  await missionPlannerStore.uploadToVehicle();
+  const result = await missionPlannerStore.uploadToVehicle();
+  if (result.status === "success") {
+    notifySuccess("Mission uploaded to vehicle", { id: "mission-upload" });
+  } else if (result.status === "blocked") {
+    notifyWarning("Mission upload is unavailable", {
+      description: plannerProblemDescription("Connect a live vehicle before uploading."),
+      id: "mission-upload",
+    });
+  } else if (result.status === "error") {
+    notifyPlannerFailure("mission-upload", "Mission upload failed", "The vehicle did not accept the mission upload.");
+  }
 }
 
 async function handleCancelTransfer() {
-  await missionPlannerStore.cancelTransfer();
+  const result = await missionPlannerStore.cancelTransfer();
+  if (result.status === "cancelled") {
+    notifyInfo("Mission transfer cancelled", { id: "mission-transfer" });
+  } else {
+    notifyPlannerFailure("mission-transfer", "Could not cancel mission transfer", "The transfer may still be active.");
+  }
+}
+
+async function handleConfirmSurveyPrompt() {
+  const result = await missionPlannerStore.confirmSurveyPrompt();
+  if (result.status === "generated") {
+    notifySuccess("Survey regenerated", { id: "mission-survey-decision" });
+  } else if (result.status === "dissolved") {
+    notifySuccess("Survey dissolved into mission items", { id: "mission-survey-decision" });
+  } else if (result.status === "error" || result.status === "blocked") {
+    notifyPlannerFailure("mission-survey-decision", "Survey change failed", "The survey region was left unchanged.");
+  }
 }
 
 function handleDismissWarning(id: string) {
@@ -664,7 +761,20 @@ function handleWarningAction(action: NonNullable<MissionPlannerWarningView["acti
 }
 
 async function confirmPrompt() {
-  await missionPlannerStore.confirmReplacePrompt();
+  const result = await missionPlannerStore.confirmReplacePrompt();
+  if (result.status === "restored") {
+    notifySuccess("Saved mission draft restored", { id: "mission-replace" });
+  } else if (result.status === "replaced") {
+    notifySuccess("Mission draft replaced", { id: "mission-replace" });
+  } else if (result.status === "cleared") {
+    notifySuccess("Vehicle mission cleared", { id: "mission-replace" });
+  } else if (result.status === "error") {
+    notifyPlannerFailure(
+      "mission-replace",
+      "Mission replacement failed",
+      "The current mission draft remains available.",
+    );
+  }
 }
 
 function dismissPrompt() {
@@ -707,6 +817,8 @@ function dismissPrompt() {
     canUndo={view.canUndo}
     canUseVehicleActions={canUseVehicleActions}
     hasContent={hasContent || view.workspaceMounted}
+    {inlineCopy}
+    issueCount={sharedWarnings.length}
     mode={view.mode}
     onAddMissionItem={missionPlannerStore.addMissionItem}
     onAddSurveyBlock={handleCreateSurveyBlock}
@@ -714,6 +826,7 @@ function dismissPrompt() {
     onExportPlan={handleExportPlan}
     onImport={handleToolbarImport}
     onNewMission={handleNewMission}
+    onOpenIssues={() => { issuesOpen = true; }}
     onReadFromVehicle={handleReadFromVehicle}
     onRedo={handleRedo}
     onSelectMode={handleSelectMode}
@@ -724,9 +837,8 @@ function dismissPrompt() {
   />
 
   <MissionWorkspaceStatusPanels
-    {inlineCopy}
+    {issuesOpen}
     {planner}
-    {replayMapOverlay}
     {sharedWarnings}
     {view}
     onConfirmExportReview={handleConfirmExportReview}
@@ -735,7 +847,7 @@ function dismissPrompt() {
     onDismissExportReview={missionPlannerStore.dismissExportReview}
     onDismissImportReview={missionPlannerStore.dismissImportReview}
     onDismissPrompt={dismissPrompt}
-    onDismissReplayMapOverlay={onDismissReplayMapOverlay}
+    onIssuesOpenChange={(open) => { issuesOpen = open; }}
     onSetExportReviewChoice={missionPlannerStore.setExportReviewChoice}
     onSetImportReviewChoice={missionPlannerStore.setImportReviewChoice}
   />

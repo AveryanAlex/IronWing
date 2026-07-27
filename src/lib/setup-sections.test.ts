@@ -33,8 +33,7 @@ describe("setup section routes", () => {
       ["arming", "/setup/arming"],
       ["initial_params", "/setup/initial-params"],
       ["pid_tuning", "/setup/pid-tuning"],
-      ["peripherals", "/setup/peripherals"],
-      ["full_parameters", "/setup/full-parameters"],
+      ["parameters", "/setup/parameters"],
     ]);
   });
 
@@ -105,7 +104,7 @@ describe("setup section navigation", () => {
       ["Hardware", ["navigation", "battery_monitor", "motors_esc", "servo_outputs", "serial_ports", "osd"]],
       ["Safety", ["failsafe", "rtl_return", "geofence", "arming"]],
       ["Tuning", ["initial_params", "pid_tuning"]],
-      ["Peripherals", ["peripherals", "full_parameters"]],
+      ["Advanced", ["parameters"]],
     ]);
   });
 });

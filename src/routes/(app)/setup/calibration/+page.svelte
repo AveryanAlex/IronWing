@@ -3,12 +3,12 @@ import { Compass, Gauge, MessageSquare, Radio } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 import { calibrateCompassAccept, calibrateCompassCancel, calibrateCompassStart } from "../../../../calibration";
 import { trackAnalytics } from "../../../../lib/analytics/client";
-import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../../../lib/replay-readonly";
+import { notifyUnknownError } from "../../../../lib/notifications";
+import { isReplayReadonly } from "../../../../lib/replay-readonly";
 import type { SetupWorkspaceStoreState, SetupWorkspaceCalibrationCard } from "../../../../lib/stores/setup-workspace";
 import { Button } from "../../../../components/ui";
 import SetupFieldStack from "../../../../features/setup/shared/SetupFieldStack.svelte";
 import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
-import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
@@ -19,7 +19,6 @@ const viewStore = fromStore(route.viewStore);
 
 let view = $derived(viewStore.current);
 
-let actionError = $state<string | null>(null);
 let pendingCardId = $state<SetupWorkspaceCalibrationCard["id"] | null>(null);
 let replayReadonly = $derived(isReplayReadonly(view.activeSource));
 
@@ -28,7 +27,6 @@ async function runCompassAction(card: SetupWorkspaceCalibrationCard) {
     return;
   }
 
-  actionError = null;
   pendingCardId = card.id;
 
   try {
@@ -43,7 +41,9 @@ async function runCompassAction(card: SetupWorkspaceCalibrationCard) {
       await calibrateCompassStart();
     }
   } catch (error) {
-    actionError = error instanceof Error ? error.message : String(error);
+    notifyUnknownError("Compass calibration action failed", error, {
+      id: "setup-compass-calibration-action-failed",
+    });
     trackAnalytics("calibration_completed", { kind: "compass", result: "error" });
   } finally {
     pendingCardId = null;
@@ -87,16 +87,6 @@ function calibrationIcon(cardId: SetupWorkspaceCalibrationCard["id"]) {
   testId={setupWorkspaceTestIds.calibrationSection}
 >
   {#snippet body()}
-      {#if actionError}
-        <SetupNotice tone="danger">{actionError}</SetupNotice>
-      {/if}
-
-      {#if replayReadonly}
-        <SetupNotice tone="warning" testId={setupWorkspaceTestIds.calibrationReplayReadonly}>
-          <strong>{REPLAY_READONLY_TITLE}</strong> {REPLAY_READONLY_COPY}
-        </SetupNotice>
-      {/if}
-
       {#if view.statusNotices.length > 0}
         <SetupSectionCard
           icon={MessageSquare}

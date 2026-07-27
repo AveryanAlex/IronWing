@@ -19,7 +19,6 @@ describe("LogsRecordingPanel", () => {
           started_at_unix_msec: 123,
         },
         recordingError: null,
-        manualRecordingError: null,
         recordingPath: "/fallback/path/that/should/also/wrap/manual-capture.tlog",
         recordingLabel: "Recording capture-with-a-very-long-file-name-that-should-wrap.tlog",
         supportsRecordingPicker: true,

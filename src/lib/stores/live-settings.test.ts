@@ -132,6 +132,8 @@ function createSettingsStorage(settings?: unknown) {
 const DEFAULT_CATALOG: MessageRateInfo[] = [
   { id: 30, name: "Attitude", default_rate_hz: 4 },
   { id: 33, name: "Global Position", default_rate_hz: 2 },
+  { id: 36, name: "Servo Output", default_rate_hz: 2 },
+  { id: 65, name: "RC Channels", default_rate_hz: 2 },
 ];
 
 function createMockService(overrides: Partial<LiveSettingsService> = {}) {
@@ -265,6 +267,89 @@ describe("live settings store", () => {
     });
     expect(state.applyPhase).toBe("partial-failure");
     expect(loadSettings(storage).messageRates).toEqual({ 33: 5 });
+  });
+
+  it("quick-enables only the requested streams, persists them, and preserves unrelated drafts", async () => {
+    const sessionStore = writable(createScopedSessionState());
+    const storage = createSettingsStorage();
+    const service = createMockService();
+    const store = createLiveSettingsStore(sessionStore, service, storage);
+
+    await store.initialize();
+    store.stageMessageRate(30, 3);
+    await store.enableMessageRates([65, 36], 5);
+
+    const state = get(store);
+    expect(service.applyMessageRate).toHaveBeenNthCalledWith(1, 36, 5);
+    expect(service.applyMessageRate).toHaveBeenNthCalledWith(2, 65, 5);
+    expect(state.confirmedSettings.messageRates).toEqual({ 36: 5, 65: 5 });
+    expect(state.draft.messageRates).toEqual({ 30: 3, 36: 5, 65: 5 });
+    expect(state.applyPhase).toBe("idle");
+    expect(state.messageRateApplyIds).toEqual([]);
+    expect(loadSettings(storage).messageRates).toEqual({ 36: 5, 65: 5 });
+  });
+
+  it("keeps failed quick-enable streams staged while persisting successful streams", async () => {
+    const sessionStore = writable(createScopedSessionState());
+    const storage = createSettingsStorage();
+    const service = createMockService({
+      applyMessageRate: vi.fn(async (messageId: number) => {
+        if (messageId === 36) {
+          throw new Error("servo stream rejected");
+        }
+      }),
+    });
+    const store = createLiveSettingsStore(sessionStore, service, storage);
+
+    await store.initialize();
+    await store.enableMessageRates([36, 65], 5);
+
+    const state = get(store);
+    expect(state.confirmedSettings.messageRates).toEqual({ 65: 5 });
+    expect(state.draft.messageRates).toEqual({ 36: 5, 65: 5 });
+    expect(state.messageRateErrors[36]?.message).toBe("servo stream rejected");
+    expect(state.applyPhase).toBe("partial-failure");
+    expect(loadSettings(storage).messageRates).toEqual({ 65: 5 });
+  });
+
+  it("rejects quick-enable requests outside a live session and keeps them staged for review", async () => {
+    const sessionStore = writable(createScopedSessionState({ connectionKind: "disconnected" }));
+    const service = createMockService();
+    const store = createLiveSettingsStore(sessionStore, service, createSettingsStorage());
+
+    await store.initialize();
+    await store.enableMessageRates([65], 5);
+
+    const state = get(store);
+    expect(service.applyMessageRate).not.toHaveBeenCalled();
+    expect(state.confirmedSettings.messageRates).toEqual({});
+    expect(state.draft.messageRates).toEqual({ 65: 5 });
+    expect(state.messageRateErrors[65]?.message).toContain("active live vehicle connection");
+    expect(state.applyPhase).toBe("failed");
+  });
+
+  it("does not confirm a quick-enable request after the live session scope changes", async () => {
+    const sessionStore = writable(createScopedSessionState());
+    const pendingApply = deferred<void>();
+    const service = createMockService({
+      applyMessageRate: vi.fn(() => pendingApply.promise),
+    });
+    const store = createLiveSettingsStore(sessionStore, service, createSettingsStorage());
+
+    await store.initialize();
+    const enablePromise = store.enableMessageRates([65], 5);
+    await flush();
+    expect(get(store).messageRateApplyIds).toEqual([65]);
+
+    sessionStore.set(createScopedSessionState({ envelope: createEnvelope("session-2", { reset_revision: 1 }) }));
+    pendingApply.resolve();
+    await enablePromise;
+
+    const state = get(store);
+    expect(state.confirmedSettings.messageRates).toEqual({});
+    expect(state.draft.messageRates).toEqual({ 65: 5 });
+    expect(state.messageRateErrors[65]?.message).toContain("Live session changed");
+    expect(state.applyPhase).toBe("failed");
   });
 
   it("reapplies confirmed message-rate overrides when a new live session becomes active", async () => {

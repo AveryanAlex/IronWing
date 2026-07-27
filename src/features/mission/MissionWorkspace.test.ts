@@ -602,8 +602,10 @@ describe("MissionWorkspace", () => {
     await renderWorkspace();
 
     await waitFor(() => {
-      expect(screen.getByTestId(missionWorkspaceTestIds.mapSurface)).toBeTruthy();
+      const mapSurface = screen.getByTestId(missionWorkspaceTestIds.mapSurface);
+      expect(mapSurface).toBeTruthy();
       expect(screen.getAllByText(/Basemap initialization failed/i).length).toBeGreaterThan(0);
+      expect(mapSurface.contains(screen.getByTestId(missionWorkspaceTestIds.mapStatusPanel))).toBe(true);
     });
   });
 
@@ -625,7 +627,8 @@ describe("MissionWorkspace", () => {
       expect(screen.getByTestId(missionWorkspaceTestIds.root).querySelector(".mission-workspace")?.getAttribute("data-mission-attachment")).toContain("Playback read-only");
     });
 
-    expect(screen.getByTestId(missionWorkspaceTestIds.headerReplayReadonly).textContent).toContain("Replay is read-only");
+    expect(screen.queryByText("Replay is read-only")).toBeNull();
+    expect(screen.getByTestId(missionWorkspaceTestIds.issuesTrigger).textContent).toContain("Issues");
     expect((screen.getByTestId(missionWorkspaceTestIds.toolbarUpload) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId(missionWorkspaceTestIds.homeLatitude) as HTMLInputElement).disabled).toBe(true);
     expect(screen.getByTestId(missionWorkspaceTestIds.homeReadOnly).textContent).toContain("Playback");

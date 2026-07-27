@@ -5,6 +5,7 @@ import { fromStore } from "svelte/store";
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { motorTest } from "../../../../calibration";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
+import { notifyUnknownError } from "../../../../lib/notifications";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import {
   MOTOR_TEST_BRIDGE_LIMIT,
@@ -476,10 +477,14 @@ async function runMotorTest(row: MotorTestRow) {
       [row.motorNumber]: true,
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     commandErrorByMotor = {
       ...commandErrorByMotor,
-      [row.motorNumber]: error instanceof Error ? error.message : String(error),
+      [row.motorNumber]: message,
     };
+    notifyUnknownError(`Motor ${row.motorNumber} test rejected`, error, {
+      id: `setup-motor-${row.motorNumber}-test-failed`,
+    });
   } finally {
     activeMotorNumber = null;
   }

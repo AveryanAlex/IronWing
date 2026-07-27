@@ -6,6 +6,7 @@ import { fromStore } from "svelte/store";
 import { getParamsStoreContext } from "../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../data/ardupilot-docs";
 import { createParameterFileIo } from "../../../lib/params/parameter-file-io";
+import { notifyInfo, notifySuccess, notifyUnknownError } from "../../../lib/notifications";
 import { setupSectionPath, type SetupSectionId } from "../../../lib/setup-sections";
 import type { SetupWorkspaceStoreState } from "../../../lib/stores/setup-workspace";
 import { cn } from "../../../lib/utils";
@@ -37,7 +38,6 @@ const setupActionLinkVariantClasses = {
   secondary: "border-border-light bg-bg-secondary text-text-primary shadow-sm hover:bg-bg-tertiary",
 } as const;
 
-let fileActionMessage = $state("Imports stage changed values for operator review.");
 let fileActionBusy = $state<"refresh" | "save" | "load" | null>(null);
 let paramsReady = $derived(paramsState.current.paramStore !== null);
 let refreshDisabled = $derived(fileActionBusy !== null || !paramsState.current.liveSessionConnected);
@@ -49,12 +49,15 @@ async function handleRefresh() {
   }
 
   fileActionBusy = "refresh";
-  fileActionMessage = "Requesting a fresh parameter download from the vehicle.";
   try {
     await paramsStore.downloadAll();
-    fileActionMessage = "Parameter refresh requested.";
+    notifyInfo("Parameter refresh requested", {
+      id: "setup-parameter-refresh-requested",
+    });
   } catch (error) {
-    fileActionMessage = `Refresh failed: ${formatActionError(error)}`;
+    notifyUnknownError("Parameter refresh failed", error, {
+      id: "setup-parameter-refresh-failed",
+    });
   } finally {
     fileActionBusy = null;
   }
@@ -66,15 +69,18 @@ async function handleSave() {
   }
 
   fileActionBusy = "save";
-  fileActionMessage = "Saving the current parameter snapshot.";
   try {
     const result = await fileIo.exportToPicker({ paramStore: paramsState.current.paramStore });
-    fileActionMessage =
-      result.status === "cancelled"
-        ? "Save cancelled."
-        : `Saved ${result.paramCount} parameter${result.paramCount === 1 ? "" : "s"}.`;
+    if (result.status !== "cancelled") {
+      notifySuccess("Parameter file saved", {
+        description: `${result.paramCount} parameter${result.paramCount === 1 ? "" : "s"} exported.`,
+        id: "setup-parameter-file-saved",
+      });
+    }
   } catch (error) {
-    fileActionMessage = `Save failed: ${formatActionError(error)}`;
+    notifyUnknownError("Could not save parameter file", error, {
+      id: "setup-parameter-file-save-failed",
+    });
   } finally {
     fileActionBusy = null;
   }
@@ -86,7 +92,6 @@ async function handleLoad() {
   }
 
   fileActionBusy = "load";
-  fileActionMessage = "Loading a parameter file for review.";
   try {
     const result = await fileIo.importFromPicker({
       paramStore: paramsState.current.paramStore,
@@ -96,27 +101,18 @@ async function handleLoad() {
       for (const row of result.stagedRows) {
         paramsStore.stageParameterEdit(row.item, row.nextValue);
       }
-      fileActionMessage = `Loaded ${result.totalRows} row${result.totalRows === 1 ? "" : "s"}; staged ${result.stagedCount} changed value${result.stagedCount === 1 ? "" : "s"}.`;
-    } else {
-      fileActionMessage = "Load cancelled.";
+      notifySuccess("Parameter file loaded", {
+        description: `${result.totalRows} row${result.totalRows === 1 ? "" : "s"} read; ${result.stagedCount} changed value${result.stagedCount === 1 ? "" : "s"} staged for review.`,
+        id: "setup-parameter-file-loaded",
+      });
     }
   } catch (error) {
-    fileActionMessage = `Load failed: ${formatActionError(error)}`;
+    notifyUnknownError("Could not load parameter file", error, {
+      id: "setup-parameter-file-load-failed",
+    });
   } finally {
     fileActionBusy = null;
   }
-}
-
-function formatActionError(error: unknown) {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
-  }
-
-  if (typeof error === "string" && error.trim().length > 0) {
-    return error;
-  }
-
-  return "Unknown parameter action error.";
 }
 
 const overviewDocs = [
@@ -169,7 +165,7 @@ let bannerTitle = $derived.by(() => {
 });
 let bannerBody = $derived.by(() => {
   if (view.metadataState === "unavailable") {
-    return "Guided editors remain reachable, but labels, ranges, and option lists may be limited. Use Full Parameters when a setting is not shown here.";
+    return "Guided editors remain reachable, but labels, ranges, and option lists may be limited. Use Parameters when a setting is not shown here.";
   }
 
   if (view.readiness === "bootstrapping") {
@@ -177,7 +173,7 @@ let bannerBody = $derived.by(() => {
   }
 
   if (view.readiness === "degraded") {
-    return "Some setup details are limited right now. Open any section or Full Parameters for deeper inspection.";
+    return "Some setup details are limited right now. Open any section or Parameters for deeper inspection.";
   }
 
   return "Open a section below to inspect settings and queue changes for review.";
@@ -280,7 +276,7 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
           {fileActionBusy === "load" ? "Loading..." : "Load from file"}
         </Button>
       </ActionRow>
-      <HelperText class="mt-3" size="xs" tone="muted">{fileActionMessage}</HelperText>
+      <HelperText class="mt-3" size="xs" tone="muted">Imports stage changed values for operator review.</HelperText>
     </SetupSectionCard>
 
   {#if view.statusNotices.length > 0}
@@ -316,11 +312,11 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
     </a>
     <a
       class={setupActionLinkClass("outline")}
-      data-testid={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-full_parameters`}
-      href={resolve(setupSectionPath("full_parameters"))}
-      onclick={(event) => handleSetupLinkClick("full_parameters", event)}
+      data-testid={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-parameters`}
+      href={resolve(setupSectionPath("parameters"))}
+      onclick={(event) => handleSetupLinkClick("parameters", event)}
     >
-      Open Full Parameters
+      Open Parameters
     </a>
   </ActionRow>
 
@@ -374,17 +370,17 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="max-w-3xl">
           <HelperText class="mt-2">
-            Full Parameters stays separate from guided setup. Open it to inspect settings not covered above and queue parameter changes for review.
+            Parameters stays separate from guided setup. Open it to search the complete vehicle catalog and queue changes for review.
           </HelperText>
         </div>
         <ActionRow align="start">
           <a
             class={setupActionLinkClass("secondary")}
             data-testid={setupWorkspaceTestIds.overviewRecoveryAction}
-            href={resolve(setupSectionPath("full_parameters"))}
-            onclick={(event) => handleSetupLinkClick("full_parameters", event)}
+            href={resolve(setupSectionPath("parameters"))}
+            onclick={(event) => handleSetupLinkClick("parameters", event)}
           >
-            Open Full Parameters
+            Open Parameters
           </a>
         </ActionRow>
       </div>

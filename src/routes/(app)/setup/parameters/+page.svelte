@@ -14,17 +14,17 @@ const paramsState = fromStore(paramsStore);
 
 let params = $derived(paramsState.current);
 let docsUrl = $derived(resolveDocsUrl("full_parameter_list", resolveVehicleSlug(params.vehicleType)));
-let initialExpertSearchText = $derived(page.url.searchParams.get("search") ?? "");
-let initialExpertFilter = $derived(resolveInitialExpertFilter(page.url.searchParams.get("filter")));
+let initialSearchText = $derived(page.url.searchParams.get("search") ?? "");
+let initialFilter = $derived(resolveInitialFilter(page.url.searchParams.get("filter")));
 
-function resolveInitialExpertFilter(value: string | null): ParameterExpertFilter {
+function resolveInitialFilter(value: string | null): ParameterExpertFilter {
   switch (value) {
     case "all":
     case "modified":
     case "standard":
       return value;
     default:
-      return "standard";
+      return "all";
   }
 }
 
@@ -48,18 +48,16 @@ function resolveVehicleSlug(vehicleType: string | null): VehicleSlug | null {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.fullParameters}>
+<section class="space-y-4" data-testid={setupWorkspaceTestIds.parameters}>
   <SetupIntroCard
-    sectionId="full_parameters"
-    title="Full Parameters"
-    description="Inspect, search, and edit the complete ArduPilot parameter catalog. Changes remain staged until you review and apply them."
-    docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.fullParametersDocsLink }]}
+    sectionId="parameters"
+    title="Parameters"
+    description="Search and edit the complete ArduPilot parameter catalog. Metadata selects the appropriate editor, and changes remain staged until you review and apply them."
+    docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.parametersDocsLink }]}
   />
 
   <ParameterWorkspace
-    defaultMode="expert"
-    embedded
-    {initialExpertFilter}
-    {initialExpertSearchText}
+    {initialFilter}
+    {initialSearchText}
   />
 </section>

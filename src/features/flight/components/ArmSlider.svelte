@@ -3,8 +3,9 @@
   import { fromStore } from "svelte/store";
 
   import { getSessionViewStoreContext } from "../../../app/shell/runtime-context";
-  import { Alert, Button, Card, Eyebrow } from "../../../components/ui";
-  import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../../lib/replay-readonly";
+  import { Button, Card, Eyebrow } from "../../../components/ui";
+  import { notifySuccess, notifyUnknownError } from "../../../lib/notifications";
+  import { isReplayReadonly } from "../../../lib/replay-readonly";
   import { armVehicle, disarmVehicle } from "../../../telemetry";
 
   const sessionView = fromStore(getSessionViewStoreContext());
@@ -17,16 +18,15 @@
   let replayReadonly = $derived(isReplayReadonly(view.activeSource));
   let locked = $derived(!connected || replayReadonly);
   let busy = $state(false);
-  let commandError = $state<string | null>(null);
 
   async function handleArm() {
     if (armed || locked) return;
     busy = true;
-    commandError = null;
     try {
       await armVehicle(false);
+      notifySuccess("Arm command sent", { id: "arm-state-command" });
     } catch (error) {
-      commandError = error instanceof Error ? error.message : String(error);
+      notifyUnknownError("Arm command failed", error, { id: "arm-state-command" });
     } finally {
       busy = false;
     }
@@ -35,11 +35,11 @@
   async function handleDisarm() {
     if (!armed || locked) return;
     busy = true;
-    commandError = null;
     try {
       await disarmVehicle(false);
+      notifySuccess("Disarm command sent", { id: "arm-state-command" });
     } catch (error) {
-      commandError = error instanceof Error ? error.message : String(error);
+      notifyUnknownError("Disarm command failed", error, { id: "arm-state-command" });
     } finally {
       busy = false;
     }
@@ -48,21 +48,13 @@
 </script>
 
 <Card.Root density="compact" surface="primary" gap="none" class={locked ? "opacity-50" : undefined}>
-  {#if replayReadonly}
-    <Alert class="mb-3" variant="warning" density="compact" title={REPLAY_READONLY_TITLE} description={REPLAY_READONLY_COPY} testId="arm-replay-readonly-banner" />
-  {/if}
-
-  {#if commandError}
-    <Alert class="mb-3" variant="danger" density="compact" description={commandError} />
-  {/if}
-
   <Eyebrow class="flex items-center gap-2">
     <Shield aria-hidden="true" class="text-text-muted" size={14} />
     {armed ? "Armed" : "Disarmed"}
   </Eyebrow>
 
   <div class="mt-2" class:opacity-50={locked || busy} class:pointer-events-none={locked || busy}>
-    <div class="relative flex h-9 rounded-lg border border-border bg-bg-secondary p-0.5" aria-label="Arm state command" data-testid="arm-state-slider" role="group">
+    <div class="relative flex h-9 rounded-lg border border-border bg-bg-secondary p-0.5" aria-label="Arm state command" data-testid="arm-state-slider" role="group" title={replayReadonly ? "Replay is read-only" : undefined}>
       <div
         class={[
           "absolute top-0.5 h-[calc(100%_-_4px)] w-[calc(50%_-_2px)] rounded-md border shadow-sm transition-[left,background,border-color] duration-200 ease-in-out",

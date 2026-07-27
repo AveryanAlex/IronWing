@@ -160,28 +160,33 @@ afterEach(() => {
 });
 
 describe("replay-readonly active command surfaces", () => {
-  it("replay-readonly disables parameter staging surfaces with a visible banner", () => {
+  it("replay-readonly keeps parameter browsing available and disables editors without a local banner", async () => {
     render(withParameterWorkspaceContext(createParamsHarness(createPlaybackParamsState()), ParameterWorkspace));
 
-    expect(screen.getByTestId("parameter-replay-readonly-banner").textContent).toContain("Replay is read-only");
-    expect(screen.getByTestId(parameterWorkspaceTestIds.advancedButton)).toHaveProperty("disabled", true);
+    expect(screen.queryByTestId("parameter-replay-readonly-banner")).toBeNull();
+    expect(screen.getByTestId(parameterWorkspaceTestIds.expertSearch)).not.toHaveProperty("disabled", true);
+
+    await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertGroupPrefix}-ARMING`));
+
+    expect(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`)).toHaveProperty("disabled", true);
   });
 
-  it("replay-readonly disables flight mode, guided takeoff, and arm controls with visible copy", async () => {
+  it("replay-readonly disables flight mode, guided takeoff, and arm controls with control-local reasons", async () => {
     const sessionStore = { subscribe: writable(createSessionState("playback")).subscribe } as any;
 
     render(withSessionContext(sessionStore, FlightControlsPanel));
     render(withSessionContext(sessionStore, ArmSlider));
 
     await waitFor(() => {
-      expect(screen.getByTestId("flight-replay-readonly-banner")).toBeTruthy();
+      expect(screen.getByLabelText("Flight mode")).toHaveProperty("disabled", true);
     });
 
-    expect(screen.getByLabelText("Flight mode")).toHaveProperty("disabled", true);
+    expect(screen.getByLabelText("Flight mode").getAttribute("title")).toBe("Replay is read-only");
     expect(screen.getByText("Takeoff")).toHaveProperty("disabled", true);
+    expect(screen.getByText("Takeoff").getAttribute("title")).toBe("Replay is read-only");
     expect(screen.getByText("Arm")).toHaveProperty("disabled", true);
     expect(screen.queryByRole("group", { name: "Quick flight modes" })).toBeNull();
-    expect(screen.getByTestId("arm-replay-readonly-banner").textContent).toContain("Replay is read-only");
+    expect(screen.getByTestId("arm-state-slider").getAttribute("title")).toBe("Replay is read-only");
   });
 
   it("keeps live flight controls interactive and hides replay-only copy", async () => {

@@ -5,6 +5,7 @@ import { fromStore } from "svelte/store";
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { setServo } from "../../../../calibration";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
+import { notifyUnknownError } from "../../../../lib/notifications";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import { getDirectionGuidance } from "../../../../lib/setup/servo-direction-guidance";
 import {
@@ -19,10 +20,12 @@ import {
 } from "../../../../lib/setup/servo-test-model";
 import { deriveVehicleProfile } from "../../../../lib/setup/vehicle-profile";
 import { selectTelemetryView } from "../../../../lib/telemetry-selectors";
+import { SERVO_OUTPUT_MESSAGE_ID } from "../../../../lib/telemetry-stream-control";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import { SetupFieldStack, SetupGuideCard, SetupNotice, SetupSectionCard } from "../../../../features/setup/shared";
 import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
+import TelemetryStreamNotice from "../../../../features/telemetry/components/TelemetryStreamNotice.svelte";
 import {
   Alert,
   Badge,
@@ -98,6 +101,7 @@ let supportedTargets = $derived(testTargets.filter((target) => target.supported)
 let functionGroups = $derived(groupServoTestTargetsByFunction(supportedTargets));
 let rawGroups = $derived(deriveServoOutputGroups(configuredOutputs, profile.subtype));
 let liveConnected = $derived(session.sessionDomain.value?.connection.kind === "connected");
+let hasServoTelemetry = $derived(Array.isArray(telemetry.servo_outputs) && telemetry.servo_outputs.length > 0);
 let docsUrl = $derived(resolveDocsUrl("servo_outputs"));
 let pendingReversalCount = $derived(
   configuredOutputs.filter((output) => output.reverseParamName && params.stagedEdits[output.reverseParamName]).length,
@@ -443,10 +447,14 @@ async function sendServoCommand(output: ServoConfiguredOutput, pwm: number) {
       [output.index]: true,
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     commandErrorByOutput = {
       ...commandErrorByOutput,
-      [output.index]: error instanceof Error ? error.message : String(error),
+      [output.index]: message,
     };
+    notifyUnknownError(`Servo output ${output.index} command rejected`, error, {
+      id: `setup-servo-output-${output.index}-command-failed`,
+    });
   } finally {
     activeOutputIndex = null;
   }
@@ -602,6 +610,15 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
         </div>
       </div>
     </SetupSectionCard>
+
+    <TelemetryStreamNotice
+      activeSource={session.activeSource}
+      available={hasServoTelemetry}
+      connected={liveConnected}
+      messageIds={[SERVO_OUTPUT_MESSAGE_ID]}
+      streamLabel="Servo output telemetry"
+      testId={setupWorkspaceTestIds.servoOutputsTelemetryNotice}
+    />
 
   {#if retainedReversalFailures.length > 0}
       <Alert

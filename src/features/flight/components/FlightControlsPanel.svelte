@@ -4,14 +4,15 @@
   import { fromStore } from "svelte/store";
 
   import { getSessionViewStoreContext } from "../../../app/shell/runtime-context";
-  import { Alert, Button, Card, Eyebrow, NativeSelect, NumberInput } from "../../../components/ui";
+  import { Button, Card, Eyebrow, NativeSelect, NumberInput } from "../../../components/ui";
+  import { notifySuccess, notifyUnknownError } from "../../../lib/notifications";
   import {
     getAvailableModes,
     setFlightMode,
     type FlightModeEntry,
   } from "../../../telemetry";
   import { guidedTakeoff } from "../../../guided";
-  import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../../lib/replay-readonly";
+  import { isReplayReadonly } from "../../../lib/replay-readonly";
 
   const sessionView = fromStore(getSessionViewStoreContext());
 
@@ -25,7 +26,6 @@
   let availableModes = $state<FlightModeEntry[]>([]);
   let takeoffAlt = $state(10);
   let busy = $state(false);
-  let commandError = $state<string | null>(null);
 
   onMount(() => {
     void loadModes();
@@ -54,11 +54,11 @@
     const customMode = Number(selectedValue);
     if (!Number.isFinite(customMode)) return;
     busy = true;
-    commandError = null;
     try {
       await setFlightMode(customMode);
+      notifySuccess("Flight mode command sent", { id: "flight-mode-command" });
     } catch (error) {
-      commandError = error instanceof Error ? error.message : String(error);
+      notifyUnknownError("Unable to change flight mode", error, { id: "flight-mode-command" });
     } finally {
       busy = false;
     }
@@ -67,11 +67,14 @@
   async function handleTakeoff() {
     if (takeoffAlt <= 0) return;
     busy = true;
-    commandError = null;
     try {
       await guidedTakeoff(takeoffAlt);
+      notifySuccess("Takeoff command sent", {
+        description: `Target altitude · ${takeoffAlt} m`,
+        id: "guided-takeoff-command",
+      });
     } catch (error) {
-      commandError = error instanceof Error ? error.message : String(error);
+      notifyUnknownError("Takeoff command failed", error, { id: "guided-takeoff-command" });
     } finally {
       busy = false;
     }
@@ -101,14 +104,6 @@
     Controls
   </Eyebrow>
 
-  {#if replayReadonly}
-    <Alert class="mt-3" variant="warning" density="compact" title={REPLAY_READONLY_TITLE} description={REPLAY_READONLY_COPY} testId="flight-replay-readonly-banner" />
-  {/if}
-
-  {#if commandError}
-    <Alert class="mt-3" variant="danger" density="compact" description={commandError} />
-  {/if}
-
   <div class="mt-3 space-y-3">
     <!-- Flight mode selector -->
     <div>
@@ -119,6 +114,7 @@
         id="flight-mode-select"
         class="mt-1"
         disabled={!connected || busy || replayReadonly}
+        title={replayReadonly ? "Replay is read-only" : undefined}
         value={currentModeValue}
         onchange={handleModeChange}
       >
@@ -147,12 +143,14 @@
             step="1"
             unit="m"
             disabled={!canTakeoff || busy || replayReadonly}
+            title={replayReadonly ? "Replay is read-only" : undefined}
             bind:value={takeoffAlt}
           />
         </div>
         <Button
           disabled={!canTakeoff || busy || replayReadonly}
           onclick={handleTakeoff}
+          title={replayReadonly ? "Replay is read-only" : undefined}
         >
           Takeoff
         </Button>

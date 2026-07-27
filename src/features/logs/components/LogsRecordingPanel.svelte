@@ -21,7 +21,6 @@ function mapTone(tone: "neutral" | "positive" | "caution" | "critical"): PillTon
 type Props = {
   recordingStatus: RecordingStatus;
   recordingError: string | null;
-  manualRecordingError: string | null;
   recordingPath: string;
   recordingLabel: string;
   supportsRecordingPicker: boolean;
@@ -38,7 +37,6 @@ type Props = {
 let {
   recordingStatus,
   recordingError,
-  manualRecordingError,
   recordingPath,
   recordingLabel,
   supportsRecordingPicker,
@@ -79,10 +77,6 @@ const titleClass = "mt-1 m-0 text-base font-semibold text-text-primary";
 
     {#if recordingError}
       <Banner severity="danger" title={recordingError} testId="logs-recording-error" />
-    {/if}
-
-    {#if manualRecordingError}
-      <Banner severity="danger" title={manualRecordingError} testId="logs-recording-picker-error" />
     {/if}
 
     {#if recordingAndReplayOverlap}

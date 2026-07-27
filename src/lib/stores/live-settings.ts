@@ -23,7 +23,7 @@ import { session } from "./session";
 
 export type LiveSettingsCatalogPhase = "idle" | "loading" | "ready" | "failed";
 export type LiveSettingsApplyPhase = "idle" | "applying" | "failed" | "partial-failure";
-export type LiveSettingsApplyTarget = "draft" | "reconnect" | null;
+export type LiveSettingsApplyTarget = "draft" | "quick" | "reconnect" | null;
 export type LiveSettingsReconnectPhase = "idle" | "pending" | "applying" | "failed";
 
 export type LiveSettingsDraft = Pick<Settings, "telemetryRateHz" | "messageRates">;
@@ -47,6 +47,7 @@ export type LiveSettingsStoreState = {
   catalogError: string | null;
   applyPhase: LiveSettingsApplyPhase;
   applyTarget: LiveSettingsApplyTarget;
+  messageRateApplyIds: number[];
   lastApplyError: string | null;
   telemetryRateError: string | null;
   messageRateErrors: Record<number, LiveSettingsMessageRateError>;
@@ -89,6 +90,7 @@ function createInitialState(storage: StorageLike): LiveSettingsStoreState {
     catalogError: null,
     applyPhase: "idle",
     applyTarget: null,
+    messageRateApplyIds: [],
     lastApplyError: null,
     telemetryRateError: null,
     messageRateErrors: {},
@@ -133,6 +135,7 @@ export function createLiveSettingsStore(
       liveVehicleConnected: nextLiveVehicleConnected,
       applyPhase: liveScopeChanged && state.applyTarget === "reconnect" ? "idle" : state.applyPhase,
       applyTarget: liveScopeChanged && state.applyTarget === "reconnect" ? null : state.applyTarget,
+      messageRateApplyIds: liveScopeChanged && state.applyTarget === "reconnect" ? [] : state.messageRateApplyIds,
       reconnectPhase: resolveReconnectPhase(state.confirmedSettings, sessionState, nextLiveVehicleConnected),
       reconnectError: nextLiveVehicleConnected ? state.reconnectError : null,
     }));
@@ -246,6 +249,7 @@ export function createLiveSettingsStore(
         draft: createDraft(state.confirmedSettings),
         applyPhase: "idle",
         applyTarget: null,
+        messageRateApplyIds: [],
         lastApplyError: null,
         telemetryRateError: null,
         messageRateErrors: {},
@@ -270,6 +274,7 @@ export function createLiveSettingsStore(
         ...current,
         applyPhase: "idle",
         applyTarget: null,
+        messageRateApplyIds: [],
         lastApplyError: null,
         telemetryRateError: null,
       }));
@@ -290,6 +295,7 @@ export function createLiveSettingsStore(
         ...current,
         applyPhase: "applying",
         applyTarget: "draft",
+        messageRateApplyIds: changedMessageIds,
         lastApplyError: null,
         telemetryRateError: null,
         messageRateErrors,
@@ -405,6 +411,7 @@ export function createLiveSettingsStore(
       confirmedSettings: nextConfirmedSettings,
       applyPhase: nextApplyPhase,
       applyTarget: null,
+      messageRateApplyIds: [],
       lastApplyError,
       telemetryRateError,
       messageRateErrors: nextMessageRateErrors,
@@ -416,6 +423,158 @@ export function createLiveSettingsStore(
 
     lastReconnectAttemptScopeKey = null;
     maybeStartReconnectApply();
+  }
+
+  async function enableMessageRates(messageIds: readonly number[], rateHz: number): Promise<void> {
+    const state = get(store);
+    if (state.applyPhase === "applying") {
+      return;
+    }
+
+    const normalizedIds = [...new Set(messageIds)]
+      .filter((messageId) => Number.isInteger(messageId) && messageId >= 0)
+      .sort((left, right) => left - right);
+    if (normalizedIds.length === 0) {
+      return;
+    }
+
+    const catalogIds = new Set(state.messageRateCatalog.map((entry) => entry.id));
+    const availabilityReason = resolveMessageRateAvailabilityReason(state);
+    const validationErrors = normalizedIds.flatMap((messageId) => {
+      if (availabilityReason) {
+        return [createMessageRateError(messageId, rateHz, availabilityReason)];
+      }
+      if (!catalogIds.has(messageId)) {
+        return [createMessageRateError(messageId, rateHz, MESSAGE_RATE_METADATA_MISSING_MESSAGE)];
+      }
+      if (!isValidMessageRateHz(rateHz)) {
+        return [createMessageRateError(messageId, rateHz, MESSAGE_RATE_INVALID_MESSAGE)];
+      }
+      return [];
+    });
+
+    const nextDraftMessageRates = { ...state.draft.messageRates };
+    for (const messageId of normalizedIds) {
+      nextDraftMessageRates[messageId] = rateHz;
+    }
+
+    if (validationErrors.length > 0) {
+      const messageRateErrors = mergeMessageRateErrors(
+        state.messageRateErrors,
+        normalizedIds,
+        validationErrors,
+      );
+      store.update((current) => ({
+        ...current,
+        draft: {
+          ...current.draft,
+          messageRates: nextDraftMessageRates,
+        },
+        applyPhase: "failed",
+        applyTarget: null,
+        messageRateApplyIds: [],
+        lastApplyError: summarizeApplyErrors(null, validationErrors),
+        messageRateErrors,
+      }));
+      return;
+    }
+
+    const requestId = applyRequestId + 1;
+    applyRequestId = requestId;
+    const liveScopeKey = resolveLiveScopeKey(state.activeEnvelope, state.liveVehicleConnected);
+
+    store.update((current) => {
+      const messageRateErrors = { ...current.messageRateErrors };
+      for (const messageId of normalizedIds) {
+        delete messageRateErrors[messageId];
+      }
+
+      return {
+        ...current,
+        draft: {
+          ...current.draft,
+          messageRates: {
+            ...current.draft.messageRates,
+            ...Object.fromEntries(normalizedIds.map((messageId) => [messageId, rateHz])),
+          },
+        },
+        applyPhase: "applying",
+        applyTarget: "quick",
+        messageRateApplyIds: normalizedIds,
+        lastApplyError: null,
+        messageRateErrors,
+      };
+    });
+
+    const settled = await Promise.allSettled(
+      normalizedIds.map((messageId) =>
+        withTimeout(
+          service.applyMessageRate(messageId, rateHz),
+          APPLY_TIMEOUT_MS,
+          new Error(APPLY_TIMEOUT_MESSAGE),
+        ),
+      ),
+    );
+
+    if (applyRequestId !== requestId) {
+      return;
+    }
+
+    const scopeStillCurrent = isCurrentLiveScope(liveScopeKey);
+    const failures: LiveSettingsMessageRateError[] = [];
+    const successfulIds: number[] = [];
+
+    for (const [index, result] of settled.entries()) {
+      const messageId = normalizedIds[index];
+      if (messageId === undefined) {
+        continue;
+      }
+
+      if (!scopeStillCurrent) {
+        failures.push(createMessageRateError(messageId, rateHz, MESSAGE_RATE_SCOPE_CHANGED_MESSAGE));
+      } else if (result.status === "fulfilled") {
+        successfulIds.push(messageId);
+      } else {
+        failures.push(createMessageRateError(messageId, rateHz, service.formatError(result.reason)));
+      }
+    }
+
+    const current = get(store);
+    let confirmedSettings = current.confirmedSettings;
+    for (const messageId of successfulIds) {
+      confirmedSettings = applyConfirmedMessageRate(confirmedSettings, messageId, rateHz);
+    }
+    if (successfulIds.length > 0) {
+      persistSettings(confirmedSettings, storage);
+      lastAppliedMessageRateScopeKey = liveScopeKey;
+    }
+
+    const messageRateErrors = mergeMessageRateErrors(
+      current.messageRateErrors,
+      normalizedIds,
+      failures,
+    );
+    const lastApplyError = summarizeApplyErrors(null, failures);
+    const applyPhase = resolveApplyPhase(null, failures, successfulIds.length > 0);
+
+    trackAnalytics("message_rate_changed", {
+      changed_count: normalizedIds.length,
+      result: failures.length === 0 ? "success" : successfulIds.length > 0 ? "partial_failure" : "error",
+    });
+
+    store.update((latest) => ({
+      ...latest,
+      confirmedSettings,
+      applyPhase,
+      applyTarget: null,
+      messageRateApplyIds: [],
+      lastApplyError,
+      messageRateErrors,
+      reconnectPhase: applyPhase === "idle"
+        ? resolveReconnectPhaseFromState(confirmedSettings, latest.activeSource, latest.liveVehicleConnected)
+        : latest.reconnectPhase,
+      reconnectError: applyPhase === "idle" ? null : latest.reconnectError,
+    }));
   }
 
   function reset() {
@@ -521,6 +680,7 @@ export function createLiveSettingsStore(
       ...current,
       applyPhase: "applying",
       applyTarget: "reconnect",
+      messageRateApplyIds: requests.map((request) => request.messageId),
       lastApplyError: null,
       reconnectPhase: "applying",
       reconnectError: null,
@@ -560,6 +720,7 @@ export function createLiveSettingsStore(
         ...current,
         applyPhase: "idle",
         applyTarget: null,
+        messageRateApplyIds: [],
         lastApplyError: null,
         reconnectPhase: "idle",
         reconnectError: null,
@@ -573,6 +734,7 @@ export function createLiveSettingsStore(
       ...current,
       applyPhase: "idle",
       applyTarget: null,
+      messageRateApplyIds: [],
       lastApplyError: reconnectError,
       reconnectPhase: "failed",
       reconnectError,
@@ -585,6 +747,7 @@ export function createLiveSettingsStore(
     refreshMessageRateCatalog,
     stageTelemetryRate,
     stageMessageRate,
+    enableMessageRates,
     discardDrafts,
     applyDrafts,
     reset,

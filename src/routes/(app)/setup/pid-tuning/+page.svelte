@@ -238,8 +238,7 @@ function withSafetyFallback(row: ParameterExpertRow): ParameterExpertRow {
   return {
     ...row,
     label: row.rawName,
-    description:
-      row.description ?? "This advanced parameter can be reviewed here; edit it from Full Parameters if needed.",
+    description: row.description ?? "This advanced parameter can be reviewed here; edit it from Parameters if needed.",
     readOnly: true,
   } satisfies ParameterExpertRow;
 }

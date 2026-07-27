@@ -19,7 +19,6 @@ export type SetupSectionIconKey =
   | "arming"
   | "calculator"
   | "tuning"
-  | "peripherals"
   | "parameters";
 
 export type SetupSectionGroupId =
@@ -30,7 +29,7 @@ export type SetupSectionGroupId =
   | "recovery"
   | "other";
 
-export type SetupSectionNavGroupId = "essential" | "hardware" | "safety" | "tuning" | "peripherals";
+export type SetupSectionNavGroupId = "essential" | "hardware" | "safety" | "tuning" | "advanced";
 
 export type SetupSectionGroupDefinition = {
   id: SetupSectionGroupId;
@@ -78,8 +77,8 @@ export const SETUP_SECTION_GROUPS: ReadonlyArray<SetupSectionGroupDefinition> = 
   },
   {
     id: "tuning",
-    title: "Tuning & peripherals",
-    description: "Initial tuning, PID work, and payload/peripheral finishing steps.",
+    title: "Tuning",
+    description: "Initial tuning and vehicle-specific PID work.",
     order: 3,
   },
   {
@@ -95,7 +94,7 @@ export const SETUP_SECTION_NAV_GROUPS: ReadonlyArray<SetupSectionNavGroupDefinit
   { id: "hardware", title: "Hardware", order: 1 },
   { id: "safety", title: "Safety", order: 2 },
   { id: "tuning", title: "Tuning", order: 3 },
-  { id: "peripherals", title: "Peripherals", order: 4 },
+  { id: "advanced", title: "Advanced", order: 4 },
 ];
 
 export const SETUP_SECTIONS = {
@@ -286,27 +285,16 @@ export const SETUP_SECTIONS = {
     navGroupId: "tuning",
     navOrder: 1,
   },
-  peripherals: {
-    title: "Peripherals",
-    description: "Optional hardware families and configured peripheral settings.",
-    kind: "guided",
-    path: "/setup/peripherals",
-    iconKey: "peripherals",
-    implemented: true,
-    groupId: "tuning",
-    navGroupId: "peripherals",
-    navOrder: 0,
-  },
-  full_parameters: {
-    title: "Full Parameters",
-    description: "Search and edit the complete parameter catalog for the active vehicle.",
+  parameters: {
+    title: "Parameters",
+    description: "Search and edit the complete metadata-driven parameter catalog for the active vehicle.",
     kind: "recovery",
-    path: "/setup/full-parameters",
+    path: "/setup/parameters",
     iconKey: "parameters",
     implemented: true,
     groupId: "recovery",
-    navGroupId: "peripherals",
-    navOrder: 1,
+    navGroupId: "advanced",
+    navOrder: 0,
   },
 } as const satisfies Record<string, SetupSectionDescriptor>;
 

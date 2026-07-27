@@ -18,9 +18,15 @@ import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 const analyticsMocks = vi.hoisted(() => ({
   trackAnalytics: vi.fn(),
 }));
+const notificationMocks = vi.hoisted(() => ({
+  notifySuccess: vi.fn(),
+}));
 
 vi.mock("../../lib/analytics/client", () => ({
   trackAnalytics: analyticsMocks.trackAnalytics,
+}));
+vi.mock("../../lib/notifications", () => ({
+  notifySuccess: notificationMocks.notifySuccess,
 }));
 
 function createSessionService(): SessionService {
@@ -149,5 +155,54 @@ describe("SetupWorkspace", () => {
       "setup_section_viewed",
       expect.objectContaining({ section: "overview" }),
     );
+  });
+
+  it("presents blocking checkpoints in a dialog with a persistent reopen affordance and explicit reset", async () => {
+    const { setupWorkspaceStore } = renderSetupWorkspace({ tier: "phone" });
+
+    setupWorkspaceStore.setCheckpointPlaceholder({
+      phase: "resume_pending",
+      reason: "Reboot and reconnect this vehicle before continuing.",
+    });
+
+    expect(await screen.findByTestId(setupWorkspaceTestIds.checkpoint)).toBeTruthy();
+    expect(screen.getByTestId(setupWorkspaceTestIds.checkpointAffordance).textContent).toContain("Setup locked");
+    expect(get(setupWorkspaceStore).checkpoint.blocksActions).toBe(true);
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.checkpointClose));
+    await waitFor(() => {
+      expect(screen.queryByTestId(setupWorkspaceTestIds.checkpoint)).toBeNull();
+    });
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.checkpointAffordance));
+    expect(await screen.findByTestId(setupWorkspaceTestIds.checkpoint)).toBeTruthy();
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.checkpointReset));
+    expect(screen.getByTestId(setupWorkspaceTestIds.checkpointConfirmReset)).toBeTruthy();
+    expect(get(setupWorkspaceStore).checkpoint.blocksActions).toBe(true);
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.checkpointConfirmReset));
+    await waitFor(() => {
+      expect(get(setupWorkspaceStore).checkpoint.phase).toBe("idle");
+      expect(screen.queryByTestId(setupWorkspaceTestIds.checkpointAffordance)).toBeNull();
+    });
+  });
+
+  it("announces a completed checkpoint once and clears it", async () => {
+    const { setupWorkspaceStore } = renderSetupWorkspace();
+
+    setupWorkspaceStore.setCheckpointPlaceholder({
+      phase: "resume_complete",
+      reason: "Reconnected to the expected setup scope.",
+    });
+
+    await waitFor(() => {
+      expect(notificationMocks.notifySuccess).toHaveBeenCalledWith("Setup resumed", {
+        description: "Reconnected to the expected setup scope.",
+        id: "setup-checkpoint-resumed",
+      });
+      expect(get(setupWorkspaceStore).checkpoint.phase).toBe("idle");
+    });
+    expect(notificationMocks.notifySuccess).toHaveBeenCalledTimes(1);
   });
 });

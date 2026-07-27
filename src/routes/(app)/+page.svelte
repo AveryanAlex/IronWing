@@ -2,7 +2,7 @@
 import { fromStore } from "svelte/store";
 
 import type { OperatorMetricView } from "../../lib/telemetry-selectors";
-import { Alert, Badge, Card, Eyebrow, HelperText, MetricTile, MonoValue, SplitPane } from "../../components/ui";
+import { Badge, Card, Eyebrow, HelperText, MetricTile, MonoValue, SplitPane } from "../../components/ui";
 import OverviewMap from "../../features/overview/components/OverviewMap.svelte";
 import { appShellTestIds } from "../../app/shell/chrome-state";
 import {
@@ -188,32 +188,21 @@ function metricDimmed(metric: OperatorMetricView) {
     {/snippet}
     {#snippet second()}
       <div class="flex h-full flex-col gap-2 overflow-y-auto p-2">
-        {#if view.quality.stale}
-          <Alert
-            density="compact"
-            description="Telemetry stale"
-            testId="operator-workspace-stale"
-            variant="warning"
-          />
-        {/if}
-        {#if view.quality.disconnected}
-          <Alert
-            density="compact"
-            description="Disconnected"
-            testId="operator-workspace-disconnected"
-            variant="info"
-          />
-        {/if}
-
-        <div class="flex flex-wrap gap-2">
+        <div class="flex min-h-6 flex-wrap gap-2" aria-label="Telemetry quality">
+          {#if view.quality.stale}
+            <Badge variant="warning" size="sm" shape="rounded" testId="operator-workspace-stale">telemetry stale</Badge>
+          {/if}
+          {#if view.quality.disconnected}
+            <Badge variant="muted" size="sm" shape="rounded" testId="operator-workspace-disconnected">disconnected</Badge>
+          {/if}
           {#if view.quality.telemetry.degraded}
-            <Badge variant="warning" size="sm" shape="rounded" testId="operator-workspace-degraded-telemetry">degraded</Badge>
+            <Badge variant="warning" size="sm" shape="rounded" testId="operator-workspace-degraded-telemetry">telemetry degraded</Badge>
           {/if}
           {#if view.quality.support.degraded}
-            <Badge variant="warning" size="sm" shape="rounded" testId="operator-workspace-degraded-support">degraded</Badge>
+            <Badge variant="warning" size="sm" shape="rounded" testId="operator-workspace-degraded-support">support degraded</Badge>
           {/if}
           {#if view.quality.notices.degraded}
-            <Badge variant="warning" size="sm" shape="rounded" testId="operator-workspace-degraded-notices">degraded</Badge>
+            <Badge variant="warning" size="sm" shape="rounded" testId="operator-workspace-degraded-notices">notices degraded</Badge>
           {/if}
         </div>
 

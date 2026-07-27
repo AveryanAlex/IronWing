@@ -206,7 +206,8 @@ describe("LogsRawMessagesPanel RawMessages", () => {
       },
     });
 
-    expect(screen.getByRole("alert").textContent).toContain("failed to refresh the raw-message page");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText("failed to refresh the raw-message page")).toBeNull();
 
     await fireEvent.keyDown(screen.getByTestId("logs-raw-row-2"), { key: "Enter" });
     expect(onSelectSequence).toHaveBeenCalledWith(2);
@@ -461,5 +462,32 @@ describe("LogsRawMessagesPanel RawMessages", () => {
 
     expect(screen.queryByText(/Export completed/i)).toBeNull();
     expect(screen.getByTestId("logs-raw-export").textContent).toContain("Export filtered CSV");
+  });
+
+  it("does not retain completed raw export feedback in the layout", () => {
+    render(LogsRawMessagesPanel, {
+      props: {
+        entry: createEntry(),
+        rawBrowser: createRawBrowserState(),
+        exportState: createExportState({
+          origin: "raw-browser",
+          phase: "completed",
+          result: {
+            operation_id: "log_export",
+            destination_path: "/tmp/raw.csv",
+            bytes_written: 64,
+            rows_written: 4,
+            diagnostics: [],
+          },
+        }),
+        onFiltersChange: vi.fn(),
+        onRunQuery: vi.fn(),
+        onExport: vi.fn(),
+        onSelectSequence: vi.fn(),
+      },
+    });
+
+    expect(screen.queryByText(/Export completed/i)).toBeNull();
+    expect(screen.queryByText(/4 rows written/i)).toBeNull();
   });
 });

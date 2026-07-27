@@ -282,16 +282,14 @@ function createHarnessStore(initialState: ParamsStoreState): ParamsStore {
 
 function renderWorkspace(options: {
     state?: ParamsStoreState;
-    defaultMode?: "workflow" | "expert";
-    initialExpertSearchText?: string;
-    initialExpertFilter?: "standard" | "all" | "modified";
+    initialSearchText?: string;
+    initialFilter?: "standard" | "all" | "modified";
 } = {}) {
     return render(
         withParameterWorkspaceContext(createHarnessStore(options.state ?? createState()), ParameterWorkspace),
         {
-            defaultMode: options.defaultMode,
-            initialExpertSearchText: options.initialExpertSearchText,
-            initialExpertFilter: options.initialExpertFilter,
+            initialSearchText: options.initialSearchText,
+            initialFilter: options.initialFilter,
         },
     );
 }
@@ -305,68 +303,31 @@ async function expandExpertGroup(groupKey: string) {
 }
 
 describe("ParameterWorkspace", () => {
-    it("renders the workflow-first default surface and queues a guided recommendation", async () => {
-        renderWorkspace();
+    it("renders every prefix group by default in alphabetical order", () => {
+        const { container } = renderWorkspace();
 
         expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
-        expect(screen.getByTestId(parameterWorkspaceTestIds.state).textContent?.trim()).toBe("Settings ready");
-        expect(screen.getByTestId(`${parameterWorkspaceTestIds.workflowCardPrefix}-battery`)).toBeTruthy();
-        expect(screen.getByTestId(`${parameterWorkspaceTestIds.workflowCardPrefix}-safety`)).toBeTruthy();
-        expect(screen.getByTestId(`${parameterWorkspaceTestIds.workflowCardPrefix}-flight`)).toBeTruthy();
-        expect(screen.getByTestId(parameterWorkspaceTestIds.advancedEntry)).toBeTruthy();
+        expect(screen.getByTestId(parameterWorkspaceTestIds.state).textContent?.trim()).toBe("Parameters ready");
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertRoot)).toBeTruthy();
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`).textContent).toContain("All");
+
+        const groupIds = [...container.querySelectorAll('[data-testid^="parameter-expert-group-"]')]
+            .map((element) => element.getAttribute("data-testid"));
+        expect(groupIds).toEqual([
+            "parameter-expert-group-ARMING",
+            "parameter-expert-group-ATC",
+            "parameter-expert-group-BATT",
+            "parameter-expert-group-FORMAT",
+            "parameter-expert-group-FS",
+            "parameter-expert-group-INS",
+            "parameter-expert-group-LOG",
+            "parameter-expert-group-MOT",
+        ]);
         expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-ARMING_CHECK`)).toBeNull();
-
-        expect(
-            screen.getByTestId(`${parameterWorkspaceTestIds.workflowCurrentPrefix}-battery-BATT_LOW_VOLT`).textContent,
-        ).toContain("12.1 V");
-        expect(
-            screen.getByTestId(`${parameterWorkspaceTestIds.workflowProposedPrefix}-battery-BATT_LOW_VOLT`).textContent,
-        ).toContain("14.4 V");
-
-        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.workflowStageButtonPrefix}-safety`));
-
-        expect(screen.getByTestId(parameterWorkspaceTestIds.pendingCount).textContent).toContain("4 pending");
-        expect(
-            screen.getByTestId(`${parameterWorkspaceTestIds.workflowRowStatePrefix}-safety-ARMING_CHECK`).textContent,
-        ).toContain("Queued");
-        expect(
-            screen.getByTestId(`${parameterWorkspaceTestIds.workflowRowStatePrefix}-safety-FS_THR_ENABLE`).textContent,
-        ).toContain("Queued");
     });
 
-    it("can enter raw browser mode from the app shell and direct Full Parameters entry", async () => {
+    it("supports generated bitmask editing and the shared staged tray state", async () => {
         renderWorkspace();
-
-        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
-
-        expect(screen.getByTestId(parameterWorkspaceTestIds.expertRoot)).toBeTruthy();
-        expect(screen.getByTestId(parameterWorkspaceTestIds.advancedPanel)).toBeTruthy();
-
-        cleanup();
-        renderWorkspace({ defaultMode: "expert" });
-
-        expect(screen.getByTestId(parameterWorkspaceTestIds.expertRoot)).toBeTruthy();
-        expect(screen.queryByTestId(parameterWorkspaceTestIds.advancedEntry)).toBeNull();
-    });
-
-    it("initializes the raw browser from a deep-linked search and filter", () => {
-        renderWorkspace({
-            defaultMode: "expert",
-            initialExpertSearchText: "LOG_",
-            initialExpertFilter: "all",
-        });
-
-        expect((screen.getByTestId(parameterWorkspaceTestIds.expertSearch) as HTMLInputElement).value).toBe("LOG_");
-        expect(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`).getAttribute("data-variant"))
-            .toBe("soft");
-        expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeTruthy();
-        expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-ARMING_CHECK`)).toBeNull();
-    });
-
-    it("supports compact raw rows and high-bit checkbox bitmask editing", async () => {
-        renderWorkspace({ defaultMode: "expert" });
-
-        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`));
         await expandExpertGroup("LOG");
 
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`).textContent).toContain("LOG_BITMASK");
@@ -379,21 +340,44 @@ describe("ParameterWorkspace", () => {
         expect(diffText).not.toContain("-2147483643");
     });
 
-    it("keeps workflow cards visible but disabled when metadata is unavailable and routes recovery through Advanced parameters", async () => {
-        renderWorkspace({ state: createState({
-            metadata: null,
-            metadataState: "unavailable",
-            metadataError: "Parameter metadata is unavailable for this vehicle type.",
-        }) });
+    it("initializes the catalog from a deep-linked search and filter", () => {
+        renderWorkspace({
+            initialSearchText: "LOG_",
+            initialFilter: "all",
+        });
 
-        expect(screen.getByTestId(`${parameterWorkspaceTestIds.workflowDisabledPrefix}-battery`).textContent).toContain(
-            "Parameter info is unavailable",
-        );
+        expect((screen.getByTestId(parameterWorkspaceTestIds.expertSearch) as HTMLInputElement).value).toBe("LOG_");
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`).getAttribute("data-variant"))
+            .toBe("soft");
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeTruthy();
+        expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-ARMING_CHECK`)).toBeNull();
+    });
 
-        await fireEvent.click(screen.getByTestId(parameterWorkspaceTestIds.advancedButton));
+    it("searches metadata fields, expands matching groups, and clears the query", async () => {
+        renderWorkspace();
+
+        const search = screen.getByTestId(parameterWorkspaceTestIds.expertSearch);
+        await fireEvent.input(search, { target: { value: "high rate telemetry" } });
+
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeTruthy();
+        expect(screen.getByTestId(parameterWorkspaceTestIds.expertSummary).textContent).toContain("Showing 1 of 16");
+
+        await fireEvent.click(screen.getByRole("button", { name: "Clear parameter search" }));
+
+        expect((search as HTMLInputElement).value).toBe("");
+        expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeNull();
+    });
+
+    it("falls back to editable raw numeric rows when metadata is unavailable", async () => {
+        renderWorkspace({
+            state: createState({
+                metadata: null,
+                metadataState: "unavailable",
+                metadataError: "Parameter metadata is unavailable for this vehicle type.",
+            }),
+        });
         await expandExpertGroup("ARMING");
 
-        expect(screen.getByTestId(parameterWorkspaceTestIds.advancedPanel)).toBeTruthy();
         expect(screen.getByTestId(parameterWorkspaceTestIds.expertMetadataFallback).textContent).toContain(
             "falling back to raw parameter names",
         );

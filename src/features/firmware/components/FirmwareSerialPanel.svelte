@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import { get } from "svelte/store";
 
 import type {
   CatalogEntry,
@@ -22,6 +23,7 @@ import {
   sanitizeCatalogTargetSummaries,
 } from "../firmware-target-filter";
 import type { FirmwareWorkspaceLayout } from "../firmware-workspace-layout";
+import { notifyFirmwareOutcome } from "../firmware-outcome-notification";
 import { firmwareWorkspaceTestIds } from "../firmware-workspace-test-ids";
 import FirmwareChecklist from "./FirmwareChecklist.svelte";
 import {
@@ -422,6 +424,14 @@ async function handleAutodetectBoard() {
   }
 
   await store.detectFirmwareInstallBootloaderBoard();
+}
+
+async function handleStartFirmwareInstall() {
+  await store.startFirmwareInstallUpdate();
+  const outcome = get(store).lastCompletedOutcome;
+  if (outcome?.path === "firmware_install_update") {
+    notifyFirmwareOutcome(outcome);
+  }
 }
 
 async function loadCatalogTargets() {
@@ -1214,10 +1224,6 @@ $effect(() => {
             <div class="mt-3">
               <Banner severity="warning" title={targetProofMessage} testId={firmwareWorkspaceTestIds.manualTargetRequired} />
             </div>
-          {:else if !manualTargetRequired}
-            <div class="mt-3">
-              <Banner severity="success" title={targetProofMessage} />
-            </div>
           {/if}
 
           <label class="mt-3 flex min-w-0 flex-col">
@@ -1268,12 +1274,6 @@ $effect(() => {
             <EmptyState class="mt-3" description="Retry the list or switch to a custom APJ file." title="No catalog targets are available right now." testId={firmwareWorkspaceTestIds.manualTargetEmpty} />
           {:else}
             <EmptyState class="mt-3" description="Clear the search text or try a board ID." title="No targets match" testId={firmwareWorkspaceTestIds.manualTargetNoMatches} />
-          {/if}
-
-          {#if manualSelectionActive && workspaceState.serial.target}
-            <div class="mt-3" data-testid={firmwareWorkspaceTestIds.manualTargetSelected}>
-              <Banner severity="info" title={`Manual board selected · ${targetLabel(workspaceState.serial.target)} · ${targetMeta(workspaceState.serial.target)}`} />
-            </div>
           {/if}
 
           {#if effectiveSourceMode === "catalog" && manualSelectionActive && !selectedTargetVisible}
@@ -1422,18 +1422,6 @@ $effect(() => {
           />
         </div>
 
-        {#if workspaceState.serial.preflight?.has_params_to_backup}
-          <div class="mt-3" data-testid={firmwareWorkspaceTestIds.paramBackup}>
-            <Banner
-              severity="warning"
-              title="Parameter backup recommended"
-              message={`Flashing will break the current vehicle session. ${workspaceState.serial.preflight.param_count} parameter${workspaceState.serial.preflight.param_count === 1 ? " is" : "s are"} currently available to back up before install.`}
-              messageTestId={firmwareWorkspaceTestIds.paramBackupState}
-            />
-          </div>
-        {:else if workspaceState.serial.preflightPhase === "ready"}
-          <InfoBlock class="mt-3" size="sm" testId={firmwareWorkspaceTestIds.paramBackupState}>No backed-up parameter set is currently reported for this controller, so install proceeds without a preflight backup reminder.</InfoBlock>
-        {/if}
       </div>
 
       {#if isSerialActive}
@@ -1452,7 +1440,7 @@ $effect(() => {
           <Button variant="outline" testId={firmwareWorkspaceTestIds.cancelSerial} onclick={() => void store.cancel()}>Cancel firmware install/update</Button>
         {/if}
 
-        <Button variant="default" testId={firmwareWorkspaceTestIds.startSerial} disabled={!canStartSerial || isSerialActive || isSerialCancelling || replayReadonly} onclick={() => void store.startFirmwareInstallUpdate()}>
+        <Button variant="default" testId={firmwareWorkspaceTestIds.startSerial} disabled={!canStartSerial || isSerialActive || isSerialCancelling || replayReadonly} onclick={() => void handleStartFirmwareInstall()}>
           Start firmware update
         </Button>
       </div>

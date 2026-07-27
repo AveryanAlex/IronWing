@@ -12,7 +12,7 @@ import {
 import { trackAnalytics } from "../../../lib/analytics/client";
 import { isSetupSectionId, type SetupSectionId } from "../../../lib/setup-sections";
 import { IconButton, WorkspaceShell } from "../../../components/ui";
-import SetupCheckpointBanner from "./SetupCheckpointBanner.svelte";
+import SetupCheckpointDialog from "./SetupCheckpointDialog.svelte";
 import SetupSectionIcon from "./SetupSectionIcon.svelte";
 import SetupWorkspaceSectionNav from "./SetupWorkspaceSectionNav.svelte";
 import { setSetupWorkspaceRouteContext } from "./setup-workspace-route-context";
@@ -187,7 +187,7 @@ function handleSectionDrawerLinkClick(sectionId: string, event: MouseEvent) {
   }
 }
 
-function clearCheckpoint() {
+function resetCheckpoint() {
   store.clearCheckpointPlaceholder();
 }
 </script>
@@ -245,7 +245,7 @@ function clearCheckpoint() {
     data-selected-section={view.selectedSectionId}
     data-setup-readiness={view.readiness}
   >
-    <SetupCheckpointBanner checkpoint={view.checkpoint} onClear={clearCheckpoint} />
+    <SetupCheckpointDialog checkpoint={view.checkpoint} onReset={resetCheckpoint} />
 
     {#if useSectionDrawer}
       <div

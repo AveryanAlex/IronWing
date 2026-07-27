@@ -282,8 +282,7 @@ describe("setup workspace store", () => {
       "arming",
       "initial_params",
       "pid_tuning",
-      "peripherals",
-      "full_parameters",
+      "parameters",
     ]);
     expect(frameSection?.detailText).toBe("Open this section to inspect settings and queue changes for review.");
     expect(navigationSection?.implemented).toBe(true);
@@ -291,8 +290,8 @@ describe("setup workspace store", () => {
     expect(hardwareGroup?.implementedCount).toBe(8);
     expect(safetyGroup?.sections).toHaveLength(6);
     expect(safetyGroup?.implementedCount).toBe(6);
-    expect(tuningGroup?.sections).toHaveLength(3);
-    expect(tuningGroup?.implementedCount).toBe(3);
+    expect(tuningGroup?.sections).toHaveLength(2);
+    expect(tuningGroup?.implementedCount).toBe(2);
   });
 
   it("keeps catalog sections routable while the global gate waits for parameter values", () => {

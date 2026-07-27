@@ -1,6 +1,6 @@
 <script lang="ts">
 import type { LogsChartState, LogsExportState } from "../../../lib/stores/logs-workspace";
-import { Banner, Button, Input } from "../../../components/ui";
+import { Button, Input } from "../../../components/ui";
 import type { LogChartGroup } from "../log-chart-config";
 import { getChartMessageTypeFilters } from "../log-chart-config";
 import { formatUsec } from "../logs-format";
@@ -81,13 +81,4 @@ const fieldLabelClass = eyebrowClass;
     </p>
   {/if}
 
-  {#if chartExportVisible && exportState.error}
-    <Banner severity="danger" title={exportState.error} testId="logs-chart-export-error" />
-  {:else if chartExportVisible && exportState.phase === "completed" && exportState.result}
-    <Banner
-      severity="success"
-      title={`Wrote ${exportState.result.rows_written.toLocaleString()} rows to ${exportState.result.destination_path}.`}
-      testId="logs-chart-export-result"
-    />
-  {/if}
 </section>

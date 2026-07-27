@@ -1,6 +1,5 @@
 <script lang="ts">
 import { Navigation } from "lucide-svelte";
-import { toast } from "svelte-sonner";
 import * as maplibregl from "maplibre-gl";
 import type {
   Map as MapLibreMap,
@@ -12,6 +11,7 @@ import type {
 import { startGuidedSession, updateGuidedSession, type GuidedDomain } from "../../../guided";
 import type { HomePosition, MissionPlan } from "../../../mission";
 import { trackAnalytics } from "../../../lib/analytics/client";
+import { notifyError, notifySuccess } from "../../../lib/notifications";
 import { buildMissionRenderFeatures } from "../../../lib/mission-path-render";
 import { resolveVehicleIconKind, type VehicleIconKind } from "../../../lib/overview/vehicle-icon";
 import {
@@ -472,7 +472,7 @@ function handleMapStyleImageMissing(event: MapStyleImageMissingEvent) {
 async function handleFlyHere(latitude_deg: number, longitude_deg: number) {
   const altitude_msl_m = resolveGuidedTargetAltitudeMsl();
   if (altitude_msl_m === null) {
-    toast.error("Guided target altitude is unavailable");
+    notifyError("Guided target altitude is unavailable", { id: "guided-target" });
     return;
   }
 
@@ -484,14 +484,14 @@ async function handleFlyHere(latitude_deg: number, longitude_deg: number) {
   try {
     const result = await command({ session });
     if (result.result === "rejected") {
-      toast.error(result.failure.reason.message);
+      notifyError(result.failure.reason.message, { id: "guided-target" });
       return;
     }
 
     contextMenu = null;
-    toast.success("Guided target sent");
+    notifySuccess("Guided target sent", { id: "guided-target" });
   } catch (error) {
-    toast.error(error instanceof Error ? error.message : String(error));
+    notifyError(error instanceof Error ? error.message : String(error), { id: "guided-target" });
   } finally {
     guidedCommandPending = false;
   }
@@ -623,7 +623,7 @@ function ensureDeviceLocationWatch(): boolean {
         pendingDeviceAction = null;
         if (pendingAction.follow) {
           followTarget = "device";
-          toast.success("Following my location");
+          notifySuccess("Following my location", { id: "map-follow" });
           return;
         }
 
@@ -640,7 +640,7 @@ function ensureDeviceLocationWatch(): boolean {
           }
           stopDeviceLocationWatch();
           if (!wasDenied) {
-            toast.error("Location permission denied — enable it in system settings");
+            notifyError("Location permission denied — enable it in system settings", { id: "map-location" });
           }
           return;
         }
@@ -652,7 +652,7 @@ function ensureDeviceLocationWatch(): boolean {
             followTarget = null;
           }
           stopDeviceLocationWatch();
-          toast.error("Current device location is unavailable");
+          notifyError("Current device location is unavailable", { id: "map-location" });
         }
       },
       { enableHighAccuracy: true },
@@ -673,14 +673,14 @@ function activateTarget(target: FollowTarget, follow: boolean) {
     pendingDeviceAction = null;
     const lngLat = asLngLat(vehicleLat, vehicleLon);
     if (!lngLat) {
-      toast.error("No vehicle position");
+      notifyError("No vehicle position", { id: "map-follow" });
       return;
     }
 
     followTarget = follow ? "vehicle" : null;
     trackAnalytics("map_follow_changed", { target: follow ? "vehicle" : "none" });
     if (follow) {
-      toast.success("Following vehicle");
+      notifySuccess("Following vehicle", { id: "map-follow" });
       return;
     }
 
@@ -692,14 +692,14 @@ function activateTarget(target: FollowTarget, follow: boolean) {
     pendingDeviceAction = null;
     const lngLat = asLngLat(homeLat, homeLon);
     if (!lngLat) {
-      toast.error("No home position");
+      notifyError("No home position", { id: "map-follow" });
       return;
     }
 
     followTarget = follow ? "home" : null;
     trackAnalytics("map_follow_changed", { target: follow ? "home" : "none" });
     if (follow) {
-      toast.success("Following home location");
+      notifySuccess("Following home location", { id: "map-follow" });
       return;
     }
 
@@ -719,7 +719,7 @@ function activateTarget(target: FollowTarget, follow: boolean) {
       return;
     }
 
-    toast.error("Location permission was denied — enable it in system settings");
+    notifyError("Location permission was denied — enable it in system settings", { id: "map-location" });
     return;
   }
 
@@ -728,7 +728,7 @@ function activateTarget(target: FollowTarget, follow: boolean) {
     trackAnalytics("map_follow_changed", { target: follow ? "device" : "none" });
     const lngLat: [number, number] = [deviceLocation.longitude_deg, deviceLocation.latitude_deg];
     if (follow) {
-      toast.success("Following my location");
+      notifySuccess("Following my location", { id: "map-follow" });
       return;
     }
 

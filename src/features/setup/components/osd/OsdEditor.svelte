@@ -744,7 +744,7 @@ function compactLabel(value: string): string {
             data-sveltekit-preload-code="hover"
             data-sveltekit-preload-data="hover"
             testId={setupWorkspaceTestIds.osdAdvancedParametersLink}
-            href={`/setup/full-parameters?search=${encodeURIComponent(`OSD${activeScreen.screen}_`)}&filter=all`}
+            href={`/setup/parameters?search=${encodeURIComponent(`OSD${activeScreen.screen}_`)}&filter=all`}
           >
             <span class="inline-flex items-center gap-2">
               <SlidersHorizontal aria-hidden="true" class="text-accent" size={16} />

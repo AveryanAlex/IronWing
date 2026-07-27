@@ -1,4 +1,5 @@
 import { fetchParamMetadataXml } from "./lib/param-metadata-cache";
+import type { SliderScale } from "./lib/slider-scale";
 
 export type ParamMeta = {
   humanName: string;
@@ -12,6 +13,7 @@ export type ParamMeta = {
   rebootRequired?: boolean;
   readOnly?: boolean;
   userLevel?: "Standard" | "Advanced";
+  sliderScale?: SliderScale;
 };
 
 export type ParamMetadataMap = Map<string, ParamMeta>;
@@ -29,6 +31,40 @@ const SLUG_MAP: Record<string, string> = {
   submarine: "ArduSub",
   blimp: "Blimp",
   antenna_tracker: "AntennaTracker",
+};
+
+const COMMON_LOG_SLIDER_PARAMS = ["FENCE_ALT_MAX", "FENCE_RADIUS"] as const;
+const LOG_SLIDER_PARAMS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
+  ArduCopter: [
+    ...COMMON_LOG_SLIDER_PARAMS,
+    "RTL_ALT_M",
+    "WP_RADIUS_M",
+    "WP_SPD",
+    "WP_SPD_UP",
+    "WP_SPD_DN",
+  ],
+  ArduPlane: [
+    ...COMMON_LOG_SLIDER_PARAMS,
+    "WP_RADIUS",
+    "Q_RTL_ALT",
+    "Q_RTL_ALT_MIN",
+  ],
+  Rover: [...COMMON_LOG_SLIDER_PARAMS, "FS_TIMEOUT"],
+  ArduSub: [
+    ...COMMON_LOG_SLIDER_PARAMS,
+    "WP_RADIUS_M",
+    "WP_SPD",
+    "WP_SPD_UP",
+    "WP_SPD_DN",
+  ],
+  Heli: [
+    ...COMMON_LOG_SLIDER_PARAMS,
+    "WPNAV_SPEED",
+    "WPNAV_SPEED_UP",
+    "WPNAV_SPEED_DN",
+  ],
+  Blimp: COMMON_LOG_SLIDER_PARAMS,
+  AntennaTracker: COMMON_LOG_SLIDER_PARAMS,
 };
 
 export function vehicleTypeToSlug(vehicleType: string): string | null {
@@ -170,6 +206,19 @@ export function parseMetadataXml(xml: string): ParamMetadataMap {
   return map;
 }
 
+function applyParameterEditorMetadata(slug: string, metadata: ParamMetadataMap): ParamMetadataMap {
+  for (const name of LOG_SLIDER_PARAMS_BY_SLUG[slug] ?? []) {
+    const meta = metadata.get(name);
+    if (!meta?.range || meta.range.min <= 0 || meta.range.max <= meta.range.min) {
+      continue;
+    }
+
+    metadata.set(name, { ...meta, sliderScale: "log" });
+  }
+
+  return metadata;
+}
+
 export async function fetchParamMetadata(
   vehicleType: string,
   firmwareVersion?: string | null,
@@ -178,5 +227,5 @@ export async function fetchParamMetadata(
   if (!slug) return null;
 
   const xml = await fetchParamMetadataXml(slug, normalizeFirmwareVersion(firmwareVersion));
-  return xml ? parseMetadataXml(xml) : null;
+  return xml ? applyParameterEditorMetadata(slug, parseMetadataXml(xml)) : null;
 }

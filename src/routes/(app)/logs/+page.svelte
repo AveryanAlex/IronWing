@@ -1,9 +1,11 @@
 <script lang="ts">
 import { onDestroy, onMount } from "svelte";
+import { get } from "svelte/store";
 
 import { getLogsWorkspaceRouteContext, type LogsWorkspaceRouteContext } from "../../../app/shell/runtime-context";
 import { logsWorkspace, type LogsWorkspaceStore } from "../../../lib/stores/logs-workspace";
-import { Banner, Button, Panel, Progress, WorkspaceShell } from "../../../components/ui";
+import { notifyError, notifyInfo, notifySuccess, notifyWarning } from "../../../lib/notifications";
+import { Button, Panel, Progress, WorkspaceShell } from "../../../components/ui";
 import LogCharts from "../../../features/logs/components/LogCharts.svelte";
 import LogsRawMessagesPanel from "../../../features/logs/components/LogsRawMessagesPanel.svelte";
 import LogsDetailsPanel from "../../../features/logs/components/LogsDetailsPanel.svelte";
@@ -45,7 +47,6 @@ let {
 let importPath = $state("");
 let relinkPath = $state("");
 let recordingPath = $state("");
-let manualRecordingError = $state<string | null>(null);
 
 let workspace = $derived($store);
 let entries = $derived(workspace.library.catalog?.entries ?? []);
@@ -189,11 +190,25 @@ async function handleRegisterEntry() {
   const result = await store.registerEntry(nextPath);
   if (result) {
     importPath = "";
+    notifySuccess("Log registered", {
+      id: "logs-library-register",
+      description: result.metadata.display_name,
+    });
+  } else {
+    notifyActionError("Could not register the log", "logs-library-register", get(store).library.error);
   }
 }
 
 async function handleRegisterEntryFromPicker() {
-  await store.registerEntryFromPicker();
+  const result = await store.registerEntryFromPicker();
+  if (result) {
+    notifySuccess("Log registered", {
+      id: "logs-library-register",
+      description: result.metadata.display_name,
+    });
+  } else {
+    notifyActionError("Could not register the log", "logs-library-register", get(store).library.error);
+  }
 }
 
 async function handleRelinkEntry() {
@@ -206,7 +221,15 @@ async function handleRelinkEntry() {
     return;
   }
 
-  await store.relinkEntry(selectedEntry.entry_id, nextPath);
+  const result = await store.relinkEntry(selectedEntry.entry_id, nextPath);
+  if (result) {
+    notifySuccess("Log relinked", {
+      id: "logs-library-relink",
+      description: result.metadata.display_name,
+    });
+  } else {
+    notifyActionError("Could not relink the log", "logs-library-relink", get(store).library.error);
+  }
 }
 
 async function handleToggleAutoRecord() {
@@ -214,10 +237,19 @@ async function handleToggleAutoRecord() {
     return;
   }
 
-  await store.saveSettings({
+  const enabled = !workspace.recording.settings.auto_record_on_connect;
+  const result = await store.saveSettings({
     ...workspace.recording.settings,
-    auto_record_on_connect: !workspace.recording.settings.auto_record_on_connect,
+    auto_record_on_connect: enabled,
   });
+  const error = get(store).recording.error;
+  if (result && !error) {
+    notifySuccess(`Auto-record ${enabled ? "enabled" : "disabled"}`, {
+      id: "logs-recording-settings",
+    });
+  } else {
+    notifyActionError("Could not update auto-record", "logs-recording-settings", error);
+  }
 }
 
 async function handleTimelineSeek(event: Event) {
@@ -227,12 +259,13 @@ async function handleTimelineSeek(event: Event) {
     return;
   }
 
-  await store.seek(nextCursorUsec);
+  const result = await store.seek(nextCursorUsec);
+  if (!result) {
+    notifyActionError("Could not seek replay", "logs-replay-action", get(store).playback.error);
+  }
 }
 
 async function handleStartRecording() {
-  manualRecordingError = null;
-
   try {
     const nextPath = supportsRecordingPicker
       ? await recordingFileIo.pickManualRecordingPath({
@@ -245,14 +278,125 @@ async function handleStartRecording() {
     }
 
     recordingPath = nextPath;
-    await store.startRecordingAt(nextPath);
+    const result = await store.startRecordingAt(nextPath);
+    const error = get(store).recording.error;
+    if (result && !error) {
+      notifySuccess("Recording started", {
+        id: "logs-recording-action",
+        description: nextPath,
+      });
+    } else {
+      notifyActionError("Could not start recording", "logs-recording-action", error);
+    }
   } catch (error) {
-    manualRecordingError =
+    const message =
       error instanceof Error && error.message.trim().length > 0
         ? error.message
         : typeof error === "string" && error.trim().length > 0
           ? error
           : "Unable to choose a recording destination.";
+    notifyError("Could not choose a recording destination", {
+      id: "logs-recording-picker",
+      description: message,
+    });
+  }
+}
+
+function notifyActionError(title: string, id: string, error: string | null): void {
+  if (!error) {
+    return;
+  }
+
+  notifyError(title, { id, description: error });
+}
+
+async function handleRefreshLibrary() {
+  await store.refreshLibrary();
+  notifyActionError("Could not refresh the log library", "logs-library-refresh", get(store).library.error);
+}
+
+async function handleRemoveEntry() {
+  if (!selectedEntry) {
+    return;
+  }
+
+  const displayName = selectedEntry.metadata.display_name;
+  const result = await store.removeEntry(selectedEntry.entry_id);
+  if (result) {
+    notifySuccess("Log removed from the library", {
+      id: "logs-library-remove",
+      description: displayName,
+    });
+  } else {
+    notifyActionError("Could not remove the log", "logs-library-remove", get(store).library.error);
+  }
+}
+
+async function handleReindexEntry() {
+  if (!selectedEntry) {
+    return;
+  }
+
+  const result = await store.reindexEntry(selectedEntry.entry_id);
+  if (result) {
+    notifySuccess("Log reindexed", {
+      id: "logs-library-reindex",
+      description: result.metadata.display_name,
+    });
+  } else {
+    notifyActionError("Could not reindex the log", "logs-library-reindex", get(store).library.error);
+  }
+}
+
+async function handlePlaybackAction(action: () => Promise<unknown>, failureTitle: string): Promise<void> {
+  const result = await action();
+  if (!result) {
+    notifyActionError(failureTitle, "logs-replay-action", get(store).playback.error);
+  }
+}
+
+async function handleRawQuery(request: Parameters<LogsWorkspaceStore["runRawQuery"]>[0]) {
+  const result = await store.runRawQuery(request);
+  if (!result) {
+    notifyActionError("Raw-message query failed", "logs-raw-query", get(store).rawBrowser.error);
+  }
+}
+
+async function handleChartQuery(request: Parameters<LogsWorkspaceStore["runChartQuery"]>[0]) {
+  const result = await store.runChartQuery(request);
+  if (!result) {
+    notifyActionError("Chart query failed", "logs-chart-query", get(store).charts.error);
+  }
+}
+
+async function handleExport(request: Parameters<LogsWorkspaceStore["runExport"]>[0], origin: "raw-browser" | "chart") {
+  const result = await store.runExport(request, { origin });
+  if (result) {
+    notifySuccess("Log export complete", {
+      id: `logs-${origin}-export`,
+      description: `${result.rows_written.toLocaleString()} rows written to ${result.destination_path}.`,
+    });
+  } else {
+    notifyActionError("Log export failed", `logs-${origin}-export`, get(store).export.error);
+  }
+}
+
+async function handleStopRecording() {
+  const result = await store.stopActiveRecording();
+  const error = get(store).recording.error;
+  if (result && !error) {
+    notifySuccess("Recording stopped", { id: "logs-recording-action" });
+  } else {
+    notifyActionError("Could not stop recording", "logs-recording-action", error);
+  }
+}
+
+async function handleCancelOperation() {
+  const cancelled = await store.cancelOperation();
+  if (cancelled) {
+    notifyInfo("Cancellation requested", { id: "logs-operation-cancel" });
+  } else {
+    notifyWarning("The log operation could not be cancelled", { id: "logs-operation-cancel" });
   }
 }
 
@@ -283,10 +427,6 @@ function emitMarkerHandoff() {
 </script>
 
 <WorkspaceShell mode="inset" testId="logs-workspace-root">
-  {#if workspace.lastError}
-    <Banner severity="danger" title={workspace.lastError} testId="logs-workspace-last-error" />
-  {/if}
-
   {#if workspace.operationProgress}
     <Panel testId="logs-progress-banner">
       <div aria-atomic="true" aria-live="polite" class="flex flex-col gap-3" role="status">
@@ -300,7 +440,7 @@ function emitMarkerHandoff() {
           </div>
 
           {#if hasCancelableOperation}
-            <Button onclick={() => void store.cancelOperation()}>Cancel</Button>
+            <Button onclick={() => void handleCancelOperation()}>Cancel</Button>
           {/if}
         </div>
 
@@ -324,7 +464,7 @@ function emitMarkerHandoff() {
         libraryPhase={workspace.library.phase}
         loadedEntryId={workspace.library.loadedEntryId}
         onImportPathChange={(path) => (importPath = path)}
-        onRefresh={() => void store.refreshLibrary()}
+        onRefresh={() => void handleRefreshLibrary()}
         onRegisterFromPicker={() => void handleRegisterEntryFromPicker()}
         onRegisterPath={() => void handleRegisterEntry()}
         onSelectEntry={(entryId) => store.selectEntry(entryId)}
@@ -334,10 +474,10 @@ function emitMarkerHandoff() {
       <LogsDetailsPanel
         libraryPhase={workspace.library.phase}
         loadedEntryId={loadedEntry?.entry_id ?? null}
-        onReindex={() => selectedEntry && void store.reindexEntry(selectedEntry.entry_id)}
+        onReindex={() => void handleReindexEntry()}
         onRelink={() => void handleRelinkEntry()}
         onRelinkPathChange={(path) => (relinkPath = path)}
-        onRemove={() => selectedEntry && void store.removeEntry(selectedEntry.entry_id)}
+        onRemove={() => void handleRemoveEntry()}
         relinkPath={relinkPath}
         {selectedEntry}
       />
@@ -348,10 +488,9 @@ function emitMarkerHandoff() {
         autoRecordDirectory={workspace.recording.settings?.auto_record_directory ?? null}
         autoRecordEnabled={workspace.recording.settings?.auto_record_on_connect ?? false}
         hasSettings={workspace.recording.settings != null}
-        manualRecordingError={manualRecordingError}
         onRecordingPathChange={(path) => (recordingPath = path)}
         onToggleAutoRecord={() => void handleToggleAutoRecord()}
-        onToggleRecording={() => void (recordingStatus.kind === "recording" ? store.stopActiveRecording() : handleStartRecording())}
+        onToggleRecording={() => void (recordingStatus.kind === "recording" ? handleStopRecording() : handleStartRecording())}
         recordingAndReplayOverlap={recordingAndReplayOverlap}
         recordingError={workspace.recording.error}
         recordingLabel={recordingLabel()}
@@ -369,14 +508,14 @@ function emitMarkerHandoff() {
         chartSelectedRangeLeft={chartSelectedRangeLeft}
         chartSelectedRangeStart={chartSelectedRangeStart}
         chartSelectedRangeWidth={chartSelectedRangeWidth}
-        onPause={() => void store.pause()}
-        onPlay={() => void store.playSelected()}
-        onPrepare={() => void store.ensurePlaybackReady()}
+        onPause={() => void handlePlaybackAction(() => store.pause(), "Could not pause replay")}
+        onPlay={() => void handlePlaybackAction(() => store.playSelected(), "Could not start replay")}
+        onPrepare={() => void handlePlaybackAction(() => store.ensurePlaybackReady(), "Could not prepare replay")}
         onSeek={handleTimelineSeek}
         onSendPathToMap={emitPathHandoff}
         onSendReplayMarker={emitMarkerHandoff}
-        onSpeedChange={(speed) => void store.setSpeed(speed)}
-        onStop={() => void store.stopReplay()}
+        onSpeedChange={(speed) => void handlePlaybackAction(() => store.setSpeed(speed), "Could not change replay speed")}
+        onStop={() => void handlePlaybackAction(() => store.stopReplay(), "Could not stop replay")}
         openedSummary={workspace.playback.openedSummary}
         playbackCursorUsec={playbackCursorUsec}
         playbackError={workspace.playback.error}
@@ -394,9 +533,9 @@ function emitMarkerHandoff() {
       <LogsRawMessagesPanel
         entry={selectedEntry}
         exportState={workspace.export}
-        onExport={(request) => void store.runExport(request)}
+        onExport={(request) => void handleExport(request, "raw-browser")}
         onFiltersChange={(filters) => store.setRawFilters(filters)}
-        onRunQuery={(request) => void store.runRawQuery(request)}
+        onRunQuery={(request) => void handleRawQuery(request)}
         onSelectSequence={(sequence) => store.selectRawMessage(sequence)}
         rawBrowser={workspace.rawBrowser}
       />
@@ -407,7 +546,7 @@ function emitMarkerHandoff() {
         exportState={workspace.export}
         onExportDestinationChange={(path) => store.setChartExportDestination(path)}
         onExportSelectedRange={({ destinationPath, startUsec, endUsec, messageTypes }) =>
-          void store.runExport({
+          void handleExport({
             destination_path: destinationPath,
             format: "csv",
             start_usec: startUsec,
@@ -415,10 +554,10 @@ function emitMarkerHandoff() {
             message_types: messageTypes,
             text: null,
             field_filters: [],
-          }, { origin: "chart" })}
+          }, "chart")}
         onHoverCursor={(cursorUsec) => store.setChartCursor(cursorUsec)}
         onRequestChartRange={({ selectors, start_usec, end_usec, max_points }) =>
-          void store.runChartQuery({
+          void handleChartQuery({
             selectors,
             start_usec,
             end_usec,

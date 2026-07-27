@@ -1,5 +1,6 @@
 <script lang="ts">
 import { onMount } from "svelte";
+import { get } from "svelte/store";
 
 import type {
   CatalogTargetSummary,
@@ -14,6 +15,7 @@ import {
 } from "../../../lib/stores/firmware-workspace";
 import { sanitizeCatalogTargetSummaries } from "../firmware-target-filter";
 import type { FirmwareWorkspaceLayout } from "../firmware-workspace-layout";
+import { notifyFirmwareOutcome } from "../firmware-outcome-notification";
 import { firmwareWorkspaceTestIds } from "../firmware-workspace-test-ids";
 import FirmwareChecklist from "./FirmwareChecklist.svelte";
 import {
@@ -235,6 +237,14 @@ async function handleManualBrowse() {
   } catch (error) {
     manualConfirmed = false;
     store.setBootloaderSourceError(service.formatError(error));
+  }
+}
+
+async function handleStartBootloaderInstallation() {
+  await store.startBootloaderInstallation();
+  const outcome = get(store).lastCompletedOutcome;
+  if (outcome?.path === "bootloader_installation") {
+    notifyFirmwareOutcome(outcome);
   }
 }
 
@@ -583,7 +593,7 @@ $effect(() => {
         <Button variant="outline" testId={firmwareWorkspaceTestIds.cancelRecovery} onclick={() => void store.cancel()}>Cancel bootloader setup</Button>
       {/if}
 
-      <Button variant="default" testId={firmwareWorkspaceTestIds.startRecovery} disabled={!canStartRecovery || isRecoveryActive || isRecoveryCancelling || replayReadonly} onclick={() => void store.startBootloaderInstallation()}>
+      <Button variant="default" testId={firmwareWorkspaceTestIds.startRecovery} disabled={!canStartRecovery || isRecoveryActive || isRecoveryCancelling || replayReadonly} onclick={() => void handleStartBootloaderInstallation()}>
         Install bootloader
       </Button>
     </div>

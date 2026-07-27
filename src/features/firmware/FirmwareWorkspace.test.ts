@@ -25,9 +25,17 @@ import {
 } from "../../lib/platform/firmware";
 import { createFirmwareWorkspaceStore } from "../../lib/stores/firmware-workspace";
 import { createSerialPortInventoryStore, type SerialPortInventoryStore } from "../../lib/stores/serial-port-inventory";
+import { notifyError, notifySuccess } from "../../lib/notifications";
 import { withSessionContext } from "../../test/context-harnesses";
 import FirmwareWorkspace from "../../routes/(app)/firmware/+page.svelte";
 import { firmwareWorkspaceTestIds } from "./firmware-workspace-test-ids";
+
+vi.mock("../../lib/notifications", () => ({
+  notifyError: vi.fn(),
+  notifyInfo: vi.fn(),
+  notifySuccess: vi.fn(),
+  notifyWarning: vi.fn(),
+}));
 
 const DEFAULT_PORTS: PortInfo[] = [
   {
@@ -756,23 +764,25 @@ describe("FirmwareWorkspace", () => {
     ]);
   });
 
-  it("replay-readonly disables firmware start surfaces and shows the read-only banner", async () => {
+  it("uses contextual disabled state instead of another replay-readonly banner", async () => {
     await renderWorkspace({ activeSource: "playback" });
 
     await waitFor(() => {
-      expect(screen.getByTestId("firmware-replay-readonly-banner").textContent).toContain("Replay is read-only");
+      expect(screen.getByText(/Replay sessions are browse-only/i)).toBeTruthy();
     });
 
+    expect(screen.queryByTestId("firmware-replay-readonly-banner")).toBeNull();
     expect((screen.getByTestId(firmwareWorkspaceTestIds.startSerial) as HTMLButtonElement).disabled).toBe(true);
 
     await openRecoveryMode();
     expect((screen.getByTestId(firmwareWorkspaceTestIds.startRecovery) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("retains target and source context after a rejected serial start and renders the failure outcome inline", async () => {
+  it("retains a sync timeout once in the outcome and announces it with a stable toast", async () => {
+    const syncTimeout = "timed out waiting for sync response";
     const service = createService({
       startFirmwareInstallUpdate: vi.fn(async () => {
-        throw new Error("serial bootloader handshake failed");
+        throw new Error(syncTimeout);
       }),
     });
 
@@ -787,11 +797,18 @@ describe("FirmwareWorkspace", () => {
     await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.startSerial));
 
     await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeResult).textContent).toContain("Failed");
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeSummary).textContent).toContain("serial bootloader handshake failed");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeResult).textContent).toContain("Firmware update failed");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeSummary).textContent).toContain(syncTimeout);
       expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedTargetState).textContent).toContain("Cube Orange");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.selectedSourceState).textContent).toContain("catalog_url");
     });
+
+    expect(screen.getAllByText(syncTimeout)).toHaveLength(1);
+    expect(notifyError).toHaveBeenCalledWith("Firmware update failed", expect.objectContaining({
+      id: "firmware-firmware_install_update-outcome",
+      description: syncTimeout,
+      action: expect.objectContaining({ label: "View outcome" }),
+    }));
   });
 
   it("prompts to reboot into bootloader when flash board detection sees bootloader sync mismatch", async () => {
@@ -814,7 +831,7 @@ describe("FirmwareWorkspace", () => {
     await fireEvent.click(screen.getByTestId(firmwareWorkspaceTestIds.startSerial));
 
     await waitFor(() => {
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeResult).textContent).toContain("Board detection failed");
+      expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeResult).textContent).toContain("Firmware board detection failed");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeSummary).textContent).toContain("Reboot the controller into bootloader mode");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeSummary).textContent).toContain("select/grant the bootloader serial port");
     });
@@ -930,11 +947,15 @@ describe("FirmwareWorkspace", () => {
     await waitFor(() => {
       expect(screen.getByTestId(firmwareWorkspaceTestIds.mode).textContent).toContain("firmware-install-update");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.serialPanel)).toBeTruthy();
-      expect(screen.getByTestId(firmwareWorkspaceTestIds.returnGuidance).textContent).toContain("Return to firmware install/update now");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeResult).textContent).toContain("Bootloader installation verified");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomeSummary).textContent).toContain("Return to firmware install/update");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel).textContent).toContain("STM32 DFU");
       expect(screen.getByTestId(firmwareWorkspaceTestIds.outcomePanel).textContent).toContain("Next step");
     });
+
+    expect(notifySuccess).toHaveBeenCalledWith("Bootloader installation verified", expect.objectContaining({
+      id: "firmware-bootloader_installation-outcome",
+      action: expect.objectContaining({ label: "View outcome" }),
+    }));
   });
 });

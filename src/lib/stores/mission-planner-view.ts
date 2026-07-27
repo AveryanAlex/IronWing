@@ -129,7 +129,7 @@ export function createMissionPlannerViewStore(store: Readable<MissionPlannerStor
     const selectedSurveyPosition = selectedSurveyRegion
       ? surveyOrder.find((block) => block.regionId === selectedSurveyRegion.id)?.position ?? null
       : null;
-    const warnings = buildWarningEntries($planner, attachment);
+    const warnings = buildWarningEntries($planner);
 
     return {
       status,
@@ -228,7 +228,6 @@ function resolveWorkspaceReadiness(
 
 function buildWarningEntries(
   state: MissionPlannerStoreState,
-  attachment: MissionPlannerAttachmentState,
 ): MissionPlannerWarningView[] {
   const warnings: MissionPlannerWarningView[] = [];
 
@@ -237,18 +236,6 @@ function buildWarningEntries(
       warnings.push(warning);
     }
   };
-
-  if (attachment.kind === "playback-readonly") {
-    pushIfVisible({
-      id: `attachment:${attachment.kind}`,
-      tone: "warning",
-      title: attachment.label,
-      detail: attachment.detail,
-      domain: "workspace",
-      lines: [],
-      action: { label: "Open mission mode", mode: "mission", target: null },
-    });
-  }
 
   if (state.streamError) {
     pushIfVisible({
