@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { ParamStore } from "../../params";
 import { buildArduPilotOsdModel, clampOsdCoordinate } from "./ardupilot-osd-model";
+import { osdDisplayTargetPreset } from "./osd-display-target";
 
 function createParamStore(entries: Record<string, number>): ParamStore {
   const params: ParamStore["params"] = {};
@@ -137,7 +138,7 @@ describe("ardupilot-osd-model", () => {
     expect(item?.yOutOfRange).toBe(false);
   });
 
-  it("resolves screen-specific HD grids from staged OSDn_TXT_RES=3", () => {
+  it("resolves screen-specific HD grids from staged OSDn_TXT_RES=2", () => {
     const model = buildArduPilotOsdModel({
       paramStore: createParamStore({
         OSD2_TXT_RES: 0,
@@ -146,7 +147,7 @@ describe("ardupilot-osd-model", () => {
         OSD2_GSPEED_Y: 21,
       }),
       stagedEdits: {
-        OSD2_TXT_RES: { nextValue: 3 },
+        OSD2_TXT_RES: { nextValue: 2 },
       },
     });
 
@@ -158,6 +159,68 @@ describe("ardupilot-osd-model", () => {
     expect(item?.y).toBe(21);
     expect(item?.displayX).toBe(55);
     expect(item?.displayY).toBe(21);
+  });
+
+  it("uses the selected target grid instead of guessing from shared TXT_RES mode 3", () => {
+    const paramStore = createParamStore({
+      OSD1_TXT_RES: 3,
+      OSD1_GSPEED_EN: 1,
+      OSD1_GSPEED_X: 55,
+      OSD1_GSPEED_Y: 21,
+    });
+    const avatar = buildArduPilotOsdModel({
+      paramStore,
+      displayTarget: osdDisplayTargetPreset("walksnail_avatar"),
+    });
+    const wtfos = buildArduPilotOsdModel({
+      paramStore,
+      displayTarget: osdDisplayTargetPreset("dji_wtfos"),
+    });
+
+    expect(avatar.screens[0]?.grid).toMatchObject({ columns: 53, rows: 20 });
+    expect(avatar.screens[0]?.items[0]).toMatchObject({
+      x: 55,
+      y: 21,
+      displayX: 52,
+      displayY: 19,
+      xOutOfRange: true,
+      yOutOfRange: true,
+    });
+    expect(wtfos.screens[0]?.grid).toMatchObject({ columns: 60, rows: 22 });
+    expect(wtfos.screens[0]?.items[0]).toMatchObject({
+      x: 55,
+      y: 21,
+      displayX: 55,
+      displayY: 21,
+      xOutOfRange: false,
+      yOutOfRange: false,
+    });
+  });
+
+  it("applies a target override only to the active screen", () => {
+    const model = buildArduPilotOsdModel({
+      paramStore: createParamStore({
+        OSD1_TXT_RES: 1,
+        OSD1_ALTITUDE_EN: 1,
+        OSD1_ALTITUDE_X: 40,
+        OSD1_ALTITUDE_Y: 17,
+        OSD2_TXT_RES: 3,
+        OSD2_GSPEED_EN: 1,
+        OSD2_GSPEED_X: 52,
+        OSD2_GSPEED_Y: 19,
+      }),
+      displayTarget: osdDisplayTargetPreset("walksnail_avatar"),
+      displayTargetScreen: 2,
+    });
+
+    expect(model.screens[0]?.grid).toEqual({ columns: 50, rows: 18, label: "HD 50 x 18" });
+    expect(model.screens[1]?.grid).toMatchObject({ columns: 53, rows: 20 });
+    expect(model.screens[1]?.items[0]).toMatchObject({
+      displayX: 52,
+      displayY: 19,
+      xOutOfRange: false,
+      yOutOfRange: false,
+    });
   });
 
   it("tracks disabled screens separately from item enable state", () => {

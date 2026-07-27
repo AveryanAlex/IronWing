@@ -6,6 +6,18 @@ import type { ParamStore } from "../../../../params";
 import type { ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import type { ArduPilotOsdModel } from "../../../../lib/osd/ardupilot-osd-model";
 import {
+  OSD_DISPLAY_GRID_OPTIONS,
+  OSD_DISPLAY_TARGET_OPTIONS,
+  OSD_TEXT_RESOLUTION_MODES,
+  createManualOsdDisplayTarget,
+  osdDisplayGridOption,
+  osdDisplayTargetLabel,
+  osdDisplayTargetPreset,
+  type OsdDisplayTargetId,
+  type OsdDisplayTargetSelection,
+  type OsdTextResolutionMode,
+} from "../../../../lib/osd/osd-display-target";
+import {
   OSD_VIDEO_SYSTEM_PROFILE_LIST,
   OSD_VIDEO_SYSTEM_PROFILES,
   buildOsdConfigurationPlan,
@@ -27,6 +39,8 @@ type StagedSerialRow = {
   nextValueText: string;
 };
 
+const DEFAULT_MANUAL_GRID = { columns: 30, rows: 16 } as const;
+
 type Props = {
   osdModel: ArduPilotOsdModel;
   serialModel: SerialPortModel;
@@ -34,8 +48,10 @@ type Props = {
   paramStore: ParamStore | null;
   stagedEdits: Record<string, StagedParameterEdit>;
   itemIndex: Map<string, ParameterItemModel>;
+  displayTarget: OsdDisplayTargetSelection | null;
   disabled?: boolean;
   onStageParam: (name: string, value: number) => void;
+  onDisplayTargetChange: (selection: OsdDisplayTargetSelection | null) => void;
 };
 
 let {
@@ -45,8 +61,10 @@ let {
   paramStore,
   stagedEdits,
   itemIndex,
+  displayTarget,
   disabled = false,
   onStageParam,
+  onDisplayTargetChange,
 }: Props = $props();
 
 let selectedProfileId = $state<OsdVideoSystemId | null>(null);
@@ -54,7 +72,7 @@ let selectedPortByProfile = $state<Partial<Record<OsdVideoSystemId, string>>>({}
 
 let detected = $derived(detectOsdConfiguration({ paramStore, stagedEdits }));
 let draftProfileId = $derived(selectedProfileId ?? (
-  detected.state === "analog" || detected.state === "dji" || detected.state === "walksnail"
+  detected.state === "analog" || detected.state === "dji" || detected.state === "displayport"
     ? detected.state
     : null
 ));
@@ -139,12 +157,36 @@ let selectedScreenModel = $derived.by(() => {
 
   return osdModel.screens.find((screen) => screen.screen === selectedScreen) ?? osdModel.screens[0] ?? null;
 });
-let resolutionOptions = $derived([
-  { value: "0", label: "SD 30 x 16" },
-  { value: "1", label: "HD 50 x 18" },
-  { value: "3", label: "HD 60 x 22" },
-]);
-let resolutionSelectValue = $derived(String(selectedScreenModel?.txtResValue ?? 1));
+let textResolutionModeOptions = $derived(
+  OSD_TEXT_RESOLUTION_MODES.map((mode) => ({ value: String(mode), label: `Mode ${mode}` })),
+);
+let displayGridOptions = $derived(
+  OSD_DISPLAY_GRID_OPTIONS.map((grid) => ({ value: grid.id, label: grid.label })),
+);
+let manualGridValue = $derived(
+  displayTarget?.source === "manual" ? osdDisplayGridOption(displayTarget)?.id ?? "30x16" : "30x16",
+);
+let manualModeValue = $derived(String(displayTarget?.source === "manual" ? displayTarget.txtResMode : 0));
+let displayTargetActionabilityIssue = $derived.by(() => {
+  if (!displayTarget) {
+    return "Select the connected display target first.";
+  }
+  if (!selectedScreenModel?.txtResParamName) {
+    return "No OSDn_TXT_RES parameter is loaded for the active screen.";
+  }
+
+  return targetActionabilityIssue({ name: selectedScreenModel.txtResParamName });
+});
+let displayTargetModeMatches = $derived(
+  displayTarget !== null
+  && selectedScreenModel?.txtResValue === displayTarget.txtResMode,
+);
+let canStageDisplayTargetMode = $derived(
+  draftProfileId === "displayport"
+  && !disabled
+  && displayTargetActionabilityIssue === null
+  && !displayTargetModeMatches,
+);
 let stagedSerialRows = $derived(
   serialModel.ports.flatMap((row) => stagedSerialChanges(row, alreadyStagedTargetNames)),
 );
@@ -175,22 +217,57 @@ function stageConfiguration() {
   }
 }
 
-function stageResolution(value: string) {
+function stageDisplayTargetMode() {
   const screen = selectedScreenModel;
-  const parsed = Number(value);
-  if (!screen || !screen.txtResParamName || !Number.isFinite(parsed)) {
+  if (!screen?.txtResParamName || !displayTarget || !canStageDisplayTargetMode) {
     return;
   }
 
-  if (!canStageTarget({ name: screen.txtResParamName })) {
-    return;
-  }
-
-  onStageParam(screen.txtResParamName, parsed);
+  onStageParam(screen.txtResParamName, displayTarget.txtResMode);
 }
 
-function canStageTarget(target: Pick<OsdSetupStageTarget, "name">): boolean {
-  return !disabled && targetActionabilityIssue(target) === null;
+function handleDisplayTargetChange(value: string) {
+  if (value === "generic") {
+    const currentGrid = displayTarget?.source === "manual"
+      ? osdDisplayGridOption(displayTarget)
+      : null;
+    onDisplayTargetChange(createManualOsdDisplayTarget(
+      displayTarget?.source === "manual" ? displayTarget.txtResMode : 0,
+      currentGrid ?? DEFAULT_MANUAL_GRID,
+    ));
+    return;
+  }
+
+  if (isPresetTargetId(value)) {
+    onDisplayTargetChange(osdDisplayTargetPreset(value));
+  }
+}
+
+function handleManualModeChange(value: string) {
+  if (displayTarget?.source !== "manual") {
+    return;
+  }
+
+  const mode = Number(value);
+  const grid = osdDisplayGridOption(displayTarget);
+  if (!isTextResolutionMode(mode) || !grid) {
+    return;
+  }
+
+  onDisplayTargetChange(createManualOsdDisplayTarget(mode, grid));
+}
+
+function handleManualGridChange(value: string) {
+  if (displayTarget?.source !== "manual") {
+    return;
+  }
+
+  const grid = OSD_DISPLAY_GRID_OPTIONS.find((candidate) => candidate.id === value);
+  if (!grid) {
+    return;
+  }
+
+  onDisplayTargetChange(createManualOsdDisplayTarget(displayTarget.txtResMode, grid));
 }
 
 function targetActionabilityIssue(target: Pick<OsdSetupStageTarget, "name">): string | null {
@@ -210,7 +287,15 @@ function isTargetAlreadyStaged(target: OsdSetupStageTarget): boolean {
 }
 
 function isProfileId(value: string): value is OsdVideoSystemId {
-  return value === "analog" || value === "dji" || value === "walksnail";
+  return value === "analog" || value === "dji" || value === "displayport";
+}
+
+function isPresetTargetId(value: string): value is Exclude<OsdDisplayTargetId, "generic"> {
+  return OSD_DISPLAY_TARGET_OPTIONS.some((option) => option.value === value) && value !== "generic";
+}
+
+function isTextResolutionMode(value: number): value is OsdTextResolutionMode {
+  return OSD_TEXT_RESOLUTION_MODES.some((mode) => mode === value);
 }
 
 function portOptionLabel(row: SerialPortRow): string {
@@ -284,7 +369,7 @@ function targetValueText(target: OsdSetupStageTarget): string {
 <SetupSectionCard
   icon={Monitor}
   title="OSD Setup"
-  description="Stage the essential ArduPilot parameters for analog onboard OSD, DJI Custom OSD, or Walksnail DisplayPort before refining the layout below."
+  description="Stage the essential ArduPilot parameters for Analog, DJI Stock Custom OSD, or MSP DisplayPort before refining the layout below."
   testId={setupWorkspaceTestIds.osdSetup}
 >
   {#snippet status()}
@@ -328,6 +413,14 @@ function targetValueText(target: OsdSetupStageTarget): string {
           </div>
         {:else}
           <p class="mt-2 text-sm leading-6 text-text-secondary">{noProfileMessage}</p>
+        {/if}
+        {#if displayTarget}
+          <p class="mt-3 rounded-md border border-border bg-bg-primary px-2 py-1.5 text-xs leading-5 text-text-muted">
+            Saved DisplayPort target:
+            <span class="font-medium text-text-primary">{osdDisplayTargetLabel(displayTarget)}</span>
+            · {displayTarget.columns} × {displayTarget.rows} · TXT_RES={displayTarget.txtResMode}.
+            This global preference remains selected across vehicle connections.
+          </p>
         {/if}
       </div>
 
@@ -400,31 +493,116 @@ function targetValueText(target: OsdSetupStageTarget): string {
             {/if}
           </ul>
         {:else}
-          <p class="mt-3 text-xs leading-5 text-text-muted">Pick Analog, DJI, or Walksnail to see wiring and display guidance.</p>
+          <p class="mt-3 text-xs leading-5 text-text-muted">Pick Analog, DJI Stock Custom OSD, or MSP DisplayPort to see wiring and display guidance.</p>
         {/if}
       </div>
 
-      {#if draftProfileId === "walksnail"}
+      {#if draftProfileId === "displayport"}
         <div class="rounded-lg border border-border bg-bg-primary p-3">
           <label class="grid gap-1 text-xs font-medium uppercase tracking-wide text-text-muted">
-            DisplayPort grid for active screen
+            Connected Display
             <NativeSelect
-              value={resolutionSelectValue}
-              options={resolutionOptions}
-              disabled={disabled || !selectedScreenModel?.txtResParamName}
-              testId={setupWorkspaceTestIds.osdSetupResolutionSelect}
-              onchange={(event) => stageResolution(event.currentTarget.value)}
+              value={displayTarget?.targetId ?? ""}
+              options={OSD_DISPLAY_TARGET_OPTIONS}
+              placeholder="Select connected display"
+              disabled={disabled}
+              testId={setupWorkspaceTestIds.osdSetupDisplayTargetSelect}
+              onchange={(event) => handleDisplayTargetChange(event.currentTarget.value)}
             />
           </label>
-          {#if selectedScreenModel?.txtResParamName}
+
+          {#if displayTarget?.source === "manual"}
+            <div class="mt-3 grid gap-3 sm:grid-cols-2">
+              <label class="grid gap-1 text-xs font-medium uppercase tracking-wide text-text-muted">
+                TXT_RES mode
+                <NativeSelect
+                  value={manualModeValue}
+                  options={textResolutionModeOptions}
+                  disabled={disabled}
+                  testId={setupWorkspaceTestIds.osdSetupManualModeSelect}
+                  onchange={(event) => handleManualModeChange(event.currentTarget.value)}
+                />
+              </label>
+              <label class="grid gap-1 text-xs font-medium uppercase tracking-wide text-text-muted">
+                Actual character grid
+                <NativeSelect
+                  value={manualGridValue}
+                  options={displayGridOptions}
+                  disabled={disabled}
+                  testId={setupWorkspaceTestIds.osdSetupManualGridSelect}
+                  onchange={(event) => handleManualGridChange(event.currentTarget.value)}
+                />
+              </label>
+            </div>
+          {/if}
+
+          {#if displayTarget}
             <p class="mt-2 text-xs leading-5 text-text-muted">
-              Stages <span class="font-mono text-text-primary">{selectedScreenModel.txtResParamName}</span> for {selectedScreenModel.label}. Use HD grids before placing Walksnail items.
-              {#if stagedEdits[selectedScreenModel.txtResParamName]}
-                <span class="ml-1 inline-block"><StagedBadge name={selectedScreenModel.txtResParamName} testId={`${setupWorkspaceTestIds.osdSetupStagedPrefix}-${selectedScreenModel.txtResParamName}`} /></span>
-              {/if}
+              <span class="font-medium text-text-primary">{osdDisplayTargetLabel(displayTarget)}</span>
+              uses a {displayTarget.columns} × {displayTarget.rows} character grid and sends
+              <span class="font-mono text-text-primary"> TXT_RES={displayTarget.txtResMode}</span>.
+              Changing this preference updates the planned preview only.
             </p>
           {:else}
-            <p class="mt-2 text-xs leading-5 text-warning">No OSDn_TXT_RES parameter is loaded for the active screen, so grid resolution cannot be staged here.</p>
+            <p class="mt-2 text-xs leading-5 text-warning">
+              A concrete display target is required because the same TXT_RES mode can represent different grids on different devices.
+            </p>
+          {/if}
+
+          {#if !displayTargetModeMatches && selectedScreenModel?.txtResParamName && stagedEdits[selectedScreenModel.txtResParamName]}
+            <div class="mt-2">
+              <StagedBadge
+                name={selectedScreenModel.txtResParamName}
+                testId={`${setupWorkspaceTestIds.osdSetupStagedPrefix}-${selectedScreenModel.txtResParamName}`}
+              />
+            </div>
+          {/if}
+
+          {#if displayTargetModeMatches && selectedScreenModel && displayTarget}
+            <div class="mt-3 flex flex-wrap items-center gap-2 rounded-md border border-success/30 bg-success/10 px-3 py-2 text-xs leading-5 text-text-secondary">
+              <CheckCircle2 class="shrink-0 text-success" size={16} aria-hidden="true" />
+              {#if selectedScreenModel.txtResStaged && selectedScreenModel.txtResParamName}
+                <span>
+                  <span class="font-mono text-text-primary">{selectedScreenModel.txtResParamName}={displayTarget.txtResMode}</span>
+                  is staged for {selectedScreenModel.label}.
+                </span>
+                <StagedBadge
+                  name={selectedScreenModel.txtResParamName}
+                  testId={`${setupWorkspaceTestIds.osdSetupStagedPrefix}-${selectedScreenModel.txtResParamName}`}
+                />
+              {:else}
+                <span>
+                  {selectedScreenModel.label} already uses
+                  <span class="font-mono text-text-primary"> TXT_RES={displayTarget.txtResMode}</span>.
+                </span>
+              {/if}
+            </div>
+          {:else}
+            <Button
+              class="mt-3 w-full"
+              disabled={!canStageDisplayTargetMode}
+              testId={setupWorkspaceTestIds.osdSetupStageGridAction}
+              onclick={stageDisplayTargetMode}
+            >
+              {#if selectedScreenModel?.txtResParamName && selectedScreenModel}
+                Stage {selectedScreenModel.txtResParamName} for {selectedScreenModel.label}
+              {:else}
+                Stage target grid for active screen
+              {/if}
+            </Button>
+          {/if}
+
+          {#if displayTargetActionabilityIssue}
+            <p class="mt-2 text-xs leading-5 text-warning">{displayTargetActionabilityIssue}</p>
+          {:else if selectedScreenModel && displayTarget && !displayTargetModeMatches}
+            <p class="mt-2 text-xs leading-5 text-text-muted">
+              Effective mode for {selectedScreenModel.label}:
+              <span class="font-mono text-text-primary">{selectedScreenModel.txtResValue ?? "--"}</span>.
+              The button stages only this screen's TXT_RES parameter.
+              {#if selectedScreenModel.txtResStaged}
+                <span class="ml-1 text-warning">Pending apply.</span>
+              {/if}
+            </p>
           {/if}
         </div>
       {/if}
@@ -437,7 +615,7 @@ function targetValueText(target: OsdSetupStageTarget): string {
           </SetupStatusPill>
         </div>
         <p class="mt-2 text-xs leading-5 text-text-muted">
-          Review the complete backend and UART transaction, then stage it in one explicit action. DisplayPort grid resolution is staged only from its own selector above.
+          Review the complete backend and UART transaction, then stage it in one explicit action. The DisplayPort target mode is staged only from its own button above.
         </p>
 
         <div class="mt-3 flex flex-wrap gap-2 text-xs text-text-secondary">

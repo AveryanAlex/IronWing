@@ -1,5 +1,9 @@
 import type { ParamStore } from "../../params";
 import type { StagedParameterEdit } from "../stores/params";
+import {
+  osdDisplayTargetGridLabel,
+  type OsdDisplayTargetSelection,
+} from "./osd-display-target";
 
 export const OSD_DEFAULT_COLUMNS = 30;
 export const OSD_DEFAULT_ROWS = 16;
@@ -80,6 +84,8 @@ export function buildArduPilotOsdModel(input: {
   stagedEdits?: Record<string, Pick<StagedParameterEdit, "nextValue">>;
   columns?: number;
   rows?: number;
+  displayTarget?: OsdDisplayTargetSelection | null;
+  displayTargetScreen?: number | null;
 }): ArduPilotOsdModel {
   const stagedEdits = input.stagedEdits ?? {};
   const fallbackGrid = {
@@ -130,13 +136,17 @@ export function buildArduPilotOsdModel(input: {
     ...screenEnableNames.keys(),
     ...screenTextResNames.keys(),
   ]);
+  const sortedScreenNumbers = [...screenNumbers].sort((left, right) => left - right);
+  const displayTargetScreen = input.displayTargetScreen ?? sortedScreenNumbers[0] ?? null;
   const screens = [...screenNumbers]
     .sort((left, right) => left - right)
     .map((screen): OsdScreenModel => {
       const enableParamName = screenEnableNames.get(screen) ?? null;
       const txtResParamName = screenTextResNames.get(screen) ?? null;
       const txtResValue = txtResParamName ? effectiveParamValue(txtResParamName, params, stagedEdits) : null;
-      const grid = resolveGridForTextResolution(txtResValue, fallbackGrid);
+      const grid = input.displayTarget && screen === displayTargetScreen
+        ? gridForDisplayTarget(input.displayTarget)
+        : resolveGridForTextResolution(txtResValue, fallbackGrid);
       const items = [...(screenItems.get(screen)?.values() ?? [])]
         .map((item) => buildOsdItem(item, screen, params, stagedEdits, grid))
         .sort((left, right) => left.y - right.y || left.x - right.x || left.label.localeCompare(right.label));
@@ -262,11 +272,19 @@ function resolveGridForTextResolution(value: number | null, fallbackGrid: OsdGri
       return DEFAULT_GRID;
     case 1:
       return { columns: 50, rows: 18, label: "HD 50 x 18" };
-    case 3:
+    case 2:
       return { columns: 60, rows: 22, label: "HD 60 x 22" };
     default:
       return fallbackGrid;
   }
+}
+
+function gridForDisplayTarget(selection: OsdDisplayTargetSelection): OsdGridModel {
+  return {
+    columns: selection.columns,
+    rows: selection.rows,
+    label: osdDisplayTargetGridLabel(selection),
+  };
 }
 
 function formatItemLabel(key: string): string {

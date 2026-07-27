@@ -84,9 +84,9 @@ describe("ardupilot-osd-setup", () => {
     });
   });
 
-  it("stages Walksnail as a single primary DisplayPort backend", () => {
+  it("stages MSP DisplayPort as a single primary backend", () => {
     const plan = buildOsdProfileStagePlan({
-      profileId: "walksnail",
+      profileId: "displayport",
       paramStore: createParamStore({
         OSD_TYPE: OSD_TYPE_ANALOG,
         MSP_OPTIONS: 1,
@@ -136,7 +136,7 @@ describe("ardupilot-osd-setup", () => {
     expect(detectOsdConfiguration({ paramStore: createParamStore({ OSD_TYPE: OSD_TYPE_MSP }) }).state)
       .toBe("dji");
     expect(detectOsdConfiguration({ paramStore: createParamStore({ OSD_TYPE: OSD_TYPE_DISPLAYPORT }) }).state)
-      .toBe("walksnail");
+      .toBe("displayport");
   });
 
   it("builds an analog transition from disabled without requiring a UART", () => {
@@ -211,9 +211,9 @@ describe("ardupilot-osd-setup", () => {
     });
   });
 
-  it("builds one complete Walksnail plan", () => {
+  it("builds one complete DisplayPort plan", () => {
     const plan = buildOsdConfigurationPlan({
-      profileId: "walksnail",
+      profileId: "displayport",
       selectedPortPrefix: "SERIAL3",
       ports: [
         row(1, SERIAL_PROTOCOL_DISPLAYPORT, SERIAL_BAUD_115200),
@@ -235,9 +235,9 @@ describe("ardupilot-osd-setup", () => {
     ]);
   });
 
-  it("cleans up a staged DJI UART when switching to Walksnail", () => {
+  it("cleans up a staged DJI UART when switching to DisplayPort", () => {
     const plan = buildOsdConfigurationPlan({
-      profileId: "walksnail",
+      profileId: "displayport",
       selectedPortPrefix: "SERIAL2",
       ports: [row(1, 33), row(2, 2)],
       paramStore: createParamStore({ OSD_TYPE: OSD_TYPE_MSP, MSP_OPTIONS: 4 }),
@@ -253,7 +253,7 @@ describe("ardupilot-osd-setup", () => {
     ]);
   });
 
-  it("cleans up DJI and Walksnail UARTs, but not generic MSP, when switching to analog", () => {
+  it("cleans up DJI and DisplayPort UARTs, but not generic MSP, when switching to analog", () => {
     const plan = buildOsdConfigurationPlan({
       profileId: "analog",
       selectedPortPrefix: null,
@@ -297,13 +297,13 @@ describe("ardupilot-osd-setup", () => {
       paramStore: createParamStore({ OSD_TYPE: 0, MSP_OPTIONS: 0, OSD_OPTIONS: 0 }),
     });
     const missingBackendParameter = buildOsdConfigurationPlan({
-      profileId: "walksnail",
+      profileId: "displayport",
       selectedPortPrefix: "SERIAL1",
       ports: [row(1, 2)],
       paramStore: createParamStore({ OSD_TYPE: 0 }),
     });
     const readOnlyCleanupUart = buildOsdConfigurationPlan({
-      profileId: "walksnail",
+      profileId: "displayport",
       selectedPortPrefix: "SERIAL2",
       ports: [
         row(1, 33, 57, { protocolMetadataReady: false }),

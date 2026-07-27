@@ -42,7 +42,7 @@ let {
   class={[
     "osd-item-chip min-w-0 overflow-hidden rounded-md border font-mono text-xs font-semibold shadow-sm transition",
     mode === "grid"
-      ? "absolute min-h-7 justify-start px-2 py-1 text-left touch-none"
+      ? "absolute h-auto min-h-0 justify-start px-1 py-0 text-left touch-none"
       : "relative flex min-h-9 w-full touch-pan-y items-center justify-between gap-2 px-2.5 py-2 text-left",
     disabled
       ? "cursor-not-allowed border-border bg-bg-secondary text-text-muted opacity-60"

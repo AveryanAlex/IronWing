@@ -21,7 +21,7 @@ export const MSP_OPTIONS_TELEMETRY_MODE_BIT = 0;
 export const MSP_OPTIONS_DJI_BETAFLIGHT_FONT_BIT = 2;
 export const OSD_OPTIONS_TRANSLATE_ARROWS_BIT = 5;
 
-export type OsdVideoSystemId = "analog" | "dji" | "walksnail";
+export type OsdVideoSystemId = "analog" | "dji" | "displayport";
 export type OsdDetectedState = "disabled" | OsdVideoSystemId | "unknown";
 
 export type OsdVideoSystemProfile = {
@@ -72,7 +72,7 @@ export type OsdConfigurationPlanInput = OsdSetupValueInput & {
 export const OSD_VIDEO_SYSTEM_PROFILES: Record<OsdVideoSystemId, OsdVideoSystemProfile> = {
   analog: {
     id: "analog",
-    label: "Analog onboard OSD",
+    label: "Analog",
     shortLabel: "Analog",
     summary: "Use the flight controller's onboard MAX7456-style analog overlay. No MSP UART is required.",
     serialProtocol: null,
@@ -86,7 +86,7 @@ export const OSD_VIDEO_SYSTEM_PROFILES: Record<OsdVideoSystemId, OsdVideoSystemP
   },
   dji: {
     id: "dji",
-    label: "DJI Custom OSD",
+    label: "DJI Stock Custom OSD",
     shortLabel: "DJI",
     summary: "Use DJI FPV/RE/compatible goggles custom OSD over MSP on the UART wired to the air unit.",
     serialProtocol: SERIAL_PROTOCOL_DJI_FPV,
@@ -98,18 +98,18 @@ export const OSD_VIDEO_SYSTEM_PROFILES: Record<OsdVideoSystemId, OsdVideoSystemP
       "Use both TX and RX between the flight controller UART and the DJI air unit for normal MSP operation.",
     ],
   },
-  walksnail: {
-    id: "walksnail",
-    label: "Walksnail DisplayPort",
-    shortLabel: "Walksnail",
-    summary: "Use Walksnail/Avatar DisplayPort so ArduPilot draws the OSD layout directly on the HD system.",
+  displayport: {
+    id: "displayport",
+    label: "MSP DisplayPort",
+    shortLabel: "DisplayPort",
+    summary: "Use MSP DisplayPort so ArduPilot draws the OSD layout directly on a compatible digital display.",
     serialProtocol: SERIAL_PROTOCOL_DISPLAYPORT,
     serialProtocolLabel: "MSP DisplayPort (42)",
     primaryOsdType: OSD_TYPE_DISPLAYPORT,
     keyParams: ["OSD_TYPE=5", "SERIALn_PROTOCOL=42", "SERIALn_BAUD=115", "OSDn_TXT_RES"],
     operatorNotes: [
-      "Wire TX and RX from the selected UART to the Walksnail/Avatar VTX or air unit.",
-      "Choose a text resolution that matches the goggles font/grid before placing HD items.",
+      "Wire TX and RX from the selected UART to the DisplayPort VTX or air unit.",
+      "Select the connected display target and stage its required text-resolution mode before placing HD items.",
     ],
   },
 };
@@ -117,7 +117,7 @@ export const OSD_VIDEO_SYSTEM_PROFILES: Record<OsdVideoSystemId, OsdVideoSystemP
 export const OSD_VIDEO_SYSTEM_PROFILE_LIST = [
   OSD_VIDEO_SYSTEM_PROFILES.analog,
   OSD_VIDEO_SYSTEM_PROFILES.dji,
-  OSD_VIDEO_SYSTEM_PROFILES.walksnail,
+  OSD_VIDEO_SYSTEM_PROFILES.displayport,
 ];
 
 export function detectOsdConfiguration(input: OsdSetupValueInput): {
@@ -135,7 +135,7 @@ export function detectOsdConfiguration(input: OsdSetupValueInput): {
     return { state: "dji", osdType };
   }
   if (osdType === OSD_TYPE_DISPLAYPORT) {
-    return { state: "walksnail", osdType };
+    return { state: "displayport", osdType };
   }
 
   return { state: "unknown", osdType };
@@ -219,7 +219,7 @@ export function buildOsdProfileStagePlan(input: OsdSetupValueInput & {
         "Translate direction arrows for DJI Betaflight-compatible fonts.",
       ));
       break;
-    case "walksnail":
+    case "displayport":
       targets.push(buildParamTarget(
         input,
         "OSD_TYPE",
@@ -372,7 +372,7 @@ function requiredProfileParamNames(profileId: OsdVideoSystemId): string[] {
       return ["OSD_TYPE"];
     case "dji":
       return ["OSD_TYPE", "MSP_OPTIONS", "OSD_OPTIONS"];
-    case "walksnail":
+    case "displayport":
       return ["OSD_TYPE", "MSP_OPTIONS"];
   }
 }
@@ -459,7 +459,7 @@ function osdProfileProtocolLabel(protocol: number | null): string {
     return OSD_VIDEO_SYSTEM_PROFILES.dji.serialProtocolLabel ?? "DJI FPV / Custom OSD";
   }
   if (protocol === SERIAL_PROTOCOL_DISPLAYPORT) {
-    return OSD_VIDEO_SYSTEM_PROFILES.walksnail.serialProtocolLabel ?? "MSP DisplayPort";
+    return OSD_VIDEO_SYSTEM_PROFILES.displayport.serialProtocolLabel ?? "MSP DisplayPort";
   }
 
   return "OSD profile protocol";
