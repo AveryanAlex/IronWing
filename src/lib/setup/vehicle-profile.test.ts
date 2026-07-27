@@ -7,9 +7,8 @@ import {
   isCopterVehicleType,
   isPlaneVehicleType,
   isRoverVehicleType,
-  type VehicleProfile,
 } from "./vehicle-profile";
-import { getApMotorDiagramModel, getVtolLayoutModel } from "./vtol-layout-model";
+import { getApMotorDiagramModel } from "./vtol-layout-model";
 
 function createParamStore(entries: Record<string, number>): ParamStore {
   const params: ParamStore["params"] = {};
@@ -31,38 +30,6 @@ function createProfileInput(
     stagedEdits: Object.fromEntries(
       Object.entries(stagedEntries).map(([name, nextValue]) => [name, { nextValue }]),
     ),
-  };
-}
-
-function createResolvedQuadPlaneProfile(overrides: Partial<VehicleProfile> = {}): VehicleProfile {
-  return {
-    vehicleFamily: "plane",
-    isPlane: true,
-    isCopter: false,
-    isRover: false,
-    supportsVtol: true,
-    hasVtolToggle: true,
-    quadPlaneEnabled: true,
-    quadPlaneEnabledInStore: true,
-    hasAnyQuadPlaneParams: true,
-    hasCompleteQuadPlaneParams: true,
-    hasPartialQuadPlaneParams: false,
-    awaitingParamRefresh: false,
-    frameParamFamily: "quadplane",
-    frameClassParam: "Q_FRAME_CLASS",
-    frameTypeParam: "Q_FRAME_TYPE",
-    frameClassValue: 1,
-    frameTypeValue: 1,
-    tiltEnabled: false,
-    tailsitterEnabled: false,
-    subtype: "standard",
-    hasUnsupportedSubtype: false,
-    planeVtolState: "vtol-ready",
-    stagedEnableChange: false,
-    stagedFrameClassChange: false,
-    stagedFrameTypeChange: false,
-    rebootRequiredBeforeTesting: false,
-    ...overrides,
   };
 }
 
@@ -199,56 +166,7 @@ describe("vtol-layout-model", () => {
     expect(model?.motors).toHaveLength(4);
   });
 
-  it("reuses AP_Motors data for a refreshed standard QuadPlane layout", () => {
-    const model = getVtolLayoutModel(createResolvedQuadPlaneProfile());
-
-    expect(model).not.toBeNull();
-    expect(model?.source).toBe("ap-motors");
-    expect(model?.overlay).toBe("none");
-    expect(model?.status).toBe("supported");
-  });
-
-  it("adds a tilt-rotor overlay when an AP_Motors layout exists", () => {
-    const model = getVtolLayoutModel(
-      createResolvedQuadPlaneProfile({
-        tiltEnabled: true,
-        subtype: "tiltrotor",
-      }),
-    );
-
-    expect(model?.overlay).toBe("tiltrotor");
-    expect(model?.motors.some((motor) => motor.role === "tilt")).toBe(true);
-    expect(model?.hasMotorTestSurface).toBe(true);
-  });
-
-  it("keeps custom tailsitter layouts preview-only while preserving motor-test state", () => {
-    const model = getVtolLayoutModel(
-      createResolvedQuadPlaneProfile({
-        frameClassValue: 10,
-        frameTypeValue: 0,
-        tailsitterEnabled: true,
-        subtype: "tailsitter",
-      }),
-    );
-
-    expect(model?.source).toBe("custom");
-    expect(model?.status).toBe("preview-only");
-    expect(model?.overlay).toBe("tailsitter");
-    expect(model?.hasLiftMotorSurface).toBe(false);
-    expect(model?.hasMotorTestSurface).toBe(true);
-  });
-
-  it("fails closed for unsupported standard QuadPlane layouts", () => {
-    const model = getVtolLayoutModel(
-      createResolvedQuadPlaneProfile({
-        frameClassValue: 10,
-        frameTypeValue: 0,
-      }),
-    );
-
-    expect(model?.status).toBe("unsupported");
-    expect(model?.hasLiftMotorSurface).toBe(false);
-    expect(model?.hasMotorTestSurface).toBe(false);
-    expect(model?.message).toMatch(/outside the known lift-motor layouts/i);
+  it("does not present Tri Motor7 yaw actuation as a propeller", () => {
+    expect(getApMotorDiagramModel(7, 0)?.motors.map((motor) => motor.motorNumber)).toEqual([1, 2, 4]);
   });
 });

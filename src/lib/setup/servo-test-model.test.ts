@@ -241,11 +241,16 @@ describe("servo-test-model", () => {
     });
   });
 
-  it("treats only Motor 1-8 function values as motor-assigned outputs", () => {
+  it("treats multicopter and tailsitter throttle functions as motor-assigned outputs", () => {
     expect(isMotorServoFunction(33)).toBe(true);
     expect(isMotorServoFunction(40)).toBe(true);
+    expect(isMotorServoFunction(82)).toBe(true);
+    expect(isMotorServoFunction(85)).toBe(true);
+    expect(isMotorServoFunction(70)).toBe(true);
+    expect(isMotorServoFunction(73)).toBe(true);
+    expect(isMotorServoFunction(74)).toBe(true);
     expect(isMotorServoFunction(32)).toBe(false);
-    expect(isMotorServoFunction(70)).toBe(false);
+    expect(isMotorServoFunction(41)).toBe(false);
     expect(isMotorServoFunction(null)).toBe(false);
   });
 });

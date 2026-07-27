@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 
 import type { ParamStore } from "../../params";
-import { deriveVehicleProfile } from "./vehicle-profile";
-import { getApMotorDiagramModel, getVtolLayoutModel } from "./vtol-layout-model";
+import { getApMotorDiagramModel, getVtolTopologyDiagramModel } from "./vtol-layout-model";
+import { buildVtolTopologyModel } from "./vtol-topology-model";
 import {
   MOTOR_TEST_BRIDGE_LIMIT,
   buildMotorTestRows,
   resolveMotorOwner,
 } from "./motor-test-model";
+import { servoFunctionForMotor } from "./motor-functions";
 
 function createParamStore(entries: Record<string, number>): ParamStore {
   const params: ParamStore["params"] = {};
@@ -57,43 +58,28 @@ describe("motor-test-model", () => {
     });
   });
 
-  it("keeps preview-only tailsitter rows visible while blocking direction-dependent test actions", () => {
-    const profile = deriveVehicleProfile(
-      "Fixed_Wing",
-      createInput({
-        Q_ENABLE: 1,
-        Q_FRAME_CLASS: 10,
-        Q_FRAME_TYPE: 0,
-        Q_TAILSIT_ENABLE: 1,
-        SERVO1_FUNCTION: 33,
-        SERVO1_REVERSED: 0,
-        SERVO2_FUNCTION: 34,
-        SERVO2_REVERSED: 0,
-      }),
-    );
+  it("keeps plane-throttle tailsitters out of the multicopter motor test bridge", () => {
+    const input = createInput({
+      Q_ENABLE: 1,
+      Q_FRAME_CLASS: 10,
+      Q_FRAME_TYPE: 0,
+      Q_TAILSIT_ENABLE: 1,
+      SERVO1_FUNCTION: 73,
+      SERVO2_FUNCTION: 74,
+    });
+    const topology = buildVtolTopologyModel(input);
     const rows = buildMotorTestRows(
-      getVtolLayoutModel(profile),
-      createInput({
-        Q_ENABLE: 1,
-        Q_FRAME_CLASS: 10,
-        Q_FRAME_TYPE: 0,
-        Q_TAILSIT_ENABLE: 1,
-        SERVO1_FUNCTION: 33,
-        SERVO1_REVERSED: 0,
-        SERVO2_FUNCTION: 34,
-        SERVO2_REVERSED: 0,
-      }),
+      getVtolTopologyDiagramModel(topology.applied),
+      input,
     );
 
-    expect(rows).toHaveLength(2);
-    expect(rows.map((row) => row.expectedDirection)).toEqual(["unknown", "unknown"]);
-    expect(rows.every((row) => row.testStatus === "blocked-layout")).toBe(true);
-    expect(rows.every((row) => row.testReason?.includes("preview") ?? false)).toBe(true);
+    expect(getVtolTopologyDiagramModel(topology.applied)?.status).toBe("preview-only");
+    expect(rows).toEqual([]);
   });
 
   it("marks rows above the motor_test bridge limit as visible but non-testable", () => {
     const servoEntries = Object.fromEntries(
-      Array.from({ length: 12 }, (_, index) => [`SERVO${index + 1}_FUNCTION`, 33 + index]).flatMap(
+      Array.from({ length: 12 }, (_, index) => [`SERVO${index + 1}_FUNCTION`, servoFunctionForMotor(index + 1) ?? 0]).flatMap(
         ([name, value], index) => [
           [name, value],
           [`SERVO${index + 1}_REVERSED`, 0],

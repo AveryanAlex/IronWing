@@ -1,5 +1,5 @@
 import { getMotorLayout, type MotorLayout } from "../../data/motor-layouts";
-import type { VehicleProfile } from "./vehicle-profile";
+import type { VtolTopologySnapshot } from "./vtol-topology-model";
 
 export type MotorDiagramOverlay = "none" | "tiltrotor" | "tailsitter";
 export type MotorDiagramMotorRole = "lift" | "tilt" | "propulsion";
@@ -21,46 +21,12 @@ export type MotorDiagramModel = {
   message: string | null;
 };
 
-const FALLBACK_TILTROTOR_MOTORS: MotorDiagramEntry[] = [
-  { motorNumber: 1, rollFactor: -0.8, pitchFactor: 0.75, yawFactor: -1, testOrder: 1, role: "tilt" },
-  { motorNumber: 2, rollFactor: 0.8, pitchFactor: 0.75, yawFactor: 1, testOrder: 2, role: "tilt" },
-  { motorNumber: 3, rollFactor: -0.65, pitchFactor: -0.75, yawFactor: 1, testOrder: 3, role: "lift" },
-  { motorNumber: 4, rollFactor: 0.65, pitchFactor: -0.75, yawFactor: -1, testOrder: 4, role: "lift" },
-];
-
-const CUSTOM_TAILSITTER_MOTORS: MotorDiagramEntry[] = [
-  { motorNumber: 1, rollFactor: -0.75, pitchFactor: 0, yawFactor: 0, testOrder: 1, role: "propulsion" },
-  { motorNumber: 2, rollFactor: 0.75, pitchFactor: 0, yawFactor: 0, testOrder: 2, role: "propulsion" },
-];
-
 function cloneMotors(motors: MotorLayout[]): MotorDiagramEntry[] {
   return motors.map((motor) => ({ ...motor }));
 }
 
-function markTiltMotors(motors: MotorLayout[]): MotorDiagramEntry[] {
-  if (motors.length === 0) {
-    return [];
-  }
-
-  const maxPitchFactor = Math.max(...motors.map((motor) => motor.pitchFactor));
-  return motors.map((motor) => ({
-    ...motor,
-    role: motor.pitchFactor === maxPitchFactor ? "tilt" : "lift",
-  }));
-}
-
-function buildUnsupportedModel(message: string): MotorDiagramModel {
-  return {
-    status: "unsupported",
-    source: "custom",
-    className: "VTOL",
-    typeName: "Unsupported",
-    overlay: "none",
-    motors: [],
-    hasLiftMotorSurface: false,
-    hasMotorTestSurface: false,
-    message,
-  };
+function propulsionEntries(frameClass: number, motors: MotorLayout[]): MotorLayout[] {
+  return motors.filter((motor) => !(frameClass === 7 && motor.motorNumber === 7));
 }
 
 export function getApMotorDiagramModel(frameClass: number, frameType: number): MotorDiagramModel | null {
@@ -68,6 +34,7 @@ export function getApMotorDiagramModel(frameClass: number, frameType: number): M
   if (!layout) {
     return null;
   }
+  const motors = propulsionEntries(frameClass, layout.motors);
 
   return {
     status: "supported",
@@ -75,104 +42,55 @@ export function getApMotorDiagramModel(frameClass: number, frameType: number): M
     className: layout.className,
     typeName: layout.typeName,
     overlay: "none",
-    motors: cloneMotors(layout.motors),
-    hasLiftMotorSurface: layout.motors.length > 0,
-    hasMotorTestSurface: layout.motors.length > 0,
+    motors: cloneMotors(motors),
+    hasLiftMotorSurface: motors.length > 0,
+    hasMotorTestSurface: motors.length > 0,
     message: null,
   };
 }
 
-function buildCustomTiltrotorModel(): MotorDiagramModel {
-  const baseQuadX = getMotorLayout(1, 1);
-  const motors = baseQuadX ? markTiltMotors(baseQuadX.motors) : FALLBACK_TILTROTOR_MOTORS;
-
-  return {
-    status: "supported",
-    source: "custom",
-    className: "CUSTOM",
-    typeName: "Tilt-Rotor",
-    overlay: "tiltrotor",
-    motors,
-    hasLiftMotorSurface: true,
-    hasMotorTestSurface: true,
-    message: "Custom tilt-rotor preview shown because this QuadPlane layout is outside the AP_Motors dataset.",
-  };
-}
-
-function buildCustomTailsitterModel(): MotorDiagramModel {
-  return {
-    status: "preview-only",
-    source: "custom",
-    className: "CUSTOM",
-    typeName: "Tailsitter",
-    overlay: "tailsitter",
-    motors: CUSTOM_TAILSITTER_MOTORS,
-    hasLiftMotorSurface: false,
-    hasMotorTestSurface: true,
-    message: "Custom tailsitter preview shown. Use motor testing and manual verification because lift-motor mapping depends on this custom layout.",
-  };
-}
-
-export function getVtolLayoutModel(
-  profile: Pick<
-    VehicleProfile,
-    "frameParamFamily" | "frameClassValue" | "frameTypeValue" | "subtype" | "hasUnsupportedSubtype"
-  >,
-): MotorDiagramModel | null {
-  if (
-    profile.frameParamFamily !== "quadplane"
-    || profile.frameClassValue == null
-    || profile.frameTypeValue == null
-  ) {
+export function getVtolTopologyDiagramModel(snapshot: VtolTopologySnapshot): MotorDiagramModel | null {
+  if (!snapshot.enabled) {
     return null;
   }
 
-  if (profile.hasUnsupportedSubtype || profile.subtype === "compound") {
-    return buildUnsupportedModel(
-      "Tilt-rotor and tailsitter flags are both enabled. Refresh the VTOL params and confirm the airframe before testing motors.",
-    );
-  }
-
-  const apModel = getApMotorDiagramModel(profile.frameClassValue, profile.frameTypeValue);
-  if (apModel) {
-    if (profile.subtype === "tiltrotor") {
-      return {
-        ...apModel,
-        overlay: "tiltrotor",
-        motors: markTiltMotors(apModel.motors),
-        message: "Using the detected lift-motor map with a tilt-rotor overlay.",
-      };
-    }
-
-    if (profile.subtype === "tailsitter") {
-      return {
-        ...apModel,
-        overlay: "tailsitter",
-        message: "Using the detected lift-motor map with a tailsitter overlay.",
-      };
-    }
-
-    return apModel;
-  }
-
-  if (profile.subtype === "tiltrotor") {
-    return buildCustomTiltrotorModel();
-  }
-
-  if (profile.subtype === "tailsitter") {
-    return buildCustomTailsitterModel();
-  }
-
-  return buildUnsupportedModel(
-    `QuadPlane frame class ${profile.frameClassValue} type ${profile.frameTypeValue} is outside the known lift-motor layouts. Verify the airframe manually before testing motors.`,
+  const numberedPropulsors = snapshot.propulsors.filter(
+    (propulsor): propulsor is typeof propulsor & { motorNumber: number } => propulsor.motorNumber !== null,
   );
-}
+  if (numberedPropulsors.length === 0) {
+    return {
+      status: "preview-only",
+      source: "custom",
+      className: snapshot.frameClassLabel,
+      typeName: snapshot.frameTypeLabel,
+      overlay: snapshot.architecture.startsWith("tailsitter") ? "tailsitter" : "tiltrotor",
+      motors: [],
+      hasLiftMotorSurface: false,
+      hasMotorTestSurface: false,
+      message: "This architecture uses plane throttle functions instead of the multicopter motor_test numbering. Verify its propulsion outputs through the documented tailsitter/bicopter bench procedure.",
+    };
+  }
 
-export function deriveVtolLayoutModel(
-  profile: Pick<
-    VehicleProfile,
-    "frameParamFamily" | "frameClassValue" | "frameTypeValue" | "subtype" | "hasUnsupportedSubtype"
-  >,
-): MotorDiagramModel | null {
-  return getVtolLayoutModel(profile);
+  return {
+    status: snapshot.supportedDiagram ? "supported" : "unsupported",
+    source: "ap-motors",
+    className: snapshot.frameClassLabel,
+    typeName: snapshot.frameTypeLabel,
+    overlay: snapshot.architecture === "tiltrotor" || snapshot.architecture === "bicopter"
+      ? "tiltrotor"
+      : snapshot.architecture.startsWith("tailsitter")
+        ? "tailsitter"
+        : "none",
+    motors: numberedPropulsors.map((propulsor) => ({
+      motorNumber: propulsor.motorNumber,
+      rollFactor: propulsor.rollFactor,
+      pitchFactor: propulsor.pitchFactor,
+      yawFactor: propulsor.yawFactor,
+      testOrder: propulsor.testOrder,
+      role: propulsor.tilts ? "tilt" : "lift",
+    })),
+    hasLiftMotorSurface: true,
+    hasMotorTestSurface: true,
+    message: null,
+  };
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+import { page } from "$app/state";
 import { Fan, Power } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
@@ -16,9 +17,10 @@ import {
 import { deriveVehicleProfile, getVehicleSlug, type VehicleProfile } from "../../../../lib/setup/vehicle-profile";
 import {
   getApMotorDiagramModel,
-  getVtolLayoutModel,
+  getVtolTopologyDiagramModel,
   type MotorDiagramModel,
 } from "../../../../lib/setup/vtol-layout-model";
+import { buildVtolTopologyModel } from "../../../../lib/setup/vtol-topology-model";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import MotorDiagram from "../../../../features/setup/shared/MotorDiagram.svelte";
@@ -81,7 +83,7 @@ const sessionState = fromStore(sessionStore);
 
 let testUnlocked = $state(false);
 let activeMotorNumber = $state<number | null>(null);
-let selectedMotorNumber = $state<number | null>(null);
+let selectedMotorNumber = $state<number | null>(requestedMotorNumber());
 let testSuccessByMotor = $state<Record<number, boolean>>({});
 let directionResultByMotor = $state<Record<number, DirectionResult>>({});
 let commandErrorByMotor = $state<Record<number, string>>({});
@@ -98,12 +100,7 @@ let appliedProfile = $derived(
     stagedEdits: {},
   }),
 );
-let previewProfile = $derived(
-  deriveVehicleProfile(vehicleType, {
-    paramStore: params.paramStore,
-    stagedEdits: params.stagedEdits,
-  }),
-);
+let topology = $derived(buildVtolTopologyModel({ paramStore: params.paramStore, stagedEdits: params.stagedEdits }));
 let layoutModel = $derived(resolveAppliedLayoutModel(appliedProfile));
 let rows = $derived(
   buildMotorTestRows(layoutModel, {
@@ -193,10 +190,9 @@ let reversalStateDetail = $derived.by(() => {
   return `${resolvedOwnerCount} rows can stage one-click SERVOx_REVERSED fixes. The rest stay diagnosis-only because mapped outputs or reverse settings are unavailable.`;
 });
 let hasQueuedLayoutChange = $derived(
-  previewProfile.quadPlaneEnabled !== appliedProfile.quadPlaneEnabled ||
-    previewProfile.frameParamFamily !== appliedProfile.frameParamFamily ||
-    previewProfile.frameClassValue !== appliedProfile.frameClassValue ||
-    previewProfile.frameTypeValue !== appliedProfile.frameTypeValue,
+  appliedProfile.frameParamFamily === "quadplane"
+    ? topology.hasTopologyChanges
+    : Object.keys(params.stagedEdits).some((name) => name === "FRAME_CLASS" || name === "FRAME_TYPE"),
 );
 let banners = $derived.by(() => {
   const next: Banner[] = [];
@@ -205,7 +201,10 @@ let banners = $derived.by(() => {
     next.push({
       id: "queued-layout",
       tone: "warning",
-      text: "Frame or VTOL changes are staged. This section keeps showing the last applied layout until those edits are applied and parameters refresh.",
+      text:
+        appliedProfile.frameParamFamily === "quadplane"
+          ? `Pending VTOL topology: ${topology.proposed.architectureLabel} · ${topology.proposed.frameClassLabel} ${topology.proposed.frameTypeLabel}. Motor tests still use applied ${topology.applied.frameClassLabel} ${topology.applied.frameTypeLabel} until Apply, reboot, and parameter refresh complete.`
+          : "Frame changes are staged. Motor tests continue to use the applied layout until those edits are applied and parameters refresh.",
     });
   }
 
@@ -257,7 +256,7 @@ $effect(() => {
     trackedScopeKey = view.activeScopeKey;
     testUnlocked = false;
     activeMotorNumber = null;
-    selectedMotorNumber = null;
+    selectedMotorNumber = requestedMotorNumber();
     testSuccessByMotor = {};
     directionResultByMotor = {};
     commandErrorByMotor = {};
@@ -274,7 +273,7 @@ $effect(() => {
 
 function resolveAppliedLayoutModel(profile: VehicleProfile): MotorDiagramModel | null {
   if (profile.frameParamFamily === "quadplane") {
-    return getVtolLayoutModel(profile);
+    return getVtolTopologyDiagramModel(topology.applied);
   }
 
   if (profile.frameParamFamily === "copter" && profile.frameClassValue !== null && profile.frameTypeValue !== null) {
@@ -282,6 +281,11 @@ function resolveAppliedLayoutModel(profile: VehicleProfile): MotorDiagramModel |
   }
 
   return null;
+}
+
+function requestedMotorNumber(): number | null {
+  const value = Number(page.url.searchParams.get("motor"));
+  return Number.isInteger(value) && value > 0 ? value : null;
 }
 
 function resolveUnlockDisabledReason(input: {
@@ -700,6 +704,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
         {@const reverseParamItem = reverseItem(row)}
         <Card.Root
           as="article"
+          id={`motor-${row.motorNumber}`}
           selected={selectedMotorNumber === row.motorNumber}
           surface="primary"
           testId={`${setupWorkspaceTestIds.motorsEscRowPrefix}-${row.motorNumber}`}

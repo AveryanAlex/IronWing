@@ -123,7 +123,7 @@ export const SETUP_SECTIONS = {
   },
   vtol: {
     title: "VTOL / QuadPlane",
-    description: "QuadPlane activation, lift-frame geometry, transitions, fixed-wing assistance, and wind hold.",
+    description: "VTOL architecture, motor and tilt topology, physical output mapping, transitions, and fixed-wing assistance.",
     kind: "guided",
     path: "/setup/vtol",
     iconKey: "vtol",
@@ -167,7 +167,7 @@ export const SETUP_SECTIONS = {
   },
   motors_esc: {
     title: "Motors & ESC",
-    description: "Motor layout, direction checks, and guarded test readiness.",
+    description: "Applied motor layout, ESC settings, direction checks, and guarded test readiness.",
     kind: "guided",
     path: "/setup/motors-esc",
     iconKey: "motors",

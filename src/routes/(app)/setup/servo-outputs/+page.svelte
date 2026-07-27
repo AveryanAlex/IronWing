@@ -1,4 +1,5 @@
 <script lang="ts">
+import { page } from "$app/state";
 import { Activity, Cable, List, Power } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
@@ -66,7 +67,7 @@ const sessionState = fromStore(sessionStore);
 
 let testUnlocked = $state(false);
 let activeOutputIndex = $state<number | null>(null);
-let selectedOutputIndex = $state<number | null>(null);
+let selectedOutputIndex = $state<number | null>(requestedOutputIndex());
 let testSuccessByOutput = $state<Record<number, boolean>>({});
 let directionResultByOutput = $state<Record<number, DirectionResult>>({});
 let commandErrorByOutput = $state<Record<number, string>>({});
@@ -260,12 +261,17 @@ let banners = $derived.by(() => {
   return next;
 });
 
+function requestedOutputIndex(): number | null {
+  const value = Number(page.url.searchParams.get("output"));
+  return Number.isInteger(value) && value > 0 ? value : null;
+}
+
 $effect(() => {
   if (view.activeScopeKey !== trackedScopeKey) {
     trackedScopeKey = view.activeScopeKey;
     testUnlocked = false;
     activeOutputIndex = null;
-    selectedOutputIndex = null;
+    selectedOutputIndex = requestedOutputIndex();
     testSuccessByOutput = {};
     directionResultByOutput = {};
     commandErrorByOutput = {};
@@ -840,6 +846,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                   {@const readback = resolveReadback(output)}
                   {@const reversalFailure = output.reverseParamName ? params.retainedFailures[output.reverseParamName] : null}
                   <article
+                    id={`servo-output-${output.index}`}
                     class={`rounded-lg border px-4 py-4 ${selectedOutputIndex === output.index ? "border-accent/40 bg-accent/5" : "border-border bg-bg-primary/80"}`}
                     data-selected={selectedOutputIndex === output.index}
                     data-testid={`${setupWorkspaceTestIds.servoOutputsRawRowPrefix}-${output.index}`}

@@ -1,9 +1,9 @@
 import type { ParamStore } from "../../params";
 import type { MotorDiagramEntry, MotorDiagramModel } from "./vtol-layout-model";
+import { servoFunctionForMotor } from "./motor-functions";
 
 export const MOTOR_TEST_BRIDGE_LIMIT = 8;
 export const MOTOR_OUTPUT_COUNT = 32;
-export const MOTOR_FUNCTION_BASE = 32;
 
 export type MotorDirection = "cw" | "ccw" | "unknown";
 export type MotorOwnerStatus = "resolved" | "function-only" | "ambiguous" | "unowned";
@@ -88,7 +88,16 @@ export function resolveMotorOwner(
     };
   }
 
-  const targetFunction = MOTOR_FUNCTION_BASE + motorNumber;
+  const targetFunction = servoFunctionForMotor(motorNumber);
+  if (targetFunction === null) {
+    return {
+      status: "unowned",
+      servoIndex: null,
+      functionParamName: null,
+      reverseParamName: null,
+      reason: `Motor ${motorNumber} is outside the supported ArduPilot motor-function map.`,
+    };
+  }
   let resolvedServoIndex: number | null = null;
   let ambiguousServoIndex: number | null = null;
 

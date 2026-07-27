@@ -1,11 +1,12 @@
 <script lang="ts">
-import { Box, Cable, Gauge, GitMerge, PlaneTakeoff, Route, ShieldCheck, Wind } from "lucide-svelte";
+import { Cable, Gauge, GitMerge, PlaneTakeoff, Route, ShieldCheck, Wind } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { Eyebrow, HelperText, InternalLink } from "../../../../components/ui";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import VtolAssistSpeedEditor from "../../../../features/setup/components/VtolAssistSpeedEditor.svelte";
+import VtolAirframeConfigurator from "../../../../features/setup/components/VtolAirframeConfigurator.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import {
   getSetupWorkspaceRouteContext,
@@ -30,8 +31,7 @@ import {
   type VtolHandoffState,
   type VtolSetupHandoff,
 } from "../../../../lib/setup/vtol-setup-model";
-import { getVtolLayoutModel } from "../../../../lib/setup/vtol-layout-model";
-import MotorDiagram from "../../../../features/setup/shared/MotorDiagram.svelte";
+import { buildVtolTopologyModel } from "../../../../lib/setup/vtol-topology-model";
 
 const route = getSetupWorkspaceRouteContext();
 const viewStore = fromStore(route.viewStore);
@@ -40,20 +40,16 @@ let view = $derived(viewStore.current);
 let section = $derived(setupRouteSection(view, "vtol"));
 
 const enableParams = [{ id: "Q_ENABLE" }] satisfies readonly SetupParamRef[];
-const topologyParams = [{ id: "Q_FRAME_CLASS" }, { id: "Q_FRAME_TYPE" }] satisfies readonly SetupParamRef[];
-const subtypeParams = [{ id: "Q_TILT_ENABLE" }, { id: "Q_TAILSIT_ENABLE" }] satisfies readonly SetupParamRef[];
 const tiltrotorParams = [
-  { id: "Q_TILT_TYPE" },
-  { id: "Q_TILT_MASK" },
   { id: "Q_TILT_MAX" },
   { id: "Q_TILT_RATE_UP" },
   { id: "Q_TILT_RATE_DN" },
   { id: "Q_TILT_YAW_ANGLE" },
   { id: "Q_TILT_FIX_GAIN" },
   { id: "Q_TILT_FIX_ANGLE" },
+  { id: "Q_M_YAW_SV_ANGLE" },
 ] satisfies readonly SetupParamRef[];
 const tailsitterParams = [
-  { id: "Q_TAILSIT_MOTMX" },
   { id: "Q_TAILSIT_ANGLE" },
   { id: "Q_TAILSIT_ANG_VT" },
   { id: "Q_TAILSIT_RAT_FW" },
@@ -61,6 +57,9 @@ const tailsitterParams = [
   { id: "Q_TAILSIT_THR_VT" },
   { id: "Q_TAILSIT_INPUT" },
   { id: "Q_TAILSIT_RLL_MX" },
+  { id: "Q_TAILSIT_VHGAIN" },
+  { id: "Q_TAILSIT_VFGAIN" },
+  { id: "Q_A_ANGLE_BOOST" },
 ] satisfies readonly SetupParamRef[];
 const hoverParams = [
   { id: "Q_TRIM_PITCH" },
@@ -128,7 +127,7 @@ let forwardThrustParams = $derived(
   itemIndex.has("Q_FWD_THR_USE") ? modernForwardThrustParams : legacyForwardThrustParams,
 );
 let actionsBlocked = $derived(view.checkpoint.blocksActions);
-let layoutModel = $derived(model.profile.planeVtolState === "vtol-ready" ? getVtolLayoutModel(model.profile) : null);
+let topology = $derived(buildVtolTopologyModel({ paramStore: params.paramStore, stagedEdits: params.stagedEdits }));
 let docsUrl = $derived(resolveDocsUrl("quadplane_setup", "plane"));
 let assistDocsUrl = $derived(resolveDocsUrl("quadplane_assist", "plane"));
 let transitionsDocsUrl = $derived(resolveDocsUrl("quadplane_transitions", "plane"));
@@ -193,8 +192,8 @@ function handleSetupLinkClick(sectionId: VtolSetupHandoff["sectionId"], event: M
             {model.profile.subtype ?? "Not active"}
           </p>
           <HelperText class="mt-1">
-            {layoutModel
-              ? `${layoutModel.className} ${layoutModel.typeName}`
+            {topology.proposed.supportedDiagram
+              ? `${topology.proposed.frameClassLabel} ${topology.proposed.frameTypeLabel}`
               : "The lift-motor layout appears after the refreshed Q_FRAME family is available."}
           </HelperText>
         </div>
@@ -228,41 +227,7 @@ function handleSetupLinkClick(sectionId: VtolSetupHandoff["sectionId"], event: M
       />
 
       {#if model.profile.quadPlaneEnabled}
-        <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
-          <div class="space-y-4">
-            <SetupParamSection
-              id="topology"
-              icon={Box}
-              title="Lift-frame geometry"
-              description="Choose the VTOL motor class and layout used for mixing, motor order, and direction guidance."
-              params={topologyParams}
-              disabled={actionsBlocked || model.profile.planeVtolState !== "vtol-ready"}
-              surface="elevated"
-              testIdPrefix={setupWorkspaceTestIds.vtolParamPrefix}
-            />
-            <SetupParamSection
-              id="subtype"
-              icon={GitMerge}
-              title="VTOL subtype"
-              description="Standard QuadPlane keeps both subtype flags disabled. Enable only the mechanism fitted to this airframe."
-              params={subtypeParams}
-              disabled={actionsBlocked || model.profile.planeVtolState !== "vtol-ready"}
-              surface="elevated"
-              testIdPrefix={setupWorkspaceTestIds.vtolParamPrefix}
-            />
-          </div>
-
-          <SetupSectionCard icon={Box} title="Lift-motor preview" surface="elevated" compact>
-            <div class="flex min-h-56 flex-col items-center justify-center gap-3 rounded-md border border-border bg-bg-secondary/40 p-4">
-              <MotorDiagram model={layoutModel} size={190} />
-              <HelperText class="text-center" size="xs">
-                {layoutModel?.message
-                  ?? (layoutModel ? `${layoutModel.className} ${layoutModel.typeName}` : null)
-                  ?? "Waiting for a complete applied VTOL frame."}
-              </HelperText>
-            </div>
-          </SetupSectionCard>
-        </div>
+        <VtolAirframeConfigurator {topology} {actionsBlocked} />
       {/if}
 
       {#if model.profile.planeVtolState === "vtol-ready"}
@@ -270,8 +235,8 @@ function handleSetupLinkClick(sectionId: VtolSetupHandoff["sectionId"], event: M
           <SetupParamSection
             id="tiltrotor"
             icon={GitMerge}
-            title="Tiltrotor mechanics"
-            description="Configure tilting motors, transition angles, rates, and optional vectored control for the detected tiltrotor."
+            title="Tilt movement and advanced behavior"
+            description="Adjust transition angles, measured mechanism rates, and optional fixed-wing tilt assistance after the motor-to-actuator topology is correct."
             docsUrl={subtypeDocsUrl}
             params={tiltrotorParams}
             disabled={actionsBlocked}

@@ -1,14 +1,13 @@
 import type { Telemetry } from "../../telemetry";
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
+import { isPropulsionServoFunction } from "./motor-functions";
 
 export const SERVO_OUTPUT_COUNT = 32;
 export const SERVO_LIVE_TEST_LIMIT = 16;
 export const SERVO_COMMAND_PWM_MIN = 1000;
 export const SERVO_COMMAND_PWM_MAX = 2000;
 
-const MOTOR_FUNCTION_MIN = 33;
-const MOTOR_FUNCTION_MAX = 40;
 const SERVO_FUNCTION_DISABLED = 0;
 
 export type ServoGroupingSubtype = "standard" | "tiltrotor" | "tailsitter" | "compound" | null;
@@ -172,11 +171,7 @@ export function clampServoCommandPwm(value: number): number {
 }
 
 export function isMotorServoFunction(functionValue: number | null): boolean {
-  if (functionValue == null) {
-    return false;
-  }
-
-  return functionValue >= MOTOR_FUNCTION_MIN && functionValue <= MOTOR_FUNCTION_MAX;
+  return isPropulsionServoFunction(functionValue);
 }
 
 export function deriveConfiguredServoOutputs(input: ServoParamsInput): ServoConfiguredOutput[] {

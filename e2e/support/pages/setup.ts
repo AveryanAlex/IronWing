@@ -44,6 +44,11 @@ const ids = {
   osdSummary: "setup-workspace-osd-summary",
   vtolAssistInput: "setup-workspace-vtol-input-Q_ASSIST_SPEED",
   vtolAssistStaged: "setup-workspace-vtol-staged-Q_ASSIST_SPEED",
+  vtolAirframe: "vtol-airframe-configurator",
+  vtolFrameClass: "vtol-frame-class-select",
+  vtolTopologyDiagram: "vtol-topology-diagram",
+  motorsEscQueuedLayout: "setup-workspace-motors-esc-banner-queued-layout",
+  motorsEscRowPrefix: "setup-workspace-motors-esc-row",
 } as const;
 
 export class SetupWorkspacePage {
@@ -142,6 +147,44 @@ export class SetupWorkspacePage {
     await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-${name}`)).toHaveCount(1, { timeout: 10_000 });
     await this.auditLayout("setup staged Q_ASSIST_SPEED");
     return { name, current, next };
+  }
+
+  async expectStagedTriPreviewUsesAppliedMotorMap(): Promise<void> {
+    await this.openSectionById("vtol");
+    const airframe = this.page.getByTestId(ids.vtolAirframe);
+    await expect(airframe).toBeVisible({ timeout: 10_000 });
+
+    const motorTestLink = this.page.getByRole("link", { name: "Motor test" }).first();
+    const motorTestHref = await motorTestLink.getAttribute("href");
+    const linkedMotor = motorTestHref?.match(/[?&]motor=(\d+)/)?.[1];
+    if (!linkedMotor) {
+      throw new Error(`VTOL motor link has no motor target: ${motorTestHref}`);
+    }
+    await motorTestLink.click();
+    await expect(this.page.getByTestId(`${ids.motorsEscRowPrefix}-${linkedMotor}`)).toHaveAttribute(
+      "data-selected",
+      "true",
+    );
+
+    await this.openSectionById("vtol");
+    await expect(airframe).toBeVisible({ timeout: 10_000 });
+    await airframe.getByTestId(ids.vtolFrameClass).selectOption("7");
+
+    const topology = this.page.getByTestId(ids.vtolTopologyDiagram);
+    await expect(topology).toContainText("Proposed — not active");
+    await expect(topology).toContainText("proposed Tri Standard Tri");
+    await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-Q_FRAME_CLASS`)).toHaveCount(1, { timeout: 10_000 });
+
+    await this.openSectionById("motors_esc");
+    const pendingBanner = this.page.getByTestId(ids.motorsEscQueuedLayout);
+    await expect(pendingBanner).toContainText("Pending VTOL topology");
+    await expect(pendingBanner).toContainText("Tri Standard Tri");
+    await expect(pendingBanner).toContainText("tests still use applied Quad X");
+
+    await this.ensureReviewSurfaceVisible();
+    await this.page.getByTestId("app-shell-parameter-review-discard-Q_FRAME_CLASS").click();
+    await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-Q_FRAME_CLASS`)).toHaveCount(0);
+    await this.auditLayout("setup proposed Tri and applied Quad motor map");
   }
 
   async expectDisabledOsdWithoutLayoutParameters(): Promise<void> {

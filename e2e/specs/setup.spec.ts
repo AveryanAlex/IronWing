@@ -14,6 +14,10 @@ test("setup workspace opens every section and persists a safe parameter edit", a
     await app.setup.expectSectionsOpen(setupSections);
   });
 
+  await test.step("Preview a staged Tri without changing the applied motor-test map", async () => {
+    await app.setup.expectStagedTriPreviewUsesAppliedMotorMap();
+  });
+
   let guidedEdit: Awaited<ReturnType<typeof app.setup.stageRtlReturnAltitudeEdit>>;
   await test.step("Stage a guided RTL altitude edit from the RTL / Return setup section", async () => {
     guidedEdit = await app.setup.stageRtlReturnAltitudeEdit();
