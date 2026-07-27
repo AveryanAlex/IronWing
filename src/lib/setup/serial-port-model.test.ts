@@ -175,7 +175,7 @@ describe("serial-port-model", () => {
     });
 
     expect(model.recoveryText).toContain("SERIAL1_BAUD option labels are unavailable");
-    expect(model.recoveryText).toContain("Use Full Parameters");
+    expect(model.recoveryText).toContain("Use Parameters");
     expect(model.ports[0]?.baudMetadataReady).toBe(false);
     expect(model.ports[0]?.recoveryText).toContain("SERIAL1_BAUD option labels are unavailable");
   });

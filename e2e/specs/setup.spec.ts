@@ -21,7 +21,7 @@ test("setup workspace opens every section and persists a safe parameter edit", a
   });
 
   let edit: Awaited<ReturnType<typeof app.setup.stageFirstAvailableSafeParameterEdit>>;
-  await test.step("Stage one safe numeric parameter edit through Full Parameters", async () => {
+  await test.step("Stage one safe numeric parameter edit through Parameters", async () => {
     edit = await app.setup.stageFirstAvailableSafeParameterEdit(
       safeParameterEditCandidates.filter((candidate) => candidate !== guidedEdit.name),
     );

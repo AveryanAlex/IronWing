@@ -165,7 +165,7 @@ let bannerTitle = $derived.by(() => {
 });
 let bannerBody = $derived.by(() => {
   if (view.metadataState === "unavailable") {
-    return "Guided editors remain reachable, but labels, ranges, and option lists may be limited. Use Full Parameters when a setting is not shown here.";
+    return "Guided editors remain reachable, but labels, ranges, and option lists may be limited. Use Parameters when a setting is not shown here.";
   }
 
   if (view.readiness === "bootstrapping") {
@@ -173,7 +173,7 @@ let bannerBody = $derived.by(() => {
   }
 
   if (view.readiness === "degraded") {
-    return "Some setup details are limited right now. Open any section or Full Parameters for deeper inspection.";
+    return "Some setup details are limited right now. Open any section or Parameters for deeper inspection.";
   }
 
   return "Open a section below to inspect settings and queue changes for review.";
@@ -312,11 +312,11 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
     </a>
     <a
       class={setupActionLinkClass("outline")}
-      data-testid={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-full_parameters`}
-      href={resolve(setupSectionPath("full_parameters"))}
-      onclick={(event) => handleSetupLinkClick("full_parameters", event)}
+      data-testid={`${setupWorkspaceTestIds.overviewQuickActionPrefix}-parameters`}
+      href={resolve(setupSectionPath("parameters"))}
+      onclick={(event) => handleSetupLinkClick("parameters", event)}
     >
-      Open Full Parameters
+      Open Parameters
     </a>
   </ActionRow>
 
@@ -370,17 +370,17 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div class="max-w-3xl">
           <HelperText class="mt-2">
-            Full Parameters stays separate from guided setup. Open it to inspect settings not covered above and queue parameter changes for review.
+            Parameters stays separate from guided setup. Open it to search the complete vehicle catalog and queue changes for review.
           </HelperText>
         </div>
         <ActionRow align="start">
           <a
             class={setupActionLinkClass("secondary")}
             data-testid={setupWorkspaceTestIds.overviewRecoveryAction}
-            href={resolve(setupSectionPath("full_parameters"))}
-            onclick={(event) => handleSetupLinkClick("full_parameters", event)}
+            href={resolve(setupSectionPath("parameters"))}
+            onclick={(event) => handleSetupLinkClick("parameters", event)}
           >
-            Open Full Parameters
+            Open Parameters
           </a>
         </ActionRow>
       </div>

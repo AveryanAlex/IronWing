@@ -66,8 +66,7 @@ const ACTIVE_RUNTIME_ROOTS = [
   "src/routes/(app)/setup/arming/+page.svelte",
   "src/routes/(app)/setup/initial-params/+page.svelte",
   "src/routes/(app)/setup/pid-tuning/+page.svelte",
-  "src/routes/(app)/setup/peripherals/+page.svelte",
-  "src/routes/(app)/setup/full-parameters/+page.svelte",
+  "src/routes/(app)/setup/parameters/+page.svelte",
   "src/routes/(app)/settings/+page.svelte",
 ] as const;
 const ACTIVE_SCAN_ROOTS = [
@@ -167,7 +166,6 @@ const RAW_BUTTON_ALLOWLIST = new Set([
   "src/routes/(app)/hud/+page.svelte",
   "src/features/mission/components/MissionMap.svelte",
   "src/features/mission/components/MissionMapInteractiveLayer.svelte",
-  "src/routes/(app)/setup/peripherals/+page.svelte",
   "src/features/setup/components/SetupWorkspaceShell.svelte",
 ]);
 

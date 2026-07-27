@@ -160,11 +160,15 @@ afterEach(() => {
 });
 
 describe("replay-readonly active command surfaces", () => {
-  it("replay-readonly disables parameter staging without inserting a local banner", () => {
+  it("replay-readonly keeps parameter browsing available and disables editors without a local banner", async () => {
     render(withParameterWorkspaceContext(createParamsHarness(createPlaybackParamsState()), ParameterWorkspace));
 
     expect(screen.queryByTestId("parameter-replay-readonly-banner")).toBeNull();
-    expect(screen.getByTestId(parameterWorkspaceTestIds.advancedButton)).toHaveProperty("disabled", true);
+    expect(screen.getByTestId(parameterWorkspaceTestIds.expertSearch)).not.toHaveProperty("disabled", true);
+
+    await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertGroupPrefix}-ARMING`));
+
+    expect(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`)).toHaveProperty("disabled", true);
   });
 
   it("replay-readonly disables flight mode, guided takeoff, and arm controls with control-local reasons", async () => {

@@ -116,7 +116,6 @@ let displayValueText = $derived(
 <form
   class="param-row"
   data-failure={props.row.failureMessage ? "" : undefined}
-  data-highlighted={props.row.isHighlighted ? "" : undefined}
   data-param-name={props.row.name}
   data-readonly={props.row.readOnly ? "" : undefined}
   data-staged={props.row.isStaged ? "" : undefined}
@@ -127,15 +126,6 @@ let displayValueText = $derived(
     <span class="param-row__name">{props.row.rawName}</span>
     <span class="param-row__label">
       <span class="param-row__label-text">{props.row.label}</span>
-      {#if props.row.isHighlighted}
-        <Badge
-          class="shrink-0"
-          testId={`${parameterWorkspaceTestIds.highlightPrefix}-${props.row.name}`}
-          variant="accent"
-        >
-          workflow handoff
-        </Badge>
-      {/if}
       {#if props.row.readOnly}
         <Badge class="shrink-0" variant="warning">read only</Badge>
       {/if}
@@ -351,7 +341,6 @@ let displayValueText = $derived(
 }
 .param-row[data-staged] { background: color-mix(in srgb, var(--color-accent) 6%, transparent); }
 .param-row[data-failure] { background: color-mix(in srgb, var(--color-danger) 6%, transparent); }
-.param-row[data-highlighted] { background: color-mix(in srgb, var(--color-accent) 8%, transparent); }
 @media (max-width: 767px) {
   .param-row__main {
     grid-template-columns: 1fr;

@@ -5,7 +5,7 @@ import { expectLayoutTargetsReachable, noopLayoutAudit, type LayoutAudit } from 
 import { fillAndBlur, isVisible } from "./utils";
 
 const ids = {
-  advancedPanel: "parameter-workspace-advanced-panel",
+  expertRoot: "parameter-expert-browser",
   inputPrefix: "parameter-workspace-input",
   itemPrefix: "parameter-workspace-item",
   metadata: "parameter-domain-metadata",
@@ -61,7 +61,7 @@ export class SetupWorkspacePage {
   async stageFirstAvailableSafeParameterEdit(
     candidates: readonly string[] = safeParameterEditCandidates,
   ): Promise<ParameterEdit> {
-    await this.openFullParameters();
+    await this.openParameters();
 
     for (const name of candidates) {
       const input = await this.findParameterInput(name);
@@ -180,7 +180,7 @@ export class SetupWorkspacePage {
   }
 
   async expectParameterValue(name: string, expected: number): Promise<void> {
-    await this.openFullParameters();
+    await this.openParameters();
     const input = await this.findParameterInput(name);
     if (!input) {
       throw new Error(`Parameter ${name} disappeared after reload`);
@@ -257,19 +257,19 @@ export class SetupWorkspacePage {
     await expect(overview).toBeVisible({ timeout: 45_000 });
   }
 
-  private async openFullParameters(): Promise<void> {
-    const fullParameters = setupSections.find((section) => section.id === "full_parameters");
-    if (!fullParameters) {
-      throw new Error("Full Parameters setup section is not defined");
+  private async openParameters(): Promise<void> {
+    const parameters = setupSections.find((section) => section.id === "parameters");
+    if (!parameters) {
+      throw new Error("Parameters setup section is not defined");
     }
 
-    await this.openSection(fullParameters);
+    await this.openSection(parameters);
     await expect(this.page.getByTestId(ids.root)).toBeVisible();
     await expect(this.page.getByTestId(ids.state)).toBeVisible();
     await expect(this.page.getByTestId(ids.scope)).toContainText(/live|session|vehicle|none/i);
     await expect(this.page.getByTestId(ids.progress)).toBeVisible();
     await expect(this.page.getByTestId(ids.metadata)).toBeVisible();
-    await expect(this.page.getByTestId(ids.advancedPanel)).toBeVisible();
+    await expect(this.page.getByTestId(ids.expertRoot)).toBeVisible();
   }
 
   private async findParameterInput(name: string): Promise<Locator | null> {

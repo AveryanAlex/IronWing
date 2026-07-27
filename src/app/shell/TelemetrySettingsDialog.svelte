@@ -178,7 +178,7 @@ function createMessageRateRows(
     const unsaved = confirmedRateHz !== draftRateHz;
 
     let stateKind: DialogStatusKind = "neutral";
-    let stateLabel = draftRateHz === null ? "Default" : "Override";
+    let stateLabel = draftRateHz === null ? "Not saved" : "Override";
     if (error) {
       stateKind = "error";
       stateLabel = "Needs attention";
@@ -604,7 +604,7 @@ $effect(() => {
           <Eyebrow>Live vehicle overrides</Eyebrow>
           <h3 class="mt-1 text-base font-semibold text-text-primary">Message-rate controls</h3>
           <HelperText class="mt-1">
-            Blank restores the backend default. Confirmed overrides reapply on the next live connection.
+            Blank removes the saved reconnect override. Recommended rates are used when clearing a row on the current link.
           </HelperText>
         </div>
 
@@ -642,7 +642,7 @@ $effect(() => {
               <div>
                 <p class="text-sm font-semibold text-text-primary">{row.name}</p>
                 <HelperText size="xs" tone="muted" class="mt-1 uppercase tracking-wider">
-                  MAVLink #<MonoValue value={row.id} size="xs" tone="muted" /> · default {formatHz(row.defaultRateHz)}
+                  MAVLink #<MonoValue value={row.id} size="xs" tone="muted" /> · recommended {formatHz(row.defaultRateHz)}
                 </HelperText>
               </div>
 
@@ -660,7 +660,7 @@ $effect(() => {
                 max={MESSAGE_RATE_HZ_LIMITS.max}
                 min={MESSAGE_RATE_HZ_LIMITS.min}
                 oninput={(event) => handleMessageRateInput(row.id, (event.currentTarget as HTMLInputElement).value)}
-                placeholder={`default ${row.defaultRateHz}`}
+                placeholder={`recommended ${row.defaultRateHz}`}
                 step="0.1"
                 unit="Hz"
                 value={numberInputValue(row.inputValue)}
@@ -668,9 +668,9 @@ $effect(() => {
             </Field.Root>
 
             <HelperText size="xs" tone="muted" class="mt-2">
-              Confirmed · {row.confirmedRateHz === null ? `default ${formatHz(row.defaultRateHz)}` : formatHz(row.confirmedRateHz)}
+              Confirmed · {row.confirmedRateHz === null ? "no saved override" : formatHz(row.confirmedRateHz)}
               {#if row.draftRateHz !== row.confirmedRateHz}
-                · draft {row.draftRateHz === null ? `default ${formatHz(row.defaultRateHz)}` : formatHz(row.draftRateHz)}
+                · draft {row.draftRateHz === null ? "remove override" : formatHz(row.draftRateHz)}
               {/if}
             </HelperText>
 

@@ -33,13 +33,13 @@ function resolveVehicleSlug(vehicleType: string | null): VehicleSlug | null {
 }
 </script>
 
-<section class="space-y-4" data-testid={setupWorkspaceTestIds.fullParameters}>
+<section class="space-y-4" data-testid={setupWorkspaceTestIds.parameters}>
   <SetupIntroCard
-    sectionId="full_parameters"
-    title="Full Parameters"
-    description="Inspect, search, and edit the complete ArduPilot parameter catalog. Changes remain staged until you review and apply them."
-    docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.fullParametersDocsLink }]}
+    sectionId="parameters"
+    title="Parameters"
+    description="Search and edit the complete ArduPilot parameter catalog. Metadata selects the appropriate editor, and changes remain staged until you review and apply them."
+    docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.parametersDocsLink }]}
   />
 
-  <ParameterWorkspace defaultMode="expert" embedded />
+  <ParameterWorkspace />
 </section>

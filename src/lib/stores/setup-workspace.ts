@@ -337,8 +337,8 @@ function detailTextForSection(sectionId: SetupSectionId, implemented: boolean): 
     return "Use the grouped dashboard to review setup areas before opening a section.";
   }
 
-  if (sectionId === "full_parameters") {
-    return "Open Full Parameters to review and edit advanced vehicle settings.";
+  if (sectionId === "parameters") {
+    return "Open Parameters to search and edit the complete vehicle catalog.";
   }
 
   if (!implemented) {

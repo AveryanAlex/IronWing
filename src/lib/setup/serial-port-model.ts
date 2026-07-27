@@ -278,7 +278,7 @@ export function buildSerialPortModel(input: SerialPortModelInput): SerialPortMod
     ),
   ];
   const recoveryText = recoveryReasons.length > 0
-    ? `${recoveryReasons.join(" ")} Use Full Parameters if this firmware needs a setting that is not shown here.`
+    ? `${recoveryReasons.join(" ")} Use Parameters if this firmware needs a setting that is not shown here.`
     : null;
 
   return {

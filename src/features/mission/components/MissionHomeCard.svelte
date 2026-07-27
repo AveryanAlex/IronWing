@@ -2,7 +2,7 @@
 import { Home as HomeIcon } from "lucide-svelte";
 import type { HomePosition } from "../../../mission";
 import type { MissionPlannerAttachmentState } from "../../../lib/stores/mission-planner";
-import { Badge, Card, ExternalLink, Eyebrow, HelperText, Input, MonoValue } from "../../../components/ui";
+import { Badge, Card, ExternalLink, Eyebrow, HelperText, Input, Tooltip } from "../../../components/ui";
 import { missionWorkspaceTestIds } from "../mission-workspace-test-ids";
 
 const ARDUPILOT_HOME_POSITION_DOCS_URL = "https://ardupilot.org/copter/docs/common-mavlink-mission-command-messages-mav_cmd.html#mav-cmd-do-set-home";
@@ -33,7 +33,6 @@ let latitude = $derived(draftSourceKey === syncKey && latitudeDraft !== null ? l
 let longitude = $derived(draftSourceKey === syncKey && longitudeDraft !== null ? longitudeDraft : baseLongitude);
 let altitude = $derived(draftSourceKey === syncKey && altitudeDraft !== null ? altitudeDraft : baseAltitude);
 let visibleValidationMessage = $derived(draftSourceKey === syncKey ? validationMessage : null);
-let homeSummary = $derived(home ? `${home.latitude_deg.toFixed(5)}, ${home.longitude_deg.toFixed(5)} · ${home.altitude_m.toFixed(1)} m` : null);
 
 function beginDraft() {
   if (draftSourceKey === syncKey) {
@@ -111,30 +110,21 @@ function handleEnter(event: KeyboardEvent) {
         </span>
         <Eyebrow as="h3">HOME POSITION</Eyebrow>
       </div>
-      <ExternalLink
-        class="text-xs font-semibold"
-        testId={missionWorkspaceTestIds.homeDocsLink}
-        href={ARDUPILOT_HOME_POSITION_DOCS_URL}
-      >
-        ArduPilot docs
-      </ExternalLink>
+      <Tooltip label="ArduPilot home position docs" side="bottom" align="end">
+        <ExternalLink
+          aria-label="Open ArduPilot home position documentation"
+          testId={missionWorkspaceTestIds.homeDocsLink}
+          href={ARDUPILOT_HOME_POSITION_DOCS_URL}
+          variant="icon"
+        />
+      </Tooltip>
     </header>
-
-    {#if homeSummary}
-      <MonoValue
-        as="p"
-        class="mt-2 mb-0 text-sm leading-snug text-text-secondary"
-        testId={missionWorkspaceTestIds.homeSummary}
-        value={homeSummary}
-      >
-      </MonoValue>
-    {/if}
 
     {#if readOnlyMessage}
       <Badge testId={missionWorkspaceTestIds.homeReadOnly} variant="warning" size="sm" case="normal" shape="rounded">{readOnlyMessage}</Badge>
     {/if}
 
-    <div class="mt-2 grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2">
+    <div class="grid grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(5.5rem,0.65fr)]">
       <label class="flex min-w-0 flex-col gap-1">
         <span class="text-xs font-bold uppercase tracking-wide text-text-muted">Latitude</span>
         <Input
@@ -179,7 +169,7 @@ function handleEnter(event: KeyboardEvent) {
           value={longitude}
         />
       </label>
-      <label class="flex min-w-0 flex-col gap-1">
+      <label class="col-span-2 flex min-w-0 flex-col gap-1 sm:col-span-1">
         <span class="text-xs font-bold uppercase tracking-wide text-text-muted">Altitude (m)</span>
         <Input
           testId={missionWorkspaceTestIds.homeAltitude}

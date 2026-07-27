@@ -40,7 +40,6 @@ export type ParameterExpertRow = ParameterItemModel & {
   enumOptions: ParameterExpertEnumOption[];
   booleanOptions: BooleanEnumDescriptor | null;
   bitmaskOptions: ParameterExpertBitmaskOption[];
-  isHighlighted: boolean;
 };
 
 export type ParameterExpertGroup = {
@@ -57,9 +56,6 @@ export type ParameterExpertView = {
   matchingCount: number;
   visibleCount: number;
   stagedCount: number;
-  highlightedCount: number;
-  forcedHighlightCount: number;
-  missingHighlightTargets: string[];
   hiddenStagedRows: ParameterExpertRow[];
   groups: ParameterExpertGroup[];
 };
@@ -75,27 +71,20 @@ export function buildParameterExpertView(args: {
   retainedFailures: Record<string, ParameterExpertRetainedFailure>;
   filter: ParameterExpertFilter;
   searchText: string;
-  highlightTargets?: string[];
 }): ParameterExpertView {
   const rows = buildParameterItemModels(args.paramStore, args.metadata).map((item, index) =>
     buildExpertRow(item, index, args.metadata?.get(item.name), args.stagedEdits[item.name], args.retainedFailures[item.name]),
   );
   const normalizedSearch = args.searchText.trim().toLowerCase();
-  const requestedHighlights = normalizeHighlightTargets(args.highlightTargets ?? []);
-  const highlightNames = new Set(requestedHighlights);
-  const resolvedNames = new Set(rows.map((row) => row.name));
-  const missingHighlightTargets = requestedHighlights.filter((name) => !resolvedNames.has(name));
 
   const visibility = rows.map((row) => {
     const matchesFilter = matchesExpertFilter(row, args.filter);
     const matchesSearch = matchesExpertSearch(row, normalizedSearch);
-    const isHighlighted = highlightNames.has(row.name);
     return {
       ...row,
-      isHighlighted,
       matchesFilter,
       matchesSearch,
-      isVisible: (matchesFilter && matchesSearch) || isHighlighted,
+      isVisible: matchesFilter && matchesSearch,
     };
   });
 
@@ -111,11 +100,6 @@ export function buildParameterExpertView(args: {
     matchingCount,
     visibleCount: visibleRows.length,
     stagedCount: rows.filter((row) => row.isStaged).length,
-    highlightedCount: visibility.filter((row) => row.isHighlighted).length,
-    forcedHighlightCount: visibility.filter(
-      (row) => row.isHighlighted && !(row.matchesFilter && row.matchesSearch),
-    ).length,
-    missingHighlightTargets,
     hiddenStagedRows,
     groups: buildGroups(visibleRows),
   };
@@ -155,7 +139,6 @@ function buildExpertRow(
     enumOptions,
     booleanOptions,
     bitmaskOptions,
-    isHighlighted: false,
   };
 }
 
@@ -176,10 +159,12 @@ function buildGroups(rows: ParameterExpertRow[]): ParameterExpertGroup[] {
     });
   }
 
-  return Array.from(groups.values()).map((group) => ({
-    ...group,
-    rows: group.rows.sort((left, right) => left.order - right.order || left.name.localeCompare(right.name)),
-  }));
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      rows: group.rows.sort((left, right) => left.order - right.order || left.name.localeCompare(right.name)),
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label));
 }
 
 function matchesExpertFilter(row: ParameterExpertRow, filter: ParameterExpertFilter): boolean {
@@ -206,6 +191,7 @@ function matchesExpertSearch(row: ParameterExpertRow, normalizedSearch: string):
     row.description,
     row.valueLabel,
     row.groupLabel,
+    row.units,
     row.enumOptions.map((option) => option.label).join(" "),
     row.bitmaskOptions.map((option) => option.label).join(" "),
   ]
@@ -228,23 +214,6 @@ function resolveUserLevel(meta: ParamMeta | undefined): "Standard" | "Advanced" 
   }
 
   return "Unknown";
-}
-
-function normalizeHighlightTargets(targets: string[]): string[] {
-  const seen = new Set<string>();
-  const normalized: string[] = [];
-
-  for (const target of targets) {
-    const trimmed = target.trim();
-    if (trimmed.length === 0 || seen.has(trimmed)) {
-      continue;
-    }
-
-    seen.add(trimmed);
-    normalized.push(trimmed);
-  }
-
-  return normalized;
 }
 
 function normalizeEnumOptions(values: ParamMeta["values"] | undefined): ParameterExpertEnumOption[] {

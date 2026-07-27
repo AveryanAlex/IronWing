@@ -16,12 +16,14 @@ import {
   RECOMMENDED_FLIGHT_MODE_PRESETS,
   buildFlightModeModel,
   buildFlightModePresetPreviewRows,
+  canReorderFlightModeSlots,
   getFlightModePwmDisplayBounds,
   toggleFlightModeBitmaskValue,
   type FlightModeSlotModel,
 } from "../../../../lib/setup/flight-mode-model";
 import { getVehicleSlug } from "../../../../lib/setup/vehicle-profile";
 import { selectTelemetryView } from "../../../../lib/telemetry-selectors";
+import { RC_CHANNELS_MESSAGE_ID } from "../../../../lib/telemetry-stream-control";
 import type { FlightModeEntry } from "../../../../telemetry";
 import {
   Badge,
@@ -40,6 +42,7 @@ import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.sve
 import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
 import SetupPreviewStagePanel from "../../../../features/setup/shared/SetupPreviewStagePanel.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
+import TelemetryStreamNotice from "../../../../features/telemetry/components/TelemetryStreamNotice.svelte";
 import {
   getSetupWorkspaceRouteContext,
   setupRouteSection,
@@ -142,19 +145,12 @@ let selectedChannelState = $derived.by<"live" | "stale" | "unavailable">(() => {
 
   return session.telemetryDomain.complete === false ? "stale" : "live";
 });
+let hasRcTelemetry = $derived(Array.isArray(telemetry.rc_channels) && telemetry.rc_channels.length > 0);
+let showPwmBar = $derived(liveConnected && selectedChannelValue !== null);
 let simpleItem = $derived(itemIndex.get("SIMPLE") ?? null);
 let superSimpleItem = $derived(itemIndex.get("SUPER_SIMPLE") ?? null);
 let slotSelectsDisabled = $derived(actionsBlocked || model.availabilityState !== "live" || model.options.length === 0);
-let canReorderFlightModes = $derived.by(() => {
-  if (slotSelectsDisabled) {
-    return false;
-  }
-
-  return model.slots.every((slot) => {
-    const target = item(slot.paramName);
-    return target && target.readOnly !== true && slot.effectiveValue !== null;
-  });
-});
+let canReorderFlightModes = $derived(canReorderFlightModeSlots(model.slots, itemIndex, actionsBlocked));
 let baseSlotOrder = $derived(model.slots.map((slot) => slot.paramName));
 let orderedSlots = $derived.by<SortableFlightModeSlot[]>(() => {
   const base = model.slots.map((slot, index) => ({ ...slot, dragIndex: index }));
@@ -623,7 +619,22 @@ function handleFallbackDragEnd() {
 
     {#if model.availabilityState === "unavailable"}
       <SetupNotice tone="warning" testId={`${setupWorkspaceTestIds.flightModesBannerPrefix}-mode-list`}>
-        The vehicle has not reported its available mode list yet, so slot selectors are read-only until live mode data arrives.
+        The vehicle has not reported its available mode list yet, so slot selectors stay read-only. Loaded slot values can still be reordered.
+      </SetupNotice>
+    {/if}
+
+    <TelemetryStreamNotice
+      activeSource={session.activeSource}
+      available={hasRcTelemetry}
+      connected={liveConnected}
+      messageIds={[RC_CHANNELS_MESSAGE_ID]}
+      streamLabel="RC channel telemetry"
+      testId={setupWorkspaceTestIds.flightModesRcTelemetryNotice}
+    />
+
+    {#if hasRcTelemetry && selectedChannelValue === null}
+      <SetupNotice tone="warning" testId={`${setupWorkspaceTestIds.flightModesBannerPrefix}-selected-channel`}>
+        RC telemetry is streaming, but {selectedChannelLabel} has no valid PWM sample. Check the receiver input and selected FLTMODE_CH value.
       </SetupNotice>
     {/if}
 
@@ -684,9 +695,9 @@ function handleFallbackDragEnd() {
       {#snippet actions()}
         {#if !canReorderFlightModes}
           <HelperText class="max-w-xs" size="xs" tone="warning">
-            Reordering is enabled when the live mode list is available and all six slot parameters are writable.
+            Reordering is enabled when all six slot parameters are loaded and editable.
           </HelperText>
-        {:else}
+        {:else if showPwmBar}
           <Eyebrow class="text-right" tracking="widest">
             PWM · <span class="font-mono text-text-primary tabular-nums">{selectedChannelLabel} · {formatPwmValue(selectedChannelValue)}</span>
           </Eyebrow>
@@ -699,7 +710,12 @@ function handleFallbackDragEnd() {
         onDragStart={handleSortableDragStart}
       >
         <div class="mt-4">
-          <div class="grid min-w-0 grid-cols-[minmax(0,1fr)_4.75rem] gap-3 sm:grid-cols-[minmax(0,1fr)_5.25rem]">
+          <div class={[
+            "grid min-w-0 gap-3",
+            showPwmBar
+              ? "grid-cols-[minmax(0,1fr)_4.75rem] sm:grid-cols-[minmax(0,1fr)_5.25rem]"
+              : "grid-cols-1",
+          ]}>
             <div bind:this={slotListElement} class="grid gap-2">
             {#each orderedSlots as slot (slot.paramName)}
               {@const sortable = createSlotSortable(() => slot)}
@@ -764,12 +780,13 @@ function handleFallbackDragEnd() {
             {/each}
             </div>
 
-            <div
-              class="relative min-w-0 data-[state=unavailable]:opacity-60"
-              data-state={selectedChannelState}
-              data-testid={setupWorkspaceTestIds.flightModesPwmBar}
-              style:height={`${pwmLayoutHeight}px`}
-            >
+            {#if showPwmBar}
+              <div
+                class="relative min-w-0 data-[state=unavailable]:opacity-60"
+                data-state={selectedChannelState}
+                data-testid={setupWorkspaceTestIds.flightModesPwmBar}
+                style:height={`${pwmLayoutHeight}px`}
+              >
               <span class="sr-only">PWM {selectedChannelLabel} · {formatPwmValue(selectedChannelValue)}</span>
 
               <div class="absolute left-0 top-0 w-8 font-mono text-[10px] text-text-muted tabular-nums">
@@ -809,7 +826,8 @@ function handleFallbackDragEnd() {
                   ></div>
                 {/if}
               </div>
-            </div>
+              </div>
+            {/if}
           </div>
         </div>
       </DragDropProvider>
