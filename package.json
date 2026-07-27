@@ -63,6 +63,7 @@
     "svelte-sonner": "^1.1.0",
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.0",
+    "three": "^0.185.1",
     "uplot": "^1.6.32"
   },
   "devDependencies": {
@@ -76,6 +77,7 @@
     "@testing-library/svelte": "^5.3.1",
     "@types/geojson": "^7946.0.16",
     "@types/node": "^25.3.0",
+    "@types/three": "^0.185.1",
     "@wdio/cli": "^9.25.0",
     "@wdio/local-runner": "^9.25.0",
     "@wdio/mocha-framework": "^9.25.0",

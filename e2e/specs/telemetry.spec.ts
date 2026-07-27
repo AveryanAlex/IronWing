@@ -6,7 +6,8 @@ test("telemetry workspace renders live demo metrics", async ({ app }) => {
     await app.navigateTo("telemetry");
   });
 
-  await test.step("Verify flight, power, and GPS metrics are populated from live demo telemetry", async () => {
+  await test.step("Verify live metrics and the 3D attitude visualization", async () => {
     await app.telemetry.expectLiveMetrics();
+    await app.telemetry.expectAttitudeVisualization();
   });
 });

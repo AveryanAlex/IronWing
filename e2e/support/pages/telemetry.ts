@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 import { expectLayoutTargetsReachable, noopLayoutAudit, type LayoutAudit } from "../layout";
 import { expectLiveMetric } from "./utils";
@@ -22,6 +22,27 @@ export class TelemetryWorkspacePage {
     await expectLiveMetric(this.page, ids.battery);
     await expectLiveMetric(this.page, ids.gps);
     await this.auditLayout("telemetry live metrics");
+  }
+
+  async expectAttitudeVisualization(): Promise<void> {
+    const attitudeRegion = this.page.getByRole("region", { name: "Vehicle attitude orientation" });
+    const attitude = attitudeRegion.getByRole("img", {
+      name: "Three-dimensional vehicle attitude, north referenced",
+    });
+    const canvas = attitude.locator("canvas");
+    await expect(attitude).toBeVisible();
+
+    const supportsWebGl2 = await canvas.evaluate((element) => {
+      return Boolean((element as HTMLCanvasElement).getContext("webgl2"));
+    });
+
+    if (supportsWebGl2) {
+      await expect(canvas).toHaveClass(/opacity-100/);
+    } else {
+      await expect(attitudeRegion.getByRole("status")).toContainText("3D view unavailable");
+    }
+
+    await expect(attitudeRegion.getByText("live", { exact: true })).toBeVisible();
   }
 
   async expectPrimarySurfacesReachable(label = "telemetry"): Promise<void> {

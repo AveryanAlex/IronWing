@@ -371,6 +371,7 @@ let sections = $derived.by<MetricSection[]>(() => {
                 rollDeg={telemetry.roll_deg}
                 pitchDeg={telemetry.pitch_deg}
                 yawDeg={telemetry.yaw_deg}
+                vehicleType={session.vehicleState?.vehicle_type}
                 stale={!connected}
               />
             {:else if section.key === "radio"}
