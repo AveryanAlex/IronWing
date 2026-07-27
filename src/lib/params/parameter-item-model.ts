@@ -1,5 +1,6 @@
 import type { ParamMeta, ParamMetadataMap } from "../../param-metadata";
 import { isNonNullParam, type NonNullParam, type ParamStore } from "../../params";
+import type { SliderScale } from "../slider-scale";
 
 export type ParameterItemModel = {
   name: string;
@@ -16,6 +17,7 @@ export type ParameterItemModel = {
   increment: number | null;
   range: { min: number; max: number } | null;
   readOnly: boolean;
+  sliderScale?: SliderScale;
 };
 
 export function buildParameterItemModels(
@@ -61,6 +63,7 @@ export function buildParameterItemModel(
     increment,
     range: normalizeRange(meta?.range),
     readOnly: meta?.readOnly === true,
+    sliderScale: meta?.sliderScale,
   };
 }
 

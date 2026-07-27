@@ -111,6 +111,63 @@ describe("fetchParamMetadata", () => {
     await expect(fetchParamMetadata("boat", "4.5.7")).resolves.toBeNull();
     expect(fetchParamMetadataXmlMock).not.toHaveBeenCalled();
   });
+
+  it("applies reviewed slider scales by vehicle metadata family", async () => {
+    fetchParamMetadataXmlMock.mockResolvedValue(`
+      <paramfile>
+        <param name="WP_RADIUS" humanName="Waypoint radius" documentation="definition">
+          <field name="Range">1 32767</field>
+          <field name="Increment">1</field>
+        </param>
+        <param name="FENCE_RADIUS" humanName="Fence radius" documentation="definition">
+          <field name="Range">30 10000</field>
+        </param>
+        <param name="ACRO_ROLL_RATE" humanName="Acro rate" documentation="definition">
+          <field name="Range">10 500</field>
+        </param>
+      </paramfile>`);
+
+    const metadata = await fetchParamMetadata("fixed_wing");
+
+    expect(metadata?.get("WP_RADIUS")?.sliderScale).toBe("log");
+    expect(metadata?.get("FENCE_RADIUS")?.sliderScale).toBe("log");
+    expect(metadata?.get("ACRO_ROLL_RATE")?.sliderScale).toBeUndefined();
+  });
+
+  it("keeps same-named zero-based rover parameters linear", async () => {
+    fetchParamMetadataXmlMock.mockResolvedValue(`
+      <paramfile>
+        <param name="WP_RADIUS" humanName="Waypoint radius" documentation="definition">
+          <field name="Range">0 100</field>
+          <field name="Increment">0.1</field>
+        </param>
+        <param name="FS_TIMEOUT" humanName="Failsafe timeout" documentation="definition">
+          <field name="Range">1 100</field>
+          <field name="Increment">0.5</field>
+        </param>
+      </paramfile>`);
+
+    const metadata = await fetchParamMetadata("ground_rover");
+
+    expect(metadata?.get("WP_RADIUS")?.sliderScale).toBeUndefined();
+    expect(metadata?.get("FS_TIMEOUT")?.sliderScale).toBe("log");
+  });
+
+  it.each([
+    ["quadrotor", ["RTL_ALT_M", "WP_RADIUS_M", "WP_SPD", "WP_SPD_UP", "WP_SPD_DN"]],
+    ["submarine", ["WP_RADIUS_M", "WP_SPD", "WP_SPD_UP", "WP_SPD_DN"]],
+    ["helicopter", ["WPNAV_SPEED", "WPNAV_SPEED_UP", "WPNAV_SPEED_DN"]],
+    ["vtol", ["WP_RADIUS", "Q_RTL_ALT", "Q_RTL_ALT_MIN"]],
+  ])("applies the curated navigation scales for %s", async (vehicleType, names) => {
+    fetchParamMetadataXmlMock.mockResolvedValue(`
+      <paramfile>
+        ${names.map((name) => `<param name="${name}" humanName="${name}" documentation="definition"><field name="Range">1 100</field><field name="Increment">1</field></param>`).join("\n")}
+      </paramfile>`);
+
+    const metadata = await fetchParamMetadata(vehicleType);
+
+    expect(names.map((name) => metadata?.get(name)?.sliderScale)).toEqual(names.map(() => "log"));
+  });
 });
 
 describe("parseMetadataXml", () => {

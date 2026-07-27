@@ -155,6 +155,8 @@ function updateNumber(event: Event) {
         {min}
         {max}
         {step}
+        scale={item.sliderScale}
+        unit={unit ? ` ${unit}` : ""}
         disabled={controlDisabled}
         ariaLabel={label}
         testId={inputTestId ? `${inputTestId}-slider` : undefined}

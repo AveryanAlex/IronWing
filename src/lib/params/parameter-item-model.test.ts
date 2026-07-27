@@ -34,6 +34,7 @@ describe("buildParameterItemModels", () => {
           unitText: "milliampere hour",
           increment: 1,
           range: { min: 0, max: 7 },
+          sliderScale: "log" as const,
           values: [{ code: 3, label: "All checks" }],
         },
       ],
@@ -55,6 +56,7 @@ describe("buildParameterItemModels", () => {
       increment: 1,
       range: { min: 0, max: 7 },
       readOnly: false,
+      sliderScale: "log",
     });
   });
 

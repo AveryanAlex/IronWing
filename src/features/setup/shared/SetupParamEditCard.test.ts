@@ -113,6 +113,29 @@ describe("SetupParamEditCard", () => {
     await fireEvent.click(screen.getByText("mAh"));
     await waitFor(() => expect(screen.getByText("milliampere hour")).toBeTruthy());
   });
+
+  it("uses item slider scale without changing the compact metadata label", async () => {
+    const onValueChange = vi.fn();
+    render(SetupParamEditCard, {
+      props: {
+        item: item("WP_RADIUS", {
+          range: { min: 1, max: 32767 },
+          increment: 1,
+          sliderScale: "log",
+          units: "m",
+          value: 181,
+        }),
+        onValueChange,
+      },
+    });
+
+    expect(screen.getByText("WP_RADIUS · 1–32767 · step 1")).toBeTruthy();
+    const slider = screen.getByRole("slider", { name: "WP_RADIUS" });
+    expect(slider.getAttribute("aria-valuetext")).toBe("181 m");
+
+    await fireEvent.keyDown(slider, { key: "ArrowRight" });
+    expect(onValueChange).toHaveBeenLastCalledWith(182);
+  });
 });
 
 describe("SetupRcCaptureParamEditCard", () => {
