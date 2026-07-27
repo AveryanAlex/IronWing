@@ -89,7 +89,6 @@ export const missionWorkspaceTestIds = {
   homeAltitude: "mission-home-altitude",
   homeDocsLink: "mission-home-docs-link",
   homeValidation: "mission-home-validation",
-  homeSummary: "mission-home-summary",
   homeReadOnly: "mission-home-readonly",
   modeShell: "mission-mode-shell",
   modeShellTitle: "mission-mode-shell-title",
