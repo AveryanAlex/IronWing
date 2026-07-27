@@ -14,7 +14,6 @@ import {
   Navigation,
   Monitor,
   Plane,
-  Puzzle,
   Radio,
   ShieldAlert,
   SlidersHorizontal,
@@ -47,7 +46,6 @@ const icons = {
   arming: Lock,
   calculator: Calculator,
   tuning: Activity,
-  peripherals: Puzzle,
   parameters: SlidersVertical,
 } satisfies Record<SetupSectionIconKey, IconComponent>;
 

@@ -160,11 +160,15 @@ afterEach(() => {
 });
 
 describe("replay-readonly active command surfaces", () => {
-  it("replay-readonly disables parameter staging surfaces with a visible banner", () => {
+  it("replay-readonly keeps parameter browsing available while disabling editors", async () => {
     render(withParameterWorkspaceContext(createParamsHarness(createPlaybackParamsState()), ParameterWorkspace));
 
     expect(screen.getByTestId("parameter-replay-readonly-banner").textContent).toContain("Replay is read-only");
-    expect(screen.getByTestId(parameterWorkspaceTestIds.advancedButton)).toHaveProperty("disabled", true);
+    expect(screen.getByTestId(parameterWorkspaceTestIds.expertSearch)).not.toHaveProperty("disabled", true);
+
+    await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertGroupPrefix}-ARMING`));
+
+    expect(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`)).toHaveProperty("disabled", true);
   });
 
   it("replay-readonly disables flight mode, guided takeoff, and arm controls with visible copy", async () => {

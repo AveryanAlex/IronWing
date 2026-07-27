@@ -91,7 +91,6 @@ function buildView(
   searchText = "",
   overrides: {
     metadata?: ParamMetadataMap | null;
-    highlightTargets?: string[];
     retainedFailures?: Record<string, { message: string }>;
     stagedEdits?: Record<string, StagedParameterEdit>;
   } = {},
@@ -103,7 +102,6 @@ function buildView(
     retainedFailures: overrides.retainedFailures ?? {},
     filter,
     searchText,
-    highlightTargets: overrides.highlightTargets,
   });
 }
 
@@ -136,20 +134,14 @@ describe("buildParameterExpertView renderId", () => {
 });
 
 describe("buildParameterExpertView", () => {
-  it("groups rows by prefix, honors filters, and keeps highlighted workflow targets visible", () => {
-    const view = buildView("standard", "", {
-      highlightTargets: ["LOG_BITMASK", "UNKNOWN_PARAM"],
-    });
+  it("groups rows alphabetically by prefix and derives metadata editors", () => {
+    const view = buildView("all");
 
     expect(view.totalCount).toBe(4);
-    expect(view.highlightedCount).toBe(1);
-    expect(view.forcedHighlightCount).toBe(1);
-    expect(view.missingHighlightTargets).toEqual(["UNKNOWN_PARAM"]);
-    expect(view.groups.map((group) => group.key)).toEqual(["ARMING", "FS", "LOG", "FORMAT"]);
+    expect(view.groups.map((group) => group.key)).toEqual(["ARMING", "FORMAT", "FS", "LOG"]);
 
     const logRow = view.groups.find((group) => group.key === "LOG")?.rows[0];
     const fsRow = view.groups.find((group) => group.key === "FS")?.rows[0];
-    expect(logRow?.isHighlighted).toBe(true);
     expect(logRow?.editorKind).toBe("bitmask");
     expect(logRow?.bitmaskOptions.map((option) => option.label)).toEqual(["Fast attitude", "PID"]);
     expect(fsRow?.editorKind).toBe("boolean");
@@ -173,7 +165,7 @@ describe("buildParameterExpertView", () => {
     });
 
     expect(view.metadataAvailable).toBe(false);
-    expect(view.groups.map((group) => group.key)).toEqual(["ARMING", "FS", "LOG", "FORMAT"]);
+    expect(view.groups.map((group) => group.key)).toEqual(["ARMING", "FORMAT", "FS", "LOG"]);
     expect(view.groups[0]?.rows[0]).toMatchObject({
       name: "ARMING_CHECK",
       label: "ARMING_CHECK",

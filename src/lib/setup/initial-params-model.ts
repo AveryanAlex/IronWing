@@ -457,7 +457,7 @@ function describeFamily(profile: VehicleProfile): InitialParamsFamilyRecommendat
       state: "rover",
         headline: "Rover starter values not available",
       detail:
-        "Rover startup tuning is intentionally not modeled in this calculator-first section yet. Use the dedicated setup sections or Full Parameters instead.",
+        "Rover startup tuning is intentionally not modeled in this calculator-first section yet. Use the dedicated setup sections or Parameters instead.",
       supportsCalculator: false,
     };
   }
@@ -592,7 +592,7 @@ export function buildInitialParamsModel(input: InitialParamsModelInput): Initial
 
   if (quadPlaneFamilyMissing.length > 0) {
     recoveryReasons.push(
-      `QuadPlane starter rows are incomplete for this scope: ${quadPlaneFamilyMissing.join(", ")}. Refresh parameters or recover through Full Parameters before staging VTOL starter values.`,
+      `QuadPlane starter rows are incomplete for this scope: ${quadPlaneFamilyMissing.join(", ")}. Refresh parameters or recover through Parameters before staging VTOL starter values.`,
     );
   }
 

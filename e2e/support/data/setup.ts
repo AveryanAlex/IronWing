@@ -18,8 +18,7 @@ const setupSectionTestIds = {
   arming: "setup-workspace-arming-section",
   initial_params: "setup-workspace-initial-params-section",
   pid_tuning: "setup-workspace-pid-tuning-section",
-  peripherals: "setup-workspace-peripherals-section",
-  full_parameters: "setup-workspace-full-parameters",
+  parameters: "setup-workspace-parameters",
 } satisfies Record<SetupSectionId, string>;
 
 export const setupSections = SETUP_SECTION_CATALOG.map((section) => ({

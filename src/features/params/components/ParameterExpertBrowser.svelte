@@ -1,5 +1,5 @@
 <script lang="ts">
-import { ChevronDown, ChevronRight, Search } from "lucide-svelte";
+import { ChevronDown, ChevronRight, Search, X } from "lucide-svelte";
 
 import type {
   ParameterExpertFilter,
@@ -17,7 +17,6 @@ let {
   envelopeKey,
   searchText,
   filter,
-  highlightSourceLabel = null,
   replayReadonly = false,
   onSearchText,
   onFilterChange,
@@ -29,7 +28,6 @@ let {
   envelopeKey: string;
   searchText: string;
   filter: ParameterExpertFilter;
-  highlightSourceLabel?: string | null;
   replayReadonly?: boolean;
   onSearchText: (value: string) => void;
   onFilterChange: (value: ParameterExpertFilter) => void;
@@ -40,36 +38,24 @@ let {
 let expandedGroupIds = $state<string[]>([]);
 
 const filterOptions: Array<{ value: ParameterExpertFilter; label: string }> = [
-  { value: "standard", label: "Standard" },
   { value: "all", label: "All" },
+  { value: "standard", label: "Standard" },
   { value: "modified", label: "Modified" },
 ];
 
 function summaryText() {
   if (view.totalCount === 0) {
-    return "No raw parameters are available for this session yet.";
+    return "No parameters are available for this session yet.";
   }
 
   const staged = view.stagedCount > 0 ? ` · ${view.stagedCount} staged` : "";
   return `Showing ${view.visibleCount} of ${view.totalCount} parameters${staged}.`;
 }
 
-function highlightSummaryText() {
-  if (view.highlightedCount === 0) {
-    return null;
-  }
-
-  const source = highlightSourceLabel ?? "Selected section";
-  const forced = view.forcedHighlightCount > 0
-    ? ` ${view.forcedHighlightCount} highlighted row${view.forcedHighlightCount === 1 ? " stays" : "s stay"} visible outside the current filter.`
-    : "";
-  return `${source} highlighting ${view.highlightedCount} parameter${view.highlightedCount === 1 ? "" : "s"} for review.${forced}`;
-}
-
 function shouldForceExpanded(group: ParameterExpertGroup) {
   return searchText.trim().length > 0
     || filter === "modified"
-    || group.rows.some((row) => row.isHighlighted || row.isStaged || row.failureMessage !== null);
+    || group.rows.some((row) => row.isStaged || row.failureMessage !== null);
 }
 
 function isGroupExpanded(group: ParameterExpertGroup) {
@@ -96,7 +82,6 @@ function toggleGroup(group: ParameterExpertGroup) {
         <Button
           shape="pill"
           testId={`${parameterWorkspaceTestIds.expertFilterPrefix}-${option.value}`}
-          disabled={replayReadonly}
           onclick={() => onFilterChange(option.value)}
           size="sm"
           tone="accent"
@@ -110,19 +95,31 @@ function toggleGroup(group: ParameterExpertGroup) {
       {/each}
     </div>
 
-    <label class="flex min-w-0 basis-full items-center gap-2 sm:ml-auto sm:max-w-sm sm:flex-1">
-      <Search aria-hidden="true" class="shrink-0 text-text-muted" size={14} />
-      <span class="sr-only">Search raw parameters</span>
-      <Input
-        class="min-w-0"
-        testId={parameterWorkspaceTestIds.expertSearch}
-        disabled={replayReadonly}
-        oninput={(event) => onSearchText((event.currentTarget as HTMLInputElement).value)}
-        placeholder="Search parameters..."
-        type="search"
-        value={searchText}
-      />
-    </label>
+    <div class="flex min-w-0 basis-full items-center gap-2 sm:ml-auto sm:max-w-md sm:flex-1">
+      <label class="flex min-w-0 flex-1 items-center gap-2">
+        <Search aria-hidden="true" class="shrink-0 text-text-muted" size={14} />
+        <span class="sr-only">Search parameters</span>
+        <Input
+          class="min-w-0"
+          testId={parameterWorkspaceTestIds.expertSearch}
+          oninput={(event) => onSearchText((event.currentTarget as HTMLInputElement).value)}
+          placeholder="Search names, labels, descriptions..."
+          type="search"
+          value={searchText}
+        />
+      </label>
+      {#if searchText.length > 0}
+        <Button
+          ariaLabel="Clear parameter search"
+          onclick={() => onSearchText("")}
+          size="sm"
+          variant="ghost"
+        >
+          <X aria-hidden="true" size={14} />
+          Clear
+        </Button>
+      {/if}
+    </div>
   </div>
 
   <Alert density="compact" description={summaryText()} testId={parameterWorkspaceTestIds.expertSummary} variant="info" />
@@ -130,21 +127,8 @@ function toggleGroup(group: ParameterExpertGroup) {
   {#if !view.metadataAvailable}
     <Alert
       density="compact"
-      description="Metadata is unavailable, so this browser is falling back to raw parameter names and numeric editors."
+      description="Metadata is unavailable, so this catalog is falling back to raw parameter names and numeric editors."
       testId={parameterWorkspaceTestIds.expertMetadataFallback}
-      variant="warning"
-    />
-  {/if}
-
-  {#if highlightSummaryText()}
-    <Alert density="compact" description={highlightSummaryText() ?? undefined} testId={parameterWorkspaceTestIds.expertHighlightSummary} variant="info" />
-  {/if}
-
-  {#if view.missingHighlightTargets.length > 0}
-    <Alert
-      density="compact"
-      description={`${view.missingHighlightTargets.length} highlight target${view.missingHighlightTargets.length === 1 ? " was" : "s were"} not present in the current parameter snapshot: ${view.missingHighlightTargets.join(", ")}.`}
-      testId={parameterWorkspaceTestIds.expertHighlightMissing}
       variant="warning"
     />
   {/if}
@@ -160,7 +144,7 @@ function toggleGroup(group: ParameterExpertGroup) {
 
   {#if view.groups.length === 0}
     <EmptyState
-      description="Adjust the search text or filter chips to widen the raw parameter browser."
+      description="Adjust the search text or filter chips to widen the parameter catalog."
       title="No parameters match"
       testId={parameterWorkspaceTestIds.expertNoMatches}
     />
