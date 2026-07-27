@@ -100,7 +100,7 @@ export const SETUP_SECTION_NAV_GROUPS: ReadonlyArray<SetupSectionNavGroupDefinit
 export const SETUP_SECTIONS = {
   overview: {
     title: "Overview",
-    description: "Grouped setup dashboard with current vehicle readiness and next steps.",
+    description: "Active configuration, pre-arm readiness, safety findings, and parameter file actions.",
     kind: "overview",
     path: "/setup",
     iconKey: "overview",
@@ -254,7 +254,7 @@ export const SETUP_SECTIONS = {
   },
   arming: {
     title: "Arming",
-    description: "Pre-arm checks, current blockers, and arm/disarm controls.",
+    description: "Pre-arm validation selection and arming method safeguards.",
     kind: "guided",
     path: "/setup/arming",
     iconKey: "arming",

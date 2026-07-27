@@ -9,7 +9,11 @@ const ids = {
   inputPrefix: "parameter-workspace-input",
   itemPrefix: "parameter-workspace-item",
   metadata: "parameter-domain-metadata",
-  overviewBanner: "setup-workspace-overview-banner",
+  overviewArmControl: "setup-workspace-overview-arm-control",
+  overviewIdentity: "setup-workspace-overview-identity",
+  overviewParameterActions: "setup-workspace-overview-parameter-actions",
+  overviewPrearmSummary: "setup-workspace-overview-prearm-summary",
+  overviewSafetyAudit: "setup-workspace-overview-safety-audit",
   overviewSection: "setup-workspace-overview-section",
   progress: "parameter-domain-progress",
   root: "parameter-workspace",
@@ -53,7 +57,13 @@ export class SetupWorkspacePage {
 
   async expectOverview(): Promise<void> {
     await expect(this.page.getByTestId(ids.overviewSection)).toBeVisible({ timeout: 15_000 });
-    await expect(this.page.getByTestId(ids.overviewBanner)).toBeVisible();
+    await expect(this.page.getByTestId(ids.overviewIdentity)).toBeVisible();
+    await expect(this.page.getByTestId(ids.overviewParameterActions)).toBeVisible();
+    await expect(this.page.getByTestId(ids.overviewPrearmSummary)).toBeVisible();
+    await expect(this.page.getByTestId(ids.overviewArmControl)).toBeVisible();
+    await expect(this.page.getByTestId(ids.overviewSafetyAudit)).toBeVisible();
+    await expect(this.page.locator('[data-testid^="setup-workspace-overview-group-"]')).toHaveCount(0);
+    await expect(this.page.locator('[data-testid^="setup-workspace-overview-action-"]')).toHaveCount(0);
     await this.auditLayout("setup overview");
   }
 
@@ -198,7 +208,8 @@ export class SetupWorkspacePage {
   async expectPrimaryActionsReachable(label = "setup"): Promise<void> {
     await expectLayoutTargetsReachable(this.page, label, [
       { label: "overview section", locator: this.page.getByTestId(ids.overviewSection) },
-      { label: "setup banner", locator: this.page.getByTestId(ids.overviewBanner) },
+      { label: "active configuration", locator: this.page.getByTestId(ids.overviewIdentity) },
+      { label: "pre-arm readiness", locator: this.page.getByTestId(ids.overviewPrearmSummary) },
       {
         label: "refresh parameters",
         locator: this.page.getByRole("button", { name: "Refresh all" }),
@@ -216,9 +227,14 @@ export class SetupWorkspacePage {
     }
 
     await navLink.click();
-    await expect(this.page.getByTestId(section.testId), `${section.label} should open`).toBeVisible({
+    const sectionRoot = this.page.getByTestId(section.testId);
+    await expect(sectionRoot, `${section.label} should open`).toBeVisible({
       timeout: 15_000,
     });
+    if (section.id === "arming") {
+      await expect(sectionRoot.getByTestId("setup-workspace-arming-check-checklist")).toBeVisible();
+      await expect(sectionRoot.getByRole("button", { name: /^(Arm|Disarm)$/ })).toHaveCount(0);
+    }
     await this.auditLayout(`setup section ${section.id}`);
   }
 

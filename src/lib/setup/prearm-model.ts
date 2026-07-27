@@ -86,6 +86,14 @@ function numericIdentity(entry: Pick<StatusMessage, "sequence" | "timestamp_usec
   return "fallback";
 }
 
+function prearmMessageFingerprint(text: string): string {
+  return text
+    .replace(/^pre-?arm:\s*/i, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 export function classifyPrearmMessage(text: string, identity: string): PrearmBlocker {
   const stripped = text.replace(/^pre-?arm:\s*/i, "").trim();
   for (const { pattern, category, guidance } of PREARM_PATTERNS) {
@@ -156,9 +164,8 @@ function selectStatusBlockers(domain: StatusTextDomain | null | undefined): {
     };
   }
 
-  const blockers: PrearmBlocker[] = [];
+  const blockersByFingerprint = new Map<string, PrearmBlocker>();
   let malformedEntriesDropped = false;
-  const seen = new Set<string>();
 
   for (const entry of entries) {
     if (!entry || typeof entry !== "object") {
@@ -182,16 +189,11 @@ function selectStatusBlockers(domain: StatusTextDomain | null | undefined): {
     }
 
     const blocker = classifyPrearmMessage(text, numericIdentity(entry as StatusMessage));
-    if (seen.has(blocker.id)) {
-      continue;
-    }
-
-    seen.add(blocker.id);
-    blockers.push(blocker);
+    blockersByFingerprint.set(prearmMessageFingerprint(text), blocker);
   }
 
   return {
-    blockers,
+    blockers: [...blockersByFingerprint.values()],
     malformedEntriesDropped,
   };
 }

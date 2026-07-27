@@ -162,6 +162,43 @@ describe("prearm-model", () => {
     expect(model.snapshot?.scopeKey).toBe("scope-1");
   });
 
+  it("deduplicates repeated blocker text while retaining the newest message identity", () => {
+    const model = derivePrearmModel({
+      scopeKey: "scope-1",
+      liveConnected: true,
+      armed: false,
+      support: createSupport(true),
+      sensorHealth: createSensorHealth(),
+      statusText: createStatusText([
+        { sequence: 1, text: "PreArm: AHRS: waiting for home", severity: "warning" },
+        { sequence: 2, text: "PreArm: Logging failed", severity: "warning" },
+        { sequence: 8, text: " prearm:  AHRS:   waiting for home ", severity: "warning" },
+      ]),
+    });
+
+    expect(model.blockers).toHaveLength(2);
+    expect(model.blockers[0]).toMatchObject({
+      id: "EKF-seq:8",
+      category: "EKF",
+    });
+  });
+
+  it("keeps distinct blockers that share a category", () => {
+    const model = derivePrearmModel({
+      scopeKey: "scope-1",
+      liveConnected: true,
+      armed: false,
+      support: createSupport(true),
+      sensorHealth: createSensorHealth(),
+      statusText: createStatusText([
+        { sequence: 1, text: "PreArm: Accel calibration needed", severity: "warning" },
+        { sequence: 2, text: "PreArm: Gyro not healthy", severity: "warning" },
+      ]),
+    });
+
+    expect(model.blockers.map((blocker) => blocker.category)).toEqual(["IMU", "IMU"]);
+  });
+
   it("retains the last same-scope blockers as stale when the status feed goes incomplete", () => {
     const previous = derivePrearmModel({
       scopeKey: "scope-1",
