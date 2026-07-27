@@ -270,6 +270,21 @@ export function toggleFlightModeBitmaskValue(currentValue: number | null, bit: n
   return resolved ^ (1 << bit);
 }
 
+export function canReorderFlightModeSlots(
+  slots: readonly Pick<FlightModeSlotModel, "paramName" | "effectiveValue">[],
+  parameterItems: ReadonlyMap<string, { readOnly: boolean }>,
+  actionsBlocked: boolean,
+): boolean {
+  if (actionsBlocked || slots.length !== MODE_SLOT_COUNT) {
+    return false;
+  }
+
+  return slots.every((slot) => {
+    const item = parameterItems.get(slot.paramName);
+    return item !== undefined && !item.readOnly && slot.effectiveValue !== null;
+  });
+}
+
 export function buildFlightModePresetPreviewRows(
   preset: FlightModePreset,
   paramStore: ParamStore | null,

@@ -10,6 +10,7 @@ import {
   MODE_SLOT_PWM_RANGES,
   buildFlightModeModel,
   buildFlightModePresetPreviewRows,
+  canReorderFlightModeSlots,
   getActiveFlightModeSlotIndex,
   getFlightModePwmDisplayBounds,
   modeNameForValue,
@@ -153,6 +154,37 @@ describe("flight-mode-model", () => {
     expect(model.options).toHaveLength(COPTER_MODES.length);
     expect(model.canStagePreset).toBe(false);
     expect(model.canConfirm).toBe(false);
+  });
+
+  it("allows loaded editable slot values to reorder without live mode availability", () => {
+    const model = buildFlightModeModel({
+      vehicleType: "quadrotor",
+      paramStore: createParamStore({
+        [FLIGHT_MODE_PARAM_NAMES[0]]: 0,
+        [FLIGHT_MODE_PARAM_NAMES[1]]: 2,
+        [FLIGHT_MODE_PARAM_NAMES[2]]: 5,
+        [FLIGHT_MODE_PARAM_NAMES[3]]: 6,
+        [FLIGHT_MODE_PARAM_NAMES[4]]: 9,
+        [FLIGHT_MODE_PARAM_NAMES[5]]: 3,
+      }),
+      stagedEdits: {},
+      availableModes: [],
+      liveConnected: true,
+      sameScope: false,
+      telemetrySettled: true,
+    });
+    const editableItems = new Map(
+      FLIGHT_MODE_PARAM_NAMES.map((name) => [name, { readOnly: false }]),
+    );
+
+    expect(model.availabilityState).toBe("unavailable");
+    expect(canReorderFlightModeSlots(model.slots, editableItems, false)).toBe(true);
+    expect(canReorderFlightModeSlots(model.slots, editableItems, true)).toBe(false);
+    expect(canReorderFlightModeSlots(
+      model.slots,
+      new Map([...editableItems, [FLIGHT_MODE_PARAM_NAMES[2], { readOnly: true }]]),
+      false,
+    )).toBe(false);
   });
 
   it("falls back to raw mode numbers when current slot values are not in the available-mode list", () => {

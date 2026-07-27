@@ -7,6 +7,8 @@ import { Button, Card, Eyebrow, MetricTile, WorkspaceShell } from "../../../comp
 import AttitudeOrientationGauge from "../../../features/telemetry/components/AttitudeOrientationGauge.svelte";
 import BatteryVoltageGauge from "../../../features/telemetry/components/BatteryVoltageGauge.svelte";
 import PwmChannelStrip from "../../../features/telemetry/components/PwmChannelStrip.svelte";
+import TelemetryStreamNotice from "../../../features/telemetry/components/TelemetryStreamNotice.svelte";
+import { RC_CHANNELS_MESSAGE_ID, SERVO_OUTPUT_MESSAGE_ID } from "../../../lib/telemetry-stream-control";
 
 type MetricTone = "neutral" | "info" | "success" | "warning" | "danger";
 type MetricState = "live" | "unavailable";
@@ -126,6 +128,19 @@ let view = $derived(operatorWorkspace.current);
 let session = $derived(sessionView.current);
 let telemetry = $derived(session.telemetry);
 let connected = $derived(view.connected);
+let hasRcTelemetry = $derived(Array.isArray(telemetry.rc_channels) && telemetry.rc_channels.length > 0);
+let hasServoTelemetry = $derived(Array.isArray(telemetry.servo_outputs) && telemetry.servo_outputs.length > 0);
+let missingRadioMessageIds = $derived([
+  ...(!hasRcTelemetry ? [RC_CHANNELS_MESSAGE_ID] : []),
+  ...(!hasServoTelemetry ? [SERVO_OUTPUT_MESSAGE_ID] : []),
+]);
+let missingRadioStreamLabel = $derived(
+  missingRadioMessageIds.length === 2
+    ? "RC channel and servo output telemetry"
+    : missingRadioMessageIds[0] === RC_CHANNELS_MESSAGE_ID
+      ? "RC channel telemetry"
+      : "Servo output telemetry",
+);
 
 function metricState(hasValue: boolean): "live" | "unavailable" {
   if (!connected) return "unavailable";
@@ -359,6 +374,14 @@ let sections = $derived.by<MetricSection[]>(() => {
                 stale={!connected}
               />
             {:else if section.key === "radio"}
+              <TelemetryStreamNotice
+                activeSource={view.activeSource}
+                available={missingRadioMessageIds.length === 0}
+                {connected}
+                messageIds={missingRadioMessageIds}
+                streamLabel={missingRadioStreamLabel}
+                testId="telemetry-radio-stream-notice"
+              />
               <PwmChannelStrip title="RC channels" values={telemetry.rc_channels} labelPrefix="CH" emptyText="No RC channel telemetry available." />
               <PwmChannelStrip title="Servo outputs" values={telemetry.servo_outputs} labelPrefix="S" maxVisible={16} emptyText="No servo output telemetry available." />
             {/if}

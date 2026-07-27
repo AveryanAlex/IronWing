@@ -108,6 +108,7 @@ function createLiveSettingsState(): LiveSettingsStoreState {
     catalogError: null,
     applyPhase: "idle",
     applyTarget: null,
+    messageRateApplyIds: [],
     lastApplyError: null,
     telemetryRateError: null,
     messageRateErrors: {},

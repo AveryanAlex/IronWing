@@ -5,10 +5,13 @@ import { readable } from "svelte/store";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  setLiveSettingsStoreContext,
   setOperatorWorkspaceViewStoreContext,
   setSessionViewStoreContext,
+  setTelemetrySettingsDialogLauncherContext,
 } from "../../../app/shell/runtime-context";
 import { missingDomainValue } from "../../../lib/domain-status";
+import { createLiveSettingsStore } from "../../../lib/stores/live-settings";
 import { createOperatorWorkspaceViewStore } from "../../../lib/stores/operator-workspace-view";
 import {
   createSessionViewStore,
@@ -106,6 +109,8 @@ function TelemetryHarness(...args: any[]) {
 
   setSessionViewStoreContext(createSessionViewStore(sessionStore));
   setOperatorWorkspaceViewStoreContext(createOperatorWorkspaceViewStore(sessionStore));
+  setLiveSettingsStoreContext(createLiveSettingsStore(sessionStore, undefined, null));
+  setTelemetrySettingsDialogLauncherContext({ open: () => {} });
 
   return (TelemetryWorkspace as (...args: any[]) => unknown)(...args);
 }
