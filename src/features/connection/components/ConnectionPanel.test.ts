@@ -422,6 +422,29 @@ describe("ConnectionPanel", () => {
     });
   });
 
+  it("toasts backend connection failures without inserting an inline banner", async () => {
+    const { service } = createMockService({
+      connectSession: vi.fn(async () => {
+        throw new Error("link refused");
+      }),
+    });
+    const store = createSessionStore(service);
+
+    await store.initialize();
+    render(withSessionContext(store, ConnectionPanel));
+
+    await fireEvent.click(screen.getByTestId("connection-connect-btn"));
+
+    await waitFor(() => {
+      expect(toastError).toHaveBeenCalledWith("Connection request failed", {
+        description: "link refused",
+        duration: 10_000,
+        id: "connection-request",
+      });
+    });
+    expect(screen.queryByTestId("connection-error-message")).toBeNull();
+  });
+
   it("refreshes serial ports automatically on mount and when transport changes to serial", async () => {
     const loadConnectionForm = vi
       .fn<() => SessionConnectionFormState>()

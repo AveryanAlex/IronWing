@@ -349,4 +349,39 @@ describe("LogCharts", () => {
     expect(screen.queryByTestId("logs-chart-export-result")).toBeNull();
     expect(screen.getByTestId("logs-chart-export-button").textContent).toContain("Export selected range as CSV");
   });
+
+  it("does not retain completed chart export feedback in the layout", () => {
+    render(LogCharts, {
+      props: {
+        entry: createEntry("tlog", { ATTITUDE: 40 }),
+        chartState: createChartState({
+          selectedRange: { startUsec: 13_000_000, endUsec: 43_000_000 },
+          exportDestinationPath: "/tmp/range.csv",
+        }),
+        exportState: createExportState({
+          origin: "chart",
+          phase: "completed",
+          result: {
+            operation_id: "log_export",
+            destination_path: "/tmp/range.csv",
+            bytes_written: 64,
+            rows_written: 4,
+            diagnostics: [],
+          },
+        }),
+        playbackCursorUsec: 2_000_000,
+        playbackRangeStartUsec: 1_000_000,
+        playbackRangeEndUsec: 61_000_000,
+        onSelectGroup: vi.fn(),
+        onHoverCursor: vi.fn(),
+        onSelectRange: vi.fn(),
+        onExportDestinationChange: vi.fn(),
+        onRequestChartRange: vi.fn(),
+        onExportSelectedRange: vi.fn(),
+      },
+    });
+
+    expect(screen.queryByTestId("logs-chart-export-result")).toBeNull();
+    expect(screen.queryByText(/Wrote 4 rows/i)).toBeNull();
+  });
 });

@@ -24,12 +24,12 @@ import {
   getParameterWorkspaceViewStoreContext,
   getParamsStoreContext,
 } from "../../../app/shell/runtime-context";
-import { Alert, Badge, Button, Card, EmptyState, Eyebrow, FactTile, HelperText, WorkspaceHeader, WorkspaceShell } from "../../../components/ui";
+import { Badge, Button, Card, EmptyState, Eyebrow, FactTile, HelperText, StatusPill, WorkspaceHeader, WorkspaceShell } from "../../../components/ui";
 import ParameterExpertBrowser from "./ParameterExpertBrowser.svelte";
 import ParameterExpertFileActions from "./ParameterExpertFileActions.svelte";
 import ParameterWorkflowSection from "./ParameterWorkflowSection.svelte";
 import { parameterWorkspaceTestIds } from "../parameter-workspace-test-ids";
-import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../../lib/replay-readonly";
+import { isReplayReadonly } from "../../../lib/replay-readonly";
 
 type ExpertHighlightRequest = {
 	sourceLabel: string;
@@ -344,13 +344,21 @@ function parsePositiveNumber(value: string): number | null {
     <FactTile label="Metadata" value={view.metadataText} mono={false} testId={parameterWorkspaceTestIds.metadata} />
   </div>
 
-  {#if replayReadonly}
-    <Alert class="mt-4" description={REPLAY_READONLY_COPY} testId="parameter-replay-readonly-banner" title={REPLAY_READONLY_TITLE} variant="warning" />
-  {/if}
-
-  {#if view.noticeText}
-    <Alert class="mt-4" description={view.noticeText} testId={parameterWorkspaceTestIds.notice} variant="warning" />
-  {/if}
+  <div
+    aria-live="polite"
+    class="mt-4 flex h-9 min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border/70 bg-bg-secondary/70 px-3 text-xs"
+    role="status"
+    title={view.noticeText ?? "No active parameter notices"}
+  >
+    <StatusPill tone={view.noticeText ? "warning" : "neutral"}>
+      {view.noticeText ? "attention" : "ready"}
+    </StatusPill>
+    {#if view.noticeText}
+      <span class="truncate text-warning" data-testid={parameterWorkspaceTestIds.notice}>{view.noticeText}</span>
+    {:else}
+      <span class="truncate text-text-muted">No active parameter notices</span>
+    {/if}
+  </div>
 
   <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
     <HelperText>

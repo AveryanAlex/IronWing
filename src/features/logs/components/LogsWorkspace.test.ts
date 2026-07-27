@@ -6,10 +6,18 @@ import { writable } from "svelte/store";
 
 import type { ChartSeriesSelector, LogLibraryCatalog, LogLibraryEntry } from "../../../logs";
 import type { LogsWorkspaceState, LogsWorkspaceStore } from "../../../lib/stores/logs-workspace";
+import { notifyError, notifySuccess } from "../../../lib/notifications";
 import type { RecordingSettings, RecordingStatus } from "../../../recording";
 import type { LogRecordingFileIo } from "../log-recording-file-io";
 import type { LogsWorkspaceMapHandoff } from "../logs-workspace-types";
 import LogsWorkspace from "../../../routes/(app)/logs/+page.svelte";
+
+vi.mock("../../../lib/notifications", () => ({
+  notifyError: vi.fn(),
+  notifyInfo: vi.fn(),
+  notifySuccess: vi.fn(),
+  notifyWarning: vi.fn(),
+}));
 
 function createEntry(entryId: string, status: LogLibraryEntry["status"], path = `/logs/${entryId}.tlog`): LogLibraryEntry {
   const available = status !== "missing";
@@ -378,6 +386,35 @@ describe("LogsWorkspace", () => {
     expect(store.removeEntry).toHaveBeenCalledWith("missing");
   });
 
+  it("keeps the scoped error inline without rendering the duplicate workspace error", async () => {
+    const store = createStore(createState({
+      lastError: "duplicate workspace failure",
+      library: {
+        phase: "failed",
+        error: "scoped library failure",
+        catalog: createCatalog([createEntry("ready", "ready")]),
+        selectedEntryId: "ready",
+        loadedEntryId: null,
+      },
+    }));
+
+    render(LogsWorkspace, { props: { store } });
+
+    expect(screen.queryByTestId("logs-workspace-last-error")).toBeNull();
+    expect(screen.queryByText("duplicate workspace failure")).toBeNull();
+    expect(screen.getByText("scoped library failure")).toBeTruthy();
+
+    await fireEvent.input(screen.getByTestId("logs-import-path-input"), {
+      target: { value: "/imports/new-flight.tlog" },
+    });
+    await fireEvent.click(screen.getByTestId("logs-import-button"));
+
+    expect(notifyError).toHaveBeenCalledWith("Could not register the log", {
+      id: "logs-library-register",
+      description: "scoped library failure",
+    });
+  });
+
   it("dispatches refresh and cancel controls from the workspace chrome", async () => {
     const store = createStore(createState({
       operationProgress: {
@@ -391,7 +428,6 @@ describe("LogsWorkspace", () => {
         message: "indexing referenced logs",
       },
     }));
-
     render(LogsWorkspace, {
       props: { store },
     });
@@ -518,6 +554,13 @@ describe("LogsWorkspace", () => {
         loadedEntryId: "ready",
       },
     }));
+    vi.mocked(store.runExport).mockResolvedValue({
+      operation_id: "log_export",
+      destination_path: "/tmp/range-export.csv",
+      bytes_written: 128,
+      rows_written: 42,
+      diagnostics: [],
+    });
 
     render(LogsWorkspace, {
       props: { store },
@@ -546,6 +589,10 @@ describe("LogsWorkspace", () => {
       text: null,
       field_filters: [],
     }, { origin: "chart" });
+    expect(notifySuccess).toHaveBeenCalledWith("Log export complete", {
+      id: "logs-chart-export",
+      description: "42 rows written to /tmp/range-export.csv.",
+    });
   });
 
 });

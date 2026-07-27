@@ -108,6 +108,21 @@ body {
   font-weight: 600;
 }
 
+.app-shell-header__mode-pill {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--color-warning) 10%, transparent);
+  color: var(--color-warning);
+  font-size: 0.65rem;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  padding: 4px 7px;
+  white-space: nowrap;
+}
+
 .app-shell-tabs {
   display: flex;
   flex: 1 1 0;
@@ -210,6 +225,15 @@ body {
   font-size: 0.58rem;
   line-height: 1;
   padding: 2px 4px;
+}
+
+.app-shell-phone-nav__badge.app-shell-header__mode-pill {
+  display: block;
+  border: 0;
+  background: var(--color-warning);
+  color: var(--color-bg-primary);
+  font-size: 0.5rem;
+  padding: 2px 3px;
 }
 
 .runtime-eyebrow {

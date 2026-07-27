@@ -20,7 +20,7 @@ import {
 } from "../../../lib/stores/serial-port-inventory";
 import type { SessionStore } from "../../../lib/stores/session";
 import type { SessionEnvelope } from "../../../session";
-import { Banner, WorkspaceShell } from "../../../components/ui";
+import { StatusPill, WorkspaceShell } from "../../../components/ui";
 import FirmwareOperationRail from "../../../features/firmware/components/FirmwareOperationRail.svelte";
 import FirmwareRecoveryPanel from "../../../features/firmware/components/FirmwareRecoveryPanel.svelte";
 import FirmwareSerialPanel from "../../../features/firmware/components/FirmwareSerialPanel.svelte";
@@ -30,7 +30,7 @@ import {
   resolveFirmwareWorkspaceLayout,
 } from "../../../features/firmware/firmware-workspace-layout";
 import { firmwareWorkspaceTestIds } from "../../../features/firmware/firmware-workspace-test-ids";
-import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../../lib/replay-readonly";
+import { isReplayReadonly } from "../../../lib/replay-readonly";
 
 const internalService = createFirmwareService();
 const internalStore = createFirmwareWorkspaceStore(internalService);
@@ -140,11 +140,6 @@ let effectiveMode = $derived.by<WorkspaceMode>(() => {
 
   return selectedMode;
 });
-let showReturnGuidance = $derived(
-  effectiveMode === "install" &&
-    workspaceState.lastCompletedOutcome?.path === "bootloader_installation" &&
-    workspaceState.lastCompletedOutcome.outcome.result === "verified",
-);
 let splitOperationRail = $derived(layout.panelColumns === "split");
 let workspaceBodyClass = $derived(
   splitOperationRail ? "grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem] xl:items-start" : "grid gap-4",
@@ -191,38 +186,28 @@ $effect(() => {
     onModeChange={(mode) => (selectedMode = mode)}
   />
 
-  {#if !layout.actionsEnabled}
-    <div data-testid={firmwareWorkspaceTestIds.blockedCopy}>
-      <Banner
-        severity="warning"
-        title={layout.blockedTitle ?? "Firmware actions blocked"}
-        titleTestId={firmwareWorkspaceTestIds.blockedReason}
-        message={layout.blockedDetail ?? undefined}
-      />
-    </div>
-  {/if}
-
-  {#if replayReadonly}
-    <Banner
-      severity="warning"
-      title={REPLAY_READONLY_TITLE}
-      message={REPLAY_READONLY_COPY}
-      testId="firmware-replay-readonly-banner"
-    />
-  {/if}
-
-  {#if workspaceState.lastError}
-    <Banner severity="danger" title={workspaceState.lastError} />
-  {/if}
-
-  {#if showReturnGuidance}
-    <Banner
-      severity="success"
-      title="Bootloader installation verified"
-      message="Return to firmware install/update now, reconnect over serial if needed, and flash the normal flight firmware. The bootloader outcome remains visible below until you dismiss it."
-      testId={firmwareWorkspaceTestIds.returnGuidance}
-    />
-  {/if}
+  <div
+    class="flex h-9 min-w-0 items-center gap-2 overflow-hidden rounded-md border border-border/70 bg-bg-secondary/70 px-3 text-xs"
+    title={layout.actionsEnabled
+      ? "Firmware write actions are available in this viewport."
+      : `${layout.blockedTitle ?? "Firmware actions blocked"}. ${layout.blockedDetail ?? ""}`}
+  >
+    {#if layout.actionsEnabled}
+      <StatusPill tone="success">write enabled</StatusPill>
+      <span class="truncate text-text-secondary">Firmware write actions are available in this viewport.</span>
+    {:else}
+      <div class="contents" data-testid={firmwareWorkspaceTestIds.blockedCopy}>
+        <StatusPill tone="warning">browse only</StatusPill>
+        <span
+          class="truncate text-warning"
+          data-testid={firmwareWorkspaceTestIds.blockedReason}
+        >{layout.blockedTitle ?? "Firmware actions blocked"}</span>
+        {#if layout.blockedDetail}
+          <span class="sr-only">{layout.blockedDetail}</span>
+        {/if}
+      </div>
+    {/if}
+  </div>
 
   <div aria-hidden="true" class="hidden">
     <span data-testid={firmwareWorkspaceTestIds.mode}

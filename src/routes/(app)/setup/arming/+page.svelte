@@ -6,6 +6,7 @@ import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/s
 import { requestPrearmChecks } from "../../../../calibration";
 import { trackAnalytics } from "../../../../lib/analytics/client";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
+import { notifyUnknownError } from "../../../../lib/notifications";
 import { buildParameterItemIndex } from "../../../../lib/params/parameter-item-model";
 import { derivePrearmModel, type PrearmSnapshot } from "../../../../lib/setup/prearm-model";
 import { getVehicleSlug } from "../../../../lib/setup/vehicle-profile";
@@ -41,7 +42,6 @@ let prearmSnapshot = $state<PrearmSnapshot | null>(null);
 let requestPhase = $state<"idle" | "running">("idle");
 let actionPhase = $state<"idle" | "arming" | "disarming">("idle");
 let confirmArm = $state(false);
-let commandError = $state<string | null>(null);
 
 let params = $derived(paramsState.current);
 let session = $derived(sessionState.current);
@@ -132,16 +132,11 @@ function setArmingChecks(checked: boolean) {
   paramsStore.stageParameterEdit(armingCheckItem, nextMask);
 }
 
-function formatError(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 async function handleRequestChecks() {
   if (actionsBlocked || !prearmModel.canRequestChecks || requestPhase === "running") {
     return;
   }
 
-  commandError = null;
   requestPhase = "running";
   trackAnalytics("prearm_checks_requested", {
     connected: session.sessionDomain.value?.connection.kind === "connected" ? 1 : 0,
@@ -149,7 +144,9 @@ async function handleRequestChecks() {
   try {
     await requestPrearmChecks();
   } catch (error) {
-    commandError = `Pre-arm check request failed: ${formatError(error)}`;
+    notifyUnknownError("Pre-arm check request failed", error, {
+      id: "setup-prearm-check-request-failed",
+    });
   } finally {
     requestPhase = "idle";
   }
@@ -165,14 +162,15 @@ async function handleArm() {
     return;
   }
 
-  commandError = null;
   actionPhase = "arming";
   trackAnalytics("arming_command_requested", { action: "arm", force: 0 });
   try {
     await armVehicle(false);
     confirmArm = false;
   } catch (error) {
-    commandError = `Arm request failed: ${formatError(error)}`;
+    notifyUnknownError("Arm request failed", error, {
+      id: "setup-arm-request-failed",
+    });
   } finally {
     actionPhase = "idle";
   }
@@ -183,13 +181,14 @@ async function handleDisarm() {
     return;
   }
 
-  commandError = null;
   actionPhase = "disarming";
   trackAnalytics("arming_command_requested", { action: "disarm", force: 0 });
   try {
     await disarmVehicle(false);
   } catch (error) {
-    commandError = `Disarm request failed: ${formatError(error)}`;
+    notifyUnknownError("Disarm request failed", error, {
+      id: "setup-disarm-request-failed",
+    });
   } finally {
     actionPhase = "idle";
   }
@@ -284,10 +283,6 @@ async function handleDisarm() {
         </ActionRow>
       </SetupSectionCard>
     </div>
-
-    {#if commandError}
-      <SetupNotice tone="danger" testId={setupWorkspaceTestIds.armingFailure}>{commandError}</SetupNotice>
-    {/if}
 
     {#if checksDisabled}
       <SetupNotice tone="danger" testId={`${setupWorkspaceTestIds.armingBannerPrefix}-checks-disabled`}>

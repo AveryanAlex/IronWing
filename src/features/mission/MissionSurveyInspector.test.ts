@@ -166,6 +166,28 @@ afterEach(() => {
 });
 
 describe("MissionSurveyInspector", () => {
+  it("presents survey replacement decisions in a modal dialog", async () => {
+    const onConfirmSurveyPrompt = vi.fn();
+    const onDismissSurveyPrompt = vi.fn();
+    const region = makeGridRegion();
+
+    renderInspector(region, {
+      surveyPrompt: {
+        kind: "confirm-regenerate",
+        regionId: region.id,
+        message: "Regenerating replaces the current generated survey items.",
+      },
+      onConfirmSurveyPrompt,
+      onDismissSurveyPrompt,
+    });
+
+    expect(screen.getByRole("dialog", { name: "Replace generated survey items?" })).toBeTruthy();
+    expect(screen.getByTestId(missionWorkspaceTestIds.surveyPrompt).textContent).toContain("Replace generated survey items");
+
+    await fireEvent.click(screen.getByTestId(missionWorkspaceTestIds.surveyPromptConfirm));
+    expect(onConfirmSurveyPrompt).toHaveBeenCalledTimes(1);
+  });
+
   it("blocks generation for camera-less imported regions until a valid camera is chosen", async () => {
     const onUpdateRegion = vi.fn();
     const onGenerateRegion = vi.fn();

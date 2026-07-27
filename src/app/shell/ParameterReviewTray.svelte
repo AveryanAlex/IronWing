@@ -13,7 +13,7 @@ import {
   IconButton,
   MonoValue,
 } from "../../components/ui";
-import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../lib/replay-readonly";
+import { isReplayReadonly } from "../../lib/replay-readonly";
 import { appShellTestIds } from "./chrome-state";
 import { getParamsStoreContext, getParameterWorkspaceViewStoreContext } from "./runtime-context";
 
@@ -80,25 +80,6 @@ function discardAllQueuedEdits() {
         density="compact"
         description="Some changes require a vehicle reboot to take effect"
         icon={rebootIcon}
-        variant="warning"
-      />
-    {/if}
-    {#if view.noticeText}
-      <Alert
-        class="mb-2"
-        density="compact"
-        description={view.noticeText}
-        testId={appShellTestIds.parameterReviewWarning}
-        variant="warning"
-      />
-    {/if}
-    {#if replayReadonly}
-      <Alert
-        class="mb-2"
-        density="compact"
-        description={REPLAY_READONLY_COPY}
-        testId={appShellTestIds.parameterReviewReplayReadonly}
-        title={REPLAY_READONLY_TITLE}
         variant="warning"
       />
     {/if}

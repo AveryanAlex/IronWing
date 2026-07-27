@@ -1,7 +1,7 @@
 export const missionWorkspaceTestIds = {
   root: "mission-workspace",
   header: "mission-workspace-header",
-  headerReplayReadonly: "mission-workspace-header-replay-readonly",
+  issuesTrigger: "mission-workspace-issues-trigger",
   planningStatsPanel: "mission-planning-stats",
   planningStatsMissionCard: "mission-planning-stats-mission",
   planningStatsFenceCard: "mission-planning-stats-fence",
@@ -96,6 +96,7 @@ export const missionWorkspaceTestIds = {
   modeShellBody: "mission-mode-shell-body",
   map: "mission-map",
   mapSurface: "mission-map-surface",
+  mapStatusPanel: "mission-map-status-panel",
   mapBasemap: "mission-map-basemap",
   mapDrawSurface: "mission-map-draw-surface",
   mapSelection: "mission-map-selection",

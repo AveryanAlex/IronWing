@@ -1,7 +1,7 @@
 <script lang="ts">
 import type { LogExportRequest, LogLibraryEntry, RawMessageFieldFilter, RawMessageQuery, RawMessageRecord } from "../../../logs";
 import type { LogsExportState, LogsRawBrowserFilters, LogsRawBrowserState } from "../../../lib/stores/logs-workspace";
-import { Banner, Button, Checkbox, Eyebrow, HelperText, Input, Panel, StatusPill } from "../../../components/ui";
+import { Button, Checkbox, EmptyState, Eyebrow, HelperText, Input, Panel, StatusPill } from "../../../components/ui";
 
 type DraftFieldFilter = RawMessageFieldFilter & { id: number };
 
@@ -365,7 +365,10 @@ const titleClass = "mt-1 m-0 text-base font-semibold text-text-primary";
     </div>
 
     {#if !entry}
-      <Banner severity="info" title="Select a log to browse raw messages." />
+      <EmptyState
+        description="Choose a library entry to filter indexed records and inspect message payloads."
+        title="Select a log to browse raw messages."
+      />
     {:else}
       <div class="flex flex-wrap gap-3">
         <label class="flex-[1_1_10rem]">
@@ -438,18 +441,6 @@ const titleClass = "mt-1 m-0 text-base font-semibold text-text-primary";
         </Button>
       </div>
     </div>
-
-    {#if rawBrowser.error}
-      <Banner severity="danger" title={rawBrowser.error} />
-    {/if}
-    {#if rawExportVisible && exportState.error}
-      <Banner severity="danger" title={exportState.error} />
-    {:else if rawExportVisible && exportState.phase === "completed" && exportState.result}
-      <Banner
-        severity="success"
-        title={`Export completed · ${exportState.result.rows_written.toLocaleString()} rows written.`}
-      />
-    {/if}
 
     <div class="grid min-h-0 grid-cols-1 gap-3 xl:[grid-template-columns:minmax(0,1.4fr)_minmax(18rem,0.9fr)]">
       <div class="min-h-0 overflow-auto rounded-lg border border-border">

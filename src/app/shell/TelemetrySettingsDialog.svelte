@@ -1,7 +1,7 @@
 <script lang="ts">
 import { fromStore, get } from "svelte/store";
-import { toast } from "svelte-sonner";
 
+import { notifyError, notifySuccess } from "../../lib/notifications";
 import type {
   LiveSettingsApplyPhase,
   LiveSettingsApplyTarget,
@@ -529,12 +529,14 @@ $effect(() => {
     if (toastKey && toastKey !== lastToastKey) {
       lastToastKey = toastKey;
       if (liveSettingsView.lastApplyError) {
-        toast.error("Telemetry settings need attention", {
+        notifyError("Telemetry settings need attention", {
           description: liveSettingsView.lastApplyError,
+          id: "telemetry-settings-apply",
         });
       } else {
-        toast.success("Telemetry settings applied", {
+        notifySuccess("Telemetry settings applied", {
           description: lastDraftApplySummary ?? "Confirmed telemetry settings are now active.",
+          id: "telemetry-settings-apply",
         });
       }
     }

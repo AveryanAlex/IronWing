@@ -7,6 +7,7 @@ import {
   FileUp,
   MoreHorizontal,
   Redo2,
+  TriangleAlert,
   Undo2,
   Upload,
   X,
@@ -16,8 +17,8 @@ import type {
   MissionPlannerMode,
 } from "../../../lib/stores/mission-planner";
 import type { SurveyPatternType } from "../../../lib/survey-region";
-import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE } from "../../../lib/replay-readonly";
-import { Banner, Menu, type MenuItem, Toolbar, ToolbarButton, ToolbarGroup, Tooltip } from "../../../components/ui";
+import { Menu, type MenuItem, Toolbar, ToolbarButton, ToolbarGroup, Tooltip } from "../../../components/ui";
+import type { MissionWorkspaceInlineCopy } from "../mission-workspace-helpers";
 import { missionWorkspaceTestIds } from "../mission-workspace-test-ids";
 
 type Props = {
@@ -33,6 +34,8 @@ type Props = {
   undoCount: number;
   canRedo: boolean;
   redoCount: number;
+  issueCount: number;
+  inlineCopy: MissionWorkspaceInlineCopy | null;
   onSelectMode: (mode: MissionPlannerMode) => void;
   onAddMissionItem: () => void;
   onAddSurveyBlock: (patternType: SurveyPatternType) => void;
@@ -44,6 +47,7 @@ type Props = {
   onNewMission: () => void;
   onUploadToVehicle: () => void;
   onCancelTransfer: () => void;
+  onOpenIssues: () => void;
 };
 
 let {
@@ -59,6 +63,8 @@ let {
   undoCount,
   canRedo,
   redoCount,
+  issueCount,
+  inlineCopy,
   onSelectMode,
   onAddMissionItem,
   onAddSurveyBlock,
@@ -70,6 +76,7 @@ let {
   onNewMission,
   onUploadToVehicle,
   onCancelTransfer,
+  onOpenIssues,
 }: Props = $props();
 
 const modeButtons = [
@@ -89,8 +96,8 @@ let redoAvailable = $derived(attachment.canEdit && canRedo && normalizedRedoCoun
 let missionCreateAvailable = $derived(mode === "mission" && attachment.canEdit && !busy);
 let undoLabel = $derived(`Undo (${normalizedUndoCount} available)`);
 let redoLabel = $derived(`Redo (${normalizedRedoCount} available)`);
-let replayReadonly = $derived(attachment.kind === "playback-readonly");
 let uploadedIdle = $derived(uploaded && !busy);
+let normalizedIssueCount = $derived(normalizeHistoryCount(issueCount));
 let vehicleDisconnected = $derived(!canUseVehicleActions);
 let uploadDisabled = $derived(
   !uploading && !uploadedIdle && (busy || vehicleDisconnected),
@@ -104,6 +111,7 @@ let clearLabel = $derived(
   mode === "fence" ? "Clear fence" : mode === "rally" ? "Clear rally" : "Clear mission",
 );
 let activeModeLabel = $derived(modeButtons.find((item) => item.mode === mode)?.label ?? "Mode");
+let issuesLabel = $derived(`${normalizedIssueCount} active mission issue${normalizedIssueCount === 1 ? "" : "s"}`);
 let modeItems = $derived<MenuItem[]>(
   modeButtons.map((item) => ({
     id: `mode-${item.mode}`,
@@ -179,16 +187,6 @@ let secondaryItems = $derived<MenuItem[]>([
   class="@container flex shrink-0 flex-col gap-[var(--space-2)] border-b border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-[var(--space-3)] py-[var(--space-2)] @max-[520px]:[&_.ui-btn]:min-w-[var(--control-h-sm)] @max-[520px]:[&_.ui-btn]:px-2"
   data-testid={missionWorkspaceTestIds.header}
 >
-  {#if replayReadonly}
-    <div data-testid={missionWorkspaceTestIds.headerReplayReadonly}>
-      <Banner
-        message={REPLAY_READONLY_COPY}
-        severity="warning"
-        title={REPLAY_READONLY_TITLE}
-      />
-    </div>
-  {/if}
-
   <Toolbar ariaLabel="Mission actions" density="compact" overflow="scroll">
     <ToolbarGroup>
       <Menu
@@ -273,6 +271,23 @@ let secondaryItems = $derived<MenuItem[]>([
     </ToolbarGroup>
 
     <ToolbarGroup>
+      <Tooltip label={issuesLabel}>
+        <ToolbarButton
+          ariaLabel={issuesLabel}
+          onclick={onOpenIssues}
+          size="sm"
+          testId={missionWorkspaceTestIds.issuesTrigger}
+          tone={normalizedIssueCount > 0 ? "warning" : "neutral"}
+          variant={normalizedIssueCount > 0 ? "soft" : "secondary"}
+        >
+          <TriangleAlert aria-hidden="true" size={16} />
+          <span>Issues</span>
+          <span class="min-w-4 text-center tabular-nums">{normalizedIssueCount}</span>
+        </ToolbarButton>
+      </Tooltip>
+    </ToolbarGroup>
+
+    <ToolbarGroup>
       <Tooltip label={uploadTooltipLabel}>
         <ToolbarButton
           ariaLabel={uploadAriaLabel}
@@ -321,4 +336,27 @@ let secondaryItems = $derived<MenuItem[]>([
       />
     </ToolbarGroup>
   </Toolbar>
+
+  <div
+    aria-live="polite"
+    class="flex h-5 min-w-0 items-center gap-2 overflow-hidden text-xs"
+    data-active={inlineCopy ? "true" : "false"}
+    data-testid={missionWorkspaceTestIds.inlineStatus}
+    role="status"
+    title={inlineCopy ? `${inlineCopy.title}: ${inlineCopy.detail}` : undefined}
+  >
+    {#if inlineCopy}
+      <span
+        class={inlineCopy.tone === "warning" ? "shrink-0 font-semibold text-warning" : "shrink-0 font-semibold text-accent"}
+        data-testid={missionWorkspaceTestIds.inlineStatusMessage}
+      >
+        {inlineCopy.title}
+      </span>
+      <span class="truncate text-text-secondary" data-testid={missionWorkspaceTestIds.inlineStatusDetail}>
+        {inlineCopy.detail}
+      </span>
+    {:else}
+      <span aria-hidden="true" class="text-text-muted">Planner ready</span>
+    {/if}
+  </div>
 </div>

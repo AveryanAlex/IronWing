@@ -13,7 +13,6 @@ import {
   type ReplayMapOverlayState,
 } from "../../lib/replay-map-overlay";
 import { runtimeTestIds } from "../../lib/stores/runtime";
-import { REPLAY_READONLY_COPY, REPLAY_READONLY_TITLE, isReplayReadonly } from "../../lib/replay-readonly";
 import AppShellHeader from "./AppShellHeader.svelte";
 import { createAppShellController } from "./app-shell-controller";
 import { appShellTestIds } from "./chrome-state";
@@ -105,7 +104,6 @@ let connectionTone = $derived.by<"neutral" | "positive" | "caution" | "critical"
 
   return "neutral";
 });
-let replayReadonly = $derived(isReplayReadonly($sessionStore.activeSource));
 
 $effect(() => {
   if (activeWorkspace === lastTrackedWorkspace) {
@@ -248,6 +246,7 @@ async function handleLogsMapHandoff(
   richColors
   style={useMobileToasterPosition ? "top: var(--safe-area-top, 0px)" : undefined}
   theme="dark"
+  visibleToasts={3}
 />
 
 <main
@@ -277,16 +276,6 @@ async function handleLogsMapHandoff(
       vehiclePanelOpen={vehiclePanelOpen}
       workspaces={appShellWorkspaces}
     />
-
-    {#if replayReadonly}
-      <div
-        class="mx-3 mt-3 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm text-warning"
-        data-testid={appShellTestIds.replayReadonlyBanner}
-      >
-        <p class="font-semibold">{REPLAY_READONLY_TITLE}</p>
-        <p class="mt-1">{REPLAY_READONLY_COPY}</p>
-      </div>
-    {/if}
 
     <div class="app-shell-layout" data-shell-tier={$chromeStore.tier}>
       {#if showDockedVehiclePanel}

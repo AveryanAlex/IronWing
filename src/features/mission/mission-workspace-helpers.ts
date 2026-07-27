@@ -191,14 +191,6 @@ export function resolveInlineStatusCopy(
     return null;
   }
 
-  if (state.streamError) {
-    return {
-      tone: "warning",
-      title: "Mission stream degraded",
-      detail: `${state.streamError} Existing local planning data stays mounted instead of falling back to an empty placeholder shell.`,
-    };
-  }
-
   if (currentView.inlineStatus.busy) {
     return busyStatusCopy(currentView.inlineStatus, currentView.activeTransfer);
   }
@@ -260,12 +252,6 @@ function busyStatusCopy(
   }
 }
 
-export function statusClass(tone: "info" | "warning"): string {
-  return tone === "warning"
-    ? "border-warning/40 bg-warning/10 text-warning"
-    : "border-accent/30 bg-accent/10 text-text-primary";
-}
-
 function warningTestId(warning: MissionPlannerWarningView, index: number): string {
   if (warning.id.startsWith("file-warning:")) {
     return missionWorkspaceTestIds.warningFile;
@@ -319,5 +305,5 @@ export function modeShellTitle(mode: MissionPlannerMode): string {
 export function modeShellBody(mode: MissionPlannerMode, currentView: MissionPlannerView): string {
   return mode === "fence"
     ? `Fence mode now exposes ${currentView.fenceRegionCount} region${currentView.fenceRegionCount === 1 ? "" : "s"} plus return-point truth inside the mounted planner workspace.`
-    : `Rally data is already part of the mounted workspace (${currentView.rallyPointCount} point${currentView.rallyPointCount === 1 ? "" : "s"}), and sticky warnings / import review stay visible here. Dedicated rally editing lands in the next task.`;
+    : `Rally data is part of the mounted workspace (${currentView.rallyPointCount} point${currentView.rallyPointCount === 1 ? "" : "s"}). Planner issues and file review remain available without displacing the editor.`;
 }

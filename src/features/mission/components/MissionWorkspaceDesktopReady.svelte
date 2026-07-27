@@ -50,6 +50,7 @@ let showRallyEditor = $derived(context.view.mode === "rally");
               readOnly={!context.view.canEdit}
               readOnlyReason={context.view.attachment.detail}
               replayMapOverlay={context.replayMapOverlay}
+              onDismissReplayMapOverlay={actions.onDismissReplayMapOverlay}
               selectedSurveyRegion={context.selectedSurveyRegion}
               vehicleHeadingDeg={context.sessionVehicleHeadingDeg}
               vehiclePosition={context.sessionVehiclePosition}
@@ -87,6 +88,7 @@ let showRallyEditor = $derived(context.view.mode === "rally");
               readOnly={!context.view.canEdit}
               readOnlyReason={context.view.attachment.detail}
               replayMapOverlay={context.replayMapOverlay}
+              onDismissReplayMapOverlay={actions.onDismissReplayMapOverlay}
               selectedSurveyRegion={context.selectedSurveyRegion}
               vehicleHeadingDeg={context.sessionVehicleHeadingDeg}
               vehiclePosition={context.sessionVehiclePosition}
@@ -113,6 +115,7 @@ let showRallyEditor = $derived(context.view.mode === "rally");
               readOnly={!context.view.canEdit}
               readOnlyReason={context.view.attachment.detail}
               replayMapOverlay={context.replayMapOverlay}
+              onDismissReplayMapOverlay={actions.onDismissReplayMapOverlay}
               selectedSurveyRegion={context.selectedSurveyRegion}
               vehicleHeadingDeg={context.sessionVehicleHeadingDeg}
               vehiclePosition={context.sessionVehiclePosition}

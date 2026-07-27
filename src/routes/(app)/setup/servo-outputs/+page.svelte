@@ -5,6 +5,7 @@ import { fromStore } from "svelte/store";
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { setServo } from "../../../../calibration";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
+import { notifyUnknownError } from "../../../../lib/notifications";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import { getDirectionGuidance } from "../../../../lib/setup/servo-direction-guidance";
 import {
@@ -443,10 +444,14 @@ async function sendServoCommand(output: ServoConfiguredOutput, pwm: number) {
       [output.index]: true,
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     commandErrorByOutput = {
       ...commandErrorByOutput,
-      [output.index]: error instanceof Error ? error.message : String(error),
+      [output.index]: message,
     };
+    notifyUnknownError(`Servo output ${output.index} command rejected`, error, {
+      id: `setup-servo-output-${output.index}-command-failed`,
+    });
   } finally {
     activeOutputIndex = null;
   }

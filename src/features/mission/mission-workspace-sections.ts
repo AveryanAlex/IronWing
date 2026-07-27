@@ -102,6 +102,7 @@ export type MissionWorkspaceActions = {
   onUpdateRallyAltitude: (uiId: number, altitudeM: number) => MissionPlannerRallyMutationResult | unknown;
   onUpdateRallyAltitudeFrame: (uiId: number, frame: string) => MissionPlannerRallyMutationResult | unknown;
   onMoveRallyPointFromMap: (uiId: number, latitudeDeg: number, longitudeDeg: number) => MissionPlannerMapMoveResult;
+  onDismissReplayMapOverlay: () => void;
 };
 
 export type MissionWorkspacePhoneState = {

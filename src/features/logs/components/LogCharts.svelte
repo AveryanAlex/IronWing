@@ -4,7 +4,7 @@ import type uPlot from "uplot";
 import { isNonNullChartPoint, type ChartSeries, type ChartSeriesRequest, type LogLibraryEntry, type NonNullChartSeries } from "../../../logs";
 import type { LogsChartState, LogsExportState } from "../../../lib/stores/logs-workspace";
 import UPlotChart from "../../../components/charts/UPlotChart.svelte";
-import { Banner, Card, EmptyState, Eyebrow, HelperText, MonoValue, Panel, StatusPill } from "../../../components/ui";
+import { Card, EmptyState, Eyebrow, HelperText, MonoValue, Panel, StatusPill } from "../../../components/ui";
 import LogChartExportPanel from "./LogChartExportPanel.svelte";
 import LogChartGroupSelector from "./LogChartGroupSelector.svelte";
 import { getChartMessageTypeFilters, getDefaultChartGroupKey, getLogChartGroups, type LogChartGroup } from "../log-chart-config";
@@ -373,15 +373,9 @@ $effect(() => {
         />
       {:else}
         {#if activeGroup?.supportsAltitudePreview}
-          <Banner
-            severity="info"
-            title="Altitude preview follows the same bounded start/end window as the timeline and selected export range."
-            testId="logs-altitude-preview-note"
-          />
-        {/if}
-
-        {#if chartState.error}
-          <Banner severity="danger" title={chartState.error} testId="logs-charts-error" />
+          <HelperText testId="logs-altitude-preview-note">
+            Altitude preview follows the same bounded start/end window as the timeline and selected export range.
+          </HelperText>
         {/if}
 
       {#if chartState.phase === "loading"}

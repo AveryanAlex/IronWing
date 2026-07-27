@@ -13,6 +13,7 @@ import { setupWorkspaceTestIds } from "../../../features/setup/setup-workspace-t
 import SetupCard from "../../../features/setup/shared/SetupCard.svelte";
 import SetupContentPanel from "../../../features/setup/shared/SetupContentPanel.svelte";
 import { setupSectionForRouteId, setupSectionPath, type SetupSectionId } from "../../../lib/setup-sections";
+import { notifyInfo, notifyUnknownError } from "../../../lib/notifications";
 import { paramProgressCounts, paramProgressPhase } from "../../../params";
 
 let { children }: { children: Snippet } = $props();
@@ -28,7 +29,6 @@ let setupGateMode = $derived(
   !view.liveSessionConnected || view.activeSource !== "live" ? "disconnected" : paramsReady ? "ready" : "needs_params",
 );
 let downloadActionBusy = $state(false);
-let downloadActionMessage = $state("Download the current vehicle parameter list to unlock setup editors.");
 let refreshDisabled = $derived(downloadActionBusy || !view.liveSessionConnected);
 let paramProgress = $derived(paramsState.current.paramProgress);
 let paramProgressPhaseValue = $derived(paramProgress ? paramProgressPhase(paramProgress) : null);
@@ -55,12 +55,15 @@ async function handleDownloadParameters() {
   }
 
   downloadActionBusy = true;
-  downloadActionMessage = "Requesting a fresh parameter download from the vehicle.";
   try {
     await paramsStore.downloadAll();
-    downloadActionMessage = "Parameter download requested.";
+    notifyInfo("Parameter download requested", {
+      id: "setup-parameter-download-requested",
+    });
   } catch (error) {
-    downloadActionMessage = `Download failed: ${formatActionError(error)}`;
+    notifyUnknownError("Parameter download failed", error, {
+      id: "setup-parameter-download-failed",
+    });
   } finally {
     downloadActionBusy = false;
   }
@@ -69,21 +72,14 @@ async function handleDownloadParameters() {
 async function handleCancelDownload() {
   try {
     await paramsStore.cancelDownload();
+    notifyInfo("Parameter download cancelled", {
+      id: "setup-parameter-download-cancelled",
+    });
   } catch (error) {
-    downloadActionMessage = `Cancel failed: ${formatActionError(error)}`;
+    notifyUnknownError("Could not cancel parameter download", error, {
+      id: "setup-parameter-download-cancel-failed",
+    });
   }
-}
-
-function formatActionError(error: unknown) {
-  if (error instanceof Error && error.message.trim().length > 0) {
-    return error.message;
-  }
-
-  if (typeof error === "string" && error.trim().length > 0) {
-    return error;
-  }
-
-  return "Unknown parameter action error.";
 }
 </script>
 
@@ -142,7 +138,9 @@ function formatActionError(error: unknown) {
             </div>
           {/if}
 
-          <HelperText class="mt-4" tone="muted">{downloadActionMessage}</HelperText>
+          <HelperText class="mt-4" tone="muted">
+            Download the current vehicle parameter list to unlock setup editors.
+          </HelperText>
         </SetupCard>
       {/if}
     </SetupContentPanel>

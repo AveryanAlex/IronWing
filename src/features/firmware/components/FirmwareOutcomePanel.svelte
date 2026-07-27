@@ -1,13 +1,16 @@
 <script lang="ts">
+import { get } from "svelte/store";
+
 import type {
   FirmwareInstallUpdateOutcome,
   FirmwareOutcome,
 } from "../../../firmware";
+import { notifyError } from "../../../lib/notifications";
 import type { FirmwareWorkspaceStore, FirmwareWorkspaceState } from "../../../lib/stores/firmware-workspace";
+import { firmwareOutcomeCopy } from "../firmware-outcome-copy";
 import { firmwareWorkspaceTestIds } from "../firmware-workspace-test-ids";
 import { Banner, Button, EmptyState, FactTile, InfoBlock, Panel, SectionHeader, StatusPill } from "../../../components/ui";
 
-type OutcomeTone = "success" | "warning" | "danger";
 type BannerSeverity = "success" | "warning" | "danger";
 
 type Props = {
@@ -46,96 +49,6 @@ function recoveryTargetLabel() {
   ].filter((value): value is string => Boolean(value)).join(" · ");
 }
 
-function summaryForOutcome(outcome: FirmwareOutcome) {
-  if (outcome.path === "bootloader_installation") {
-    switch (outcome.outcome.result) {
-      case "verified":
-        return {
-          tone: "success" as OutcomeTone,
-          label: "Bootloader installation verified",
-          summary: "Bootloader installation completed. Return to firmware install/update and flash normal ArduPilot firmware over serial.",
-        };
-      case "cancelled":
-        return {
-          tone: "warning" as OutcomeTone,
-          label: "Bootloader installation cancelled",
-          summary: "Bootloader installation was cancelled before completion.",
-        };
-      case "reset_unconfirmed":
-        return {
-          tone: "warning" as OutcomeTone,
-          label: "Reset unconfirmed",
-          summary: "Bootloader installation completed, but device reset could not be confirmed. Reconnect or power-cycle the board before continuing.",
-        };
-      case "failed":
-        return {
-          tone: "danger" as OutcomeTone,
-          label: "Bootloader installation failed",
-          summary: outcome.outcome.reason,
-        };
-      case "unsupported_bootloader_installation_path":
-        return {
-          tone: "warning" as OutcomeTone,
-          label: "Bootloader installation guidance",
-          summary: outcome.outcome.guidance,
-        };
-    }
-  }
-
-  switch (outcome.outcome.result) {
-    case "verified":
-      return {
-        tone: "success" as OutcomeTone,
-        label: "Verified",
-        summary: "Firmware flashed and verified successfully.",
-      };
-    case "flashed_but_unverified":
-      return {
-        tone: "warning" as OutcomeTone,
-        label: "Written, verification unavailable",
-        summary: "Firmware was written, but the bootloader could not verify flash contents.",
-      };
-    case "reconnect_verified":
-      return {
-        tone: (outcome.outcome.flash_verified ? "success" : "warning") as OutcomeTone,
-        label: outcome.outcome.flash_verified ? "Reconnect verified" : "Reconnected without CRC proof",
-        summary: outcome.outcome.flash_verified
-          ? "The board reconnected after install and reported a verified flash."
-          : "The board reconnected after install, but CRC verification was unavailable.",
-      };
-    case "reconnect_failed":
-      return {
-        tone: "warning" as OutcomeTone,
-        label: "Reconnect failed",
-        summary: `Firmware was written, but reconnect verification failed: ${outcome.outcome.reconnect_error}`,
-      };
-    case "cancelled":
-      return {
-        tone: "warning" as OutcomeTone,
-        label: "Cancelled",
-        summary: "Firmware install/update was cancelled before completion.",
-      };
-    case "board_detection_failed":
-      return {
-        tone: "danger" as OutcomeTone,
-        label: "Board detection failed",
-        summary: outcome.outcome.reason,
-      };
-    case "extf_capacity_insufficient":
-      return {
-        tone: "danger" as OutcomeTone,
-        label: "External flash capacity insufficient",
-        summary: outcome.outcome.reason,
-      };
-    case "failed":
-      return {
-        tone: "danger" as OutcomeTone,
-        label: "Failed",
-        summary: outcome.outcome.reason,
-      };
-  }
-}
-
 function detailRows(outcome: FirmwareOutcome) {
   const rows: Array<{ label: string; value: string }> = [
     {
@@ -169,14 +82,9 @@ function detailRows(outcome: FirmwareOutcome) {
       case "reset_unconfirmed":
         rows.push({ label: "Next step", value: "Reconnect or power-cycle the board, then continue with firmware install/update." });
         break;
-      case "failed":
-        rows.push({ label: "Reason", value: recoveryOutcome.reason });
-        break;
       case "unsupported_bootloader_installation_path":
-        rows.push({ label: "Guidance", value: recoveryOutcome.guidance });
-        break;
+      case "failed":
       case "cancelled":
-        rows.push({ label: "Result", value: "operator cancelled before completion" });
         break;
     }
 
@@ -213,16 +121,12 @@ function detailRows(outcome: FirmwareOutcome) {
         { label: "Board ID", value: String(serialOutcome.board_id) },
         { label: "Bootloader rev", value: String(serialOutcome.bootloader_rev) },
         { label: "Flash verified", value: serialOutcome.flash_verified ? "yes" : "no" },
-        { label: "Reconnect error", value: serialOutcome.reconnect_error },
       );
       break;
     case "failed":
     case "board_detection_failed":
     case "extf_capacity_insufficient":
-      rows.push({ label: "Reason", value: serialOutcome.reason });
-      break;
     case "cancelled":
-      rows.push({ label: "Result", value: "operator cancelled before completion" });
       break;
   }
 
@@ -230,7 +134,7 @@ function detailRows(outcome: FirmwareOutcome) {
 }
 
 let activeOutcome = $derived(state.lastCompletedOutcome);
-let outcomeCopy = $derived(activeOutcome ? summaryForOutcome(activeOutcome) : null);
+let outcomeCopy = $derived(activeOutcome ? firmwareOutcomeCopy(activeOutcome) : null);
 let rows = $derived(activeOutcome ? detailRows(activeOutcome) : []);
 let sessionStateLabel = $derived(state.isActive
   ? `active:${state.sessionPhase ?? "running"}`
@@ -238,6 +142,17 @@ let sessionStateLabel = $derived(state.isActive
     ? `completed:${activeOutcome.outcome.result}`
     : "idle");
 let bannerSeverity = $derived<BannerSeverity>(outcomeCopy?.tone ?? "warning");
+
+async function dismissOutcome() {
+  await store.dismissOutcome();
+  const current = get(store);
+  if (current.lastCompletedOutcome && current.lastError) {
+    notifyError("Could not dismiss the firmware outcome", {
+      id: "firmware-outcome-dismiss-error",
+      description: current.lastError,
+    });
+  }
+}
 
 </script>
 
@@ -284,7 +199,7 @@ let bannerSeverity = $derived<BannerSeverity>(outcomeCopy?.tone ?? "warning");
 
       <Button
         testId={firmwareWorkspaceTestIds.outcomeDismiss}
-        onclick={() => void store.dismissOutcome()}
+        onclick={() => void dismissOutcome()}
       >
         Dismiss retained outcome
       </Button>

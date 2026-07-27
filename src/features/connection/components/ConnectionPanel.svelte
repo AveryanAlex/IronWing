@@ -2,7 +2,6 @@
 import { Radio } from "lucide-svelte";
 import { onMount } from "svelte";
 import { get } from "svelte/store";
-import { toast } from "svelte-sonner";
 
 import { getSerialPortInventoryContext, getSessionStoreContext, getSessionViewStoreContext } from "../../../app/shell/runtime-context";
 import type { SessionConnectionFormState } from "../../../lib/platform/session";
@@ -13,6 +12,7 @@ import {
   type ConnectionFieldErrors,
 } from "../../../lib/connection/connection-form";
 import { selectConnectionPanelPresentation } from "../../../lib/session-selectors";
+import { notifyError } from "../../../lib/notifications";
 import { Alert, Eyebrow, Panel } from "../../../components/ui";
 import ConnectionDiagnostics from "./ConnectionDiagnostics.svelte";
 import ConnectionTransportFields from "./ConnectionTransportFields.svelte";
@@ -27,7 +27,6 @@ onMount(() => {
   }
 });
 
-let lastToastedError: string | null = null;
 let showValidation = $state(false);
 
 let fieldErrors = $derived.by<ConnectionFieldErrors>(() => {
@@ -53,16 +52,6 @@ let panelView = $derived(
     visibleError,
   }),
 );
-
-$effect(() => {
-  const currentError = $store.lastError;
-  if (!currentError) {
-    lastToastedError = null;
-  } else if (currentError !== lastToastedError) {
-    lastToastedError = currentError;
-    toast.error("Connection request failed", { description: currentError });
-  }
-});
 
 function updateField<
   K extends keyof Pick<
@@ -93,6 +82,18 @@ function updateField<
 async function refreshSerialInventoryAndSelectDefault() {
   await serialInventory.refresh();
   selectDefaultPortForCurrentMode();
+}
+
+async function runSessionAction(
+  title: string,
+  id: string,
+  action: () => Promise<unknown>,
+) {
+  await action();
+  const error = get(store).lastError;
+  if (error) {
+    notifyError(title, { description: error, id });
+  }
 }
 
 async function grantWebSerialPortForConnect() {
@@ -137,7 +138,7 @@ async function onSubmit(event: SubmitEvent) {
       return;
     }
 
-    await store.connect();
+    await runSessionAction("Connection request failed", "connection-request", store.connect);
     return;
   }
 
@@ -146,7 +147,7 @@ async function onSubmit(event: SubmitEvent) {
     return;
   }
 
-  await store.connect();
+  await runSessionAction("Connection request failed", "connection-request", store.connect);
 }
 </script>
 
@@ -166,19 +167,19 @@ async function onSubmit(event: SubmitEvent) {
       connected={$view.connected}
       isConnecting={connectActionPending}
       onFieldChange={updateField}
-      onCancelConnect={() => void store.cancelConnect()}
-      onDisconnect={() => void store.disconnect()}
-      onRefreshBondedDevices={() => void store.refreshBondedDevices()}
+      onCancelConnect={() => void runSessionAction("Unable to cancel connection", "connection-cancel", store.cancelConnect)}
+      onDisconnect={() => void runSessionAction("Disconnect failed", "connection-disconnect", store.disconnect)}
+      onRefreshBondedDevices={() => void runSessionAction("Unable to refresh bonded devices", "connection-bonded-refresh", store.refreshBondedDevices)}
       onRefreshSerialPorts={() => void refreshSerialInventoryAndSelectDefault()}
-      onScanBleDevices={() => void store.scanBleDevices()}
+      onScanBleDevices={() => void runSessionAction("Bluetooth scan failed", "connection-bluetooth-scan", store.scanBleDevices)}
       serialInventory={$serialInventory}
       transportDescriptors={$store.transportDescriptors}
     />
 
-    {#if visibleError}
+    {#if localValidationError}
       <Alert
         density="compact"
-        description={visibleError}
+        description={localValidationError}
         testId="connection-error-message"
         variant="danger"
       />

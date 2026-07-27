@@ -1,6 +1,6 @@
 <script lang="ts">
 import { onDestroy } from "svelte";
-import { Home, MapPinPlus } from "lucide-svelte";
+import { Home, MapPinPlus, X } from "lucide-svelte";
 import * as maplibregl from "maplibre-gl";
 import type { Map as MapLibreMap, Marker } from "maplibre-gl";
 
@@ -59,6 +59,7 @@ import {
   cloneSurveyRegionSnapshot,
   positionStyle,
 } from "../mission-map-render-helpers";
+import { replayOverlayDetail } from "../mission-workspace-helpers";
 import {
   coordinateFromMapCenter as resolveCoordinateFromMapCenter,
   coordinateFromPointer as resolveCoordinateFromPointer,
@@ -118,6 +119,7 @@ type Props = {
   onUpdateFenceCircleRadius?: (uiId: number, radiusM: number) => MissionPlannerFenceMutationResult | unknown;
   onAddWaypointAt?: (latitudeDeg: number, longitudeDeg: number) => void;
   onSetHomeAt?: (latitudeDeg: number, longitudeDeg: number) => void;
+  onDismissReplayMapOverlay?: () => void;
   fillContainer?: boolean;
 };
 
@@ -231,6 +233,7 @@ let {
   onUpdateFenceCircleRadius,
   onAddWaypointAt,
   onSetHomeAt,
+  onDismissReplayMapOverlay = () => {},
   fillContainer = false,
 }: Props = $props();
 
@@ -1890,11 +1893,6 @@ function stopDeviceLocationWatch() {
     onCancelFencePlacement={cancelFencePlacement}
   />
 
-  <MissionMapStatusPanel
-    {localMessage}
-    {diagnostics}
-  />
-
   {#if renderViewport}
     <div
       bind:this={surfaceElement}
@@ -1947,6 +1945,43 @@ function stopDeviceLocationWatch() {
       />
 
       <MissionMapStateNotice mode={view.mode} state={view.state} />
+
+      <div class="pointer-events-auto absolute left-3 top-3 z-40 flex max-h-[min(40dvh,calc(100%-1.5rem))] w-[min(28rem,calc(100%-1.5rem))] flex-col gap-2 overflow-y-auto overscroll-contain">
+        {#if replayMapOverlay}
+          <div
+            class={[
+              "pointer-events-auto flex w-full items-start gap-2 rounded-lg border bg-bg-primary/95 px-3 py-2 shadow-lg backdrop-blur",
+              replayMapOverlay.phase === "failed" ? "border-danger/50" : replayMapOverlay.phase === "loading" ? "border-warning/50" : "border-accent/40",
+            ]}
+            data-testid={missionWorkspaceTestIds.replayOverlayBanner}
+            role={replayMapOverlay.phase === "failed" ? "alert" : "status"}
+            title={replayOverlayDetail(replayMapOverlay)}
+          >
+            <div class="min-w-0">
+              <p class="truncate text-xs font-semibold text-text-primary" data-testid={missionWorkspaceTestIds.replayOverlayState}>
+                Replay path · {replayMapOverlay.phase}
+              </p>
+              <p class="truncate text-xs text-text-secondary" data-testid={missionWorkspaceTestIds.replayOverlayDetail}>
+                {replayOverlayDetail(replayMapOverlay)}
+              </p>
+            </div>
+            <button
+              aria-label="Dismiss replay map overlay"
+              class="inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-bg-tertiary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+              data-testid={missionWorkspaceTestIds.replayOverlayDismiss}
+              onclick={onDismissReplayMapOverlay}
+              type="button"
+            >
+              <X aria-hidden="true" size={14} />
+            </button>
+          </div>
+        {/if}
+
+        <MissionMapStatusPanel
+          {localMessage}
+          {diagnostics}
+        />
+      </div>
 
       <MissionMapInteractiveLayer
         activeMarkerId={activeMarkerDrag?.markerId ?? null}

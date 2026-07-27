@@ -257,7 +257,10 @@ describe("OverviewMap", () => {
       expect(startGuidedSession).toHaveBeenCalledWith({
         session: { kind: "goto", latitude_deg: 47.4, longitude_deg: 8.55, altitude_msl_m: 42 },
       });
-      expect(toast.success).toHaveBeenCalledWith("Guided target sent");
+      expect(toast.success).toHaveBeenCalledWith("Guided target sent", {
+        duration: 4_000,
+        id: "guided-target",
+      });
     });
     expect(screen.queryByTestId("overview-map-context-menu")).toBeNull();
   });

@@ -23,7 +23,7 @@ import type { MissionPlannerSurveyPromptView } from "../../../lib/stores/mission
 import type { CatalogCamera } from "../../../lib/survey-camera-catalog";
 import type { SurveyRegion } from "../../../lib/survey-region";
 import MissionSurveyCameraPicker from "./MissionSurveyCameraPicker.svelte";
-import { ActionRow, Alert, Badge, Button, Card, EmptyState, Eyebrow, FactTile, Field, HelperText, NativeSelect, NumberInput, SelectableCard, Switch } from "../../../components/ui";
+import { ActionRow, Alert, Badge, Button, Card, Dialog, EmptyState, Eyebrow, FactTile, Field, HelperText, NativeSelect, NumberInput, SelectableCard, Switch } from "../../../components/ui";
 import { missionWorkspaceTestIds } from "../mission-workspace-test-ids";
 
 type LocalMessageTone = "warning" | "info";
@@ -431,31 +431,45 @@ function resetGeneratedItemEdit(index: number) {
     {/if}
   </Card.Root>
 
-  {#if promptForRegion}
-    <Alert density="default" layout="stacked" variant="warning" testId={missionWorkspaceTestIds.surveyPrompt}>
-      <Eyebrow tone="warning" testId={missionWorkspaceTestIds.surveyPromptKind}>
-        {promptForRegion.kind}
-      </Eyebrow>
-      <p class="mt-2 text-sm text-text-primary">{promptForRegion.message}</p>
-      <ActionRow align="start" class="mt-3">
-        <Button
-          testId={missionWorkspaceTestIds.surveyPromptConfirm}
-          onclick={handleConfirmPrompt}
-          tone="warning"
-          variant="soft"
-        >
-          Confirm
-        </Button>
-        <Button
-          testId={missionWorkspaceTestIds.surveyPromptDismiss}
-          onclick={onDismissSurveyPrompt}
-          variant="secondary"
-        >
-          Keep current region
-        </Button>
-      </ActionRow>
-    </Alert>
-  {/if}
+  <Dialog.Root
+    open={promptForRegion !== null}
+    onOpenChange={(open) => {
+      if (!open) onDismissSurveyPrompt();
+    }}
+  >
+    {#if promptForRegion}
+      <Dialog.Content
+        aria-label="Survey replacement decision"
+        class="max-h-[calc(100dvh-2rem)]"
+        data-testid={missionWorkspaceTestIds.surveyPrompt}
+        showClose={false}
+        size="sm"
+      >
+        <Dialog.Header>
+          <Eyebrow tone="warning" testId={missionWorkspaceTestIds.surveyPromptKind}>
+            {promptForRegion.kind}
+          </Eyebrow>
+          <Dialog.Title>
+            {promptForRegion.kind === "confirm-regenerate" ? "Replace generated survey items?" : "Dissolve this survey region?"}
+          </Dialog.Title>
+          <Dialog.Description>{promptForRegion.message}</Dialog.Description>
+        </Dialog.Header>
+        <Dialog.Footer>
+          <Button testId={missionWorkspaceTestIds.surveyPromptDismiss} onclick={onDismissSurveyPrompt} variant="secondary">
+            Keep current region
+          </Button>
+          <Button
+            testId={missionWorkspaceTestIds.surveyPromptConfirm}
+            onclick={handleConfirmPrompt}
+            tone="warning"
+            variant="soft"
+          >
+            Confirm
+          </Button>
+        </Dialog.Footer>
+      </Dialog.Content>
+    {/if}
+  </Dialog.Root>
 
   {#if localMessage}
     <Alert density="compact" description={localMessage.text} variant={localMessage.tone === "warning" ? "warning" : "info"} />

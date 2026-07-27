@@ -155,7 +155,7 @@ afterEach(() => {
 });
 
 describe("ParameterReviewTray", () => {
-  it("disables apply surfaces and shows replay read-only guidance during playback", async () => {
+  it("disables apply surfaces without duplicating shell-owned replay guidance during playback", async () => {
     const sessionStore = { subscribe: writable(createSessionState()).subscribe } as any;
     const paramsStore = createParamsStore(createParamsState());
 
@@ -163,7 +163,8 @@ describe("ParameterReviewTray", () => {
 
     await fireEvent.click(screen.getByTestId(appShellTestIds.parameterReviewToggle));
 
-    expect(screen.getByTestId(appShellTestIds.parameterReviewReplayReadonly).textContent).toContain("Replay is read-only");
+    expect(screen.queryByTestId(appShellTestIds.parameterReviewReplayReadonly)).toBeNull();
+    expect(screen.queryByTestId(appShellTestIds.parameterReviewWarning)).toBeNull();
     expect((screen.getByTestId(appShellTestIds.parameterReviewApply) as HTMLButtonElement).disabled).toBe(true);
     const row = screen.getByTestId(`${appShellTestIds.parameterReviewRowPrefix}-BATT_LOW_VOLT`);
     expect(row.textContent).toContain("Low voltage");
