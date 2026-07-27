@@ -5,7 +5,7 @@ import { expectLayoutTargetsReachable, noopLayoutAudit, type LayoutAudit } from 
 import { fillAndBlur, isVisible } from "./utils";
 
 const ids = {
-  expertRoot: "parameter-expert-browser",
+  catalogRoot: "parameter-catalog-browser",
   inputPrefix: "parameter-workspace-input",
   itemPrefix: "parameter-workspace-item",
   metadata: "parameter-domain-metadata",
@@ -14,7 +14,7 @@ const ids = {
   progress: "parameter-domain-progress",
   root: "parameter-workspace",
   scope: "parameter-domain-scope",
-  search: "parameter-expert-search",
+  search: "parameter-catalog-search",
   state: "parameter-workspace-state",
   reviewApply: "app-shell-parameter-review-apply",
   reviewCount: "app-shell-parameter-review-count",
@@ -269,7 +269,7 @@ export class SetupWorkspacePage {
     await expect(this.page.getByTestId(ids.scope)).toContainText(/live|session|vehicle|none/i);
     await expect(this.page.getByTestId(ids.progress)).toBeVisible();
     await expect(this.page.getByTestId(ids.metadata)).toBeVisible();
-    await expect(this.page.getByTestId(ids.expertRoot)).toBeVisible();
+    await expect(this.page.getByTestId(ids.catalogRoot)).toBeVisible();
   }
 
   private async findParameterInput(name: string): Promise<Locator | null> {

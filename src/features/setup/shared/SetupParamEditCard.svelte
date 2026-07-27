@@ -12,12 +12,18 @@ import {
   Tooltip,
 } from "../../../components/ui";
 import { formatParamValue, type ParameterItemModel } from "../../../lib/params/parameter-item-model";
+import SetupBitmaskChecklist from "./SetupBitmaskChecklist.svelte";
 import SetupParamEnumControl from "./SetupParamEnumControl.svelte";
 
-type ControlType = "number" | "enum" | "boolean" | "custom";
+type ControlType = "number" | "enum" | "boolean" | "bitmask" | "custom";
 
 type Option = {
   code: number;
+  label: string;
+};
+
+type BitmaskOption = {
+  bit: number;
   label: string;
 };
 
@@ -29,6 +35,7 @@ type Props = {
   type?: ControlType;
   value?: string | number | boolean;
   options?: readonly Option[];
+  bitmaskOptions?: readonly BitmaskOption[];
   min?: number;
   max?: number;
   step?: number;
@@ -60,6 +67,7 @@ let {
   type = "number",
   value = item.value,
   options = [],
+  bitmaskOptions = [],
   min = item.range?.min,
   max = item.range?.max,
   step = item.increment ?? 1,
@@ -88,6 +96,16 @@ let resolvedMetadata = $derived(metadata ?? formatMetadata());
 let enumValue = $derived(String(value));
 let numberValue = $derived(typeof value === "number" ? value : Number.isFinite(Number(value)) ? Number(value) : undefined);
 let booleanValue = $derived(typeof value === "boolean" ? value : Number(value) !== 0);
+let bitmaskValue = $derived(
+  typeof numberValue === "number" && Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : 0,
+);
+let bitmaskItems = $derived(
+  bitmaskOptions.map((option) => ({
+    key: String(option.bit),
+    label: `Bit ${option.bit} · ${option.label}`,
+    checked: Math.floor(bitmaskValue / (2 ** option.bit)) % 2 === 1,
+  })),
+);
 let resolvedUnitText = $derived(unitText === undefined && unit === item.units ? item.unitText : unitText);
 let hasSlider = $derived(
   type === "number"
@@ -113,9 +131,15 @@ function formatMetadata(): string {
 
 function updateNumber(event: Event) {
   const nextValue = (event.currentTarget as HTMLInputElement).valueAsNumber;
-  if (Number.isFinite(nextValue)) {
+  if (Number.isFinite(nextValue) && (type !== "bitmask" || (Number.isInteger(nextValue) && nextValue >= 0))) {
     onValueChange?.(nextValue);
   }
+}
+
+function toggleBit(bit: number) {
+  const mask = 2 ** bit;
+  const enabled = Math.floor(bitmaskValue / mask) % 2 === 1;
+  onValueChange?.(enabled ? bitmaskValue - mask : bitmaskValue + mask);
 }
 </script>
 
@@ -147,6 +171,28 @@ function updateNumber(event: Event) {
       testId={inputTestId}
       onToggle={(checked) => onValueChange?.(checked)}
     />
+  {:else if type === "bitmask"}
+    <div class="grid min-w-0 gap-3">
+      <NumberInput
+        id={inputId}
+        value={bitmaskValue}
+        min={0}
+        step={1}
+        disabled={controlDisabled}
+        testId={inputTestId}
+        oninput={updateNumber}
+        onchange={updateNumber}
+      />
+      {#if bitmaskItems.length > 0}
+        <SetupBitmaskChecklist
+          embedded
+          ariaLabel={`${label} bitmask options`}
+          items={bitmaskItems}
+          disabled={controlDisabled}
+          onToggle={(option) => toggleBit(Number(option.key))}
+        />
+      {/if}
+    </div>
   {:else if hasSlider}
     <div class="setup-param-numeric-control grid min-w-0 gap-2">
       <Slider
@@ -160,7 +206,7 @@ function updateNumber(event: Event) {
         disabled={controlDisabled}
         ariaLabel={label}
         testId={inputTestId ? `${inputTestId}-slider` : undefined}
-        onValueChange={(nextValue) => onValueChange?.(nextValue)}
+        onValueCommit={(nextValue) => onValueChange?.(nextValue)}
       />
       <NumberInput
         id={inputId}

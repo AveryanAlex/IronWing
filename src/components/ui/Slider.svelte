@@ -119,6 +119,7 @@ function handleThumbKeydown(event: KeyboardEvent, bitsHandler: unknown) {
 
   value = nextValue;
   onValueChange?.(nextValue);
+  onValueCommit?.(nextValue);
 }
 </script>
 

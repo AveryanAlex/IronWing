@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { writable } from "svelte/store";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { ParamsStore, ParamsStoreState } from "../../lib/stores/params";
 import type { SessionStoreState } from "../../lib/stores/session-state";
@@ -11,18 +11,25 @@ import { withShellContexts } from "../../test/context-harnesses";
 import { appShellTestIds } from "./chrome-state";
 import ParameterReviewTray from "./ParameterReviewTray.svelte";
 
-function createSessionState(): SessionStoreState {
+const notificationMocks = vi.hoisted(() => ({
+  notifyError: vi.fn(),
+  notifyUnknownError: vi.fn(),
+}));
+
+vi.mock("../../lib/notifications", () => notificationMocks);
+
+function createSessionState(source: "live" | "playback" = "playback"): SessionStoreState {
   return {
     hydrated: true,
     lastPhase: "ready",
     lastError: null,
     activeEnvelope: {
-      session_id: "playback-1",
-      source_kind: "playback",
+      session_id: `${source}-1`,
+      source_kind: source,
       seek_epoch: 1,
       reset_revision: 1,
     },
-    activeSource: "playback",
+    activeSource: source,
     sessionDomain: missingDomainValue("bootstrap"),
     telemetryDomain: missingDomainValue("bootstrap"),
     support: missingDomainValue("bootstrap"),
@@ -57,7 +64,7 @@ function createSessionState(): SessionStoreState {
   };
 }
 
-function createParamsState(): ParamsStoreState {
+function createParamsState(source: "live" | "playback" = "playback"): ParamsStoreState {
   return {
     hydrated: true,
     phase: "ready",
@@ -66,13 +73,13 @@ function createParamsState(): ParamsStoreState {
     sessionHydrated: true,
     sessionPhase: "ready",
     activeEnvelope: {
-      session_id: "playback-1",
-      source_kind: "playback",
+      session_id: `${source}-1`,
+      source_kind: source,
       seek_epoch: 1,
       reset_revision: 1,
     },
-    activeSource: "playback",
-    liveSessionConnected: false,
+    activeSource: source,
+    liveSessionConnected: source === "live",
     vehicleType: "quadrotor",
     paramStore: {
       expected_count: 2,
@@ -135,7 +142,7 @@ function createParamsState(): ParamsStoreState {
   };
 }
 
-function createParamsStore(state: ParamsStoreState): ParamsStore {
+function createParamsStore(state: ParamsStoreState, failApply = false): ParamsStore {
   const backing = writable(state);
   return {
     subscribe: backing.subscribe,
@@ -144,7 +151,24 @@ function createParamsStore(state: ParamsStoreState): ParamsStore {
     stageParameterEdit: () => undefined,
     discardStagedEdit: () => undefined,
     clearStagedEdits: () => undefined,
-    applyStagedEdits: async () => undefined,
+    applyStagedEdits: async () => {
+      if (!failApply) {
+        return;
+      }
+
+      backing.update((current) => ({
+        ...current,
+        applyPhase: "failed",
+        retainedFailures: {
+          BATT_LOW_VOLT: {
+            name: "BATT_LOW_VOLT",
+            requestedValue: 14.4,
+            message: "Vehicle rejected the requested voltage.",
+            confirmedValue: 12.1,
+          },
+        },
+      }));
+    },
     downloadAll: async () => undefined,
     cancelDownload: async () => undefined,
   } as unknown as ParamsStore;
@@ -152,6 +176,7 @@ function createParamsStore(state: ParamsStoreState): ParamsStore {
 
 afterEach(() => {
   cleanup();
+  vi.clearAllMocks();
 });
 
 describe("ParameterReviewTray", () => {
@@ -176,5 +201,25 @@ describe("ParameterReviewTray", () => {
     expect(enumRow.textContent).toContain("FS_THR_ENABLE");
     expect(enumRow.textContent).toContain("Disabled");
     expect(enumRow.textContent).toContain("Enabled always RTL");
+  });
+
+  it("reports failed writes through one toast while keeping retry state in the tray", async () => {
+    const sessionStore = { subscribe: writable(createSessionState("live")).subscribe } as any;
+    const paramsStore = createParamsStore(createParamsState("live"), true);
+
+    render(withShellContexts(sessionStore, paramsStore, ParameterReviewTray));
+
+    await fireEvent.click(screen.getByTestId(appShellTestIds.parameterReviewToggle));
+    await fireEvent.click(screen.getByTestId(appShellTestIds.parameterReviewApply));
+
+    await waitFor(() => {
+      expect(notificationMocks.notifyError).toHaveBeenCalledWith("1 parameter change failed", {
+        description: "BATT_LOW_VOLT: Vehicle rejected the requested voltage.",
+        id: "parameter-apply",
+      });
+    });
+    expect(screen.getByText("failed")).toBeTruthy();
+    expect(screen.getByTestId(`${appShellTestIds.parameterReviewRetryPrefix}-BATT_LOW_VOLT`)).toBeTruthy();
+    expect(screen.queryByText("Vehicle rejected the requested voltage.")).toBeNull();
   });
 });

@@ -33,7 +33,6 @@ export const appShellTestIds = {
   parameterReviewApply: "app-shell-parameter-review-apply",
   parameterReviewClear: "app-shell-parameter-review-clear",
   parameterReviewRowPrefix: "app-shell-parameter-review-row",
-  parameterReviewFailurePrefix: "app-shell-parameter-review-failure",
   parameterReviewRetryPrefix: "app-shell-parameter-review-retry",
   parameterReviewDiscardPrefix: "app-shell-parameter-review-discard",
   telemetrySettingsLauncher: "app-shell-telemetry-settings-launcher",

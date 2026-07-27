@@ -14,6 +14,7 @@ import {
   MonoValue,
 } from "../../components/ui";
 import { isReplayReadonly } from "../../lib/replay-readonly";
+import { notifyError, notifyUnknownError } from "../../lib/notifications";
 import { appShellTestIds } from "./chrome-state";
 import { getParamsStoreContext, getParameterWorkspaceViewStoreContext } from "./runtime-context";
 
@@ -27,15 +28,36 @@ let hasRebootFlaggedEdit = $derived(view.stagedEdits.some((edit) => edit.rebootR
 let isApplying = $derived(view.applyPhase === "applying");
 let replayReadonly = $derived(isReplayReadonly(view.activeEnvelope?.source_kind ?? null));
 
-async function applyQueuedEdits() {
-  await store.applyStagedEdits();
-  if (parameterView.current.stagedCount === 0) {
+async function applyQueuedEdits(targetNames?: string[]) {
+  try {
+    await store.applyStagedEdits(targetNames);
+  } catch (error) {
+    notifyUnknownError("Could not apply parameter changes", error, { id: "parameter-apply" });
+    return;
+  }
+
+  const currentView = parameterView.current;
+  const failures = currentView.stagedEdits.filter((edit) => edit.failureMessage);
+  if (failures.length > 0) {
+    const details = failures
+      .slice(0, 3)
+      .map((edit) => `${edit.rawName}: ${edit.failureMessage}`)
+      .join(" · ");
+    const remaining = failures.length > 3 ? ` · ${failures.length - 3} more` : "";
+    notifyError(`${failures.length} parameter change${failures.length === 1 ? "" : "s"} failed`, {
+      description: `${details}${remaining}`,
+      id: "parameter-apply",
+    });
+    return;
+  }
+
+  if (currentView.stagedCount === 0) {
     expanded = false;
   }
 }
 
 function retryEdit(name: string) {
-  void store.applyStagedEdits([name]);
+  void applyQueuedEdits([name]);
 }
 
 function discardQueuedEdit(name: string) {
@@ -92,19 +114,19 @@ function discardAllQueuedEdits() {
     <div class="mb-2 flex max-h-40 flex-col gap-0.5 overflow-y-auto">
       {#each view.stagedEdits as edit (edit.name)}
         <div
-          class="flex items-center gap-2 text-xs"
+          class="flex min-w-0 items-center gap-2 text-xs"
           data-param-name={edit.name}
           data-testid={`${appShellTestIds.parameterReviewRowPrefix}-${edit.name}`}
         >
-          <MonoValue as="span" class="w-56 truncate sm:w-72" title={`${edit.label} (${edit.rawName})`}>
+          <MonoValue as="span" class="min-w-0 flex-1 truncate" title={`${edit.label} (${edit.rawName})`}>
             {edit.label}
             {#if edit.label !== edit.rawName}
-              <MonoValue as="span" tone="muted">({edit.rawName})</MonoValue>
+              <span class="text-text-muted">({edit.rawName})</span>
             {/if}
           </MonoValue>
-          <MonoValue as="span" tone="muted">{edit.currentDisplayText}</MonoValue>
-          <HelperText as="span" size="xs" tone="muted">→</HelperText>
-          <MonoValue as="span" tone="warning" class="font-semibold">{edit.nextDisplayText}</MonoValue>
+          <MonoValue as="span" class="shrink-0" tone="muted">{edit.currentDisplayText}</MonoValue>
+          <HelperText as="span" class="shrink-0" size="xs" tone="muted">→</HelperText>
+          <MonoValue as="span" tone="warning" class="shrink-0 font-semibold">{edit.nextDisplayText}</MonoValue>
           {#if edit.rebootRequired}
             <RotateCw aria-label="reboot required" class="shrink-0 text-warning" size={8} />
             <span class="sr-only">reboot required</span>
@@ -113,8 +135,9 @@ function discardAllQueuedEdits() {
             <Badge variant="accent" size="sm" case="normal" shape="rounded">writing</Badge>
           {/if}
           {#if edit.failureMessage}
+            <Badge tone="danger" size="sm" case="normal" shape="rounded">failed</Badge>
             <Button
-              class="ml-auto h-6 px-2 text-xs uppercase tracking-wide"
+              class="h-6 px-2 text-xs uppercase tracking-wide"
               disabled={isApplying || replayReadonly}
               onclick={() => retryEdit(edit.name)}
               size="sm"
@@ -137,15 +160,6 @@ function discardAllQueuedEdits() {
           >
             <X aria-hidden="true" size={10} />
           </IconButton>
-          {#if edit.failureMessage}
-            <MonoValue
-              as="span"
-              tone="danger"
-              data-testid={`${appShellTestIds.parameterReviewFailurePrefix}-${edit.name}`}
-            >
-              {edit.failureMessage}{edit.confirmedValueText ? ` · confirmed: ${edit.confirmedValueText}${edit.units ? ` ${edit.units}` : ""}` : ""}
-            </MonoValue>
-          {/if}
         </div>
       {/each}
     </div>

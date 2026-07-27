@@ -250,7 +250,7 @@ function readGroup(state: SetupWorkspaceStoreState, id: SetupWorkspaceSectionGro
 }
 
 describe("setup workspace store", () => {
-  it("exposes the full grouped expert catalog without setup progress tracking", () => {
+  it("exposes the full grouped setup catalog without setup progress tracking", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState());
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);

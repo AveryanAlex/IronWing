@@ -7,7 +7,7 @@ import ParameterWorkspace from "../../../../features/params/components/Parameter
 import { resolveDocsUrl, type VehicleSlug } from "../../../../data/ardupilot-docs";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import SetupIntroCard from "../../../../features/setup/shared/SetupIntroCard.svelte";
-import type { ParameterExpertFilter } from "../../../../lib/params/parameter-expert-view";
+import type { ParameterCatalogFilter } from "../../../../lib/params/parameter-catalog-view";
 
 const paramsStore = getParamsStoreContext();
 const paramsState = fromStore(paramsStore);
@@ -17,7 +17,7 @@ let docsUrl = $derived(resolveDocsUrl("full_parameter_list", resolveVehicleSlug(
 let initialSearchText = $derived(page.url.searchParams.get("search") ?? "");
 let initialFilter = $derived(resolveInitialFilter(page.url.searchParams.get("filter")));
 
-function resolveInitialFilter(value: string | null): ParameterExpertFilter {
+function resolveInitialFilter(value: string | null): ParameterCatalogFilter {
   switch (value) {
     case "all":
     case "modified":

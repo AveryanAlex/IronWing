@@ -136,6 +136,46 @@ describe("SetupParamEditCard", () => {
     await fireEvent.keyDown(slider, { key: "ArrowRight" });
     expect(onValueChange).toHaveBeenLastCalledWith(182);
   });
+
+  it("does not stage a bounded value when the slider normalizes during mount", async () => {
+    const onValueChange = vi.fn();
+    render(SetupParamEditCard, {
+      props: {
+        item: item("OUTSIDE_METADATA_RANGE", {
+          range: { min: 1, max: 10 },
+          value: 0,
+        }),
+        onValueChange,
+      },
+    });
+
+    await waitFor(() => expect(screen.getByRole("slider").getAttribute("aria-valuenow")).toBe("1"));
+    expect(onValueChange).not.toHaveBeenCalled();
+  });
+
+  it("renders embedded bitmask tiles and toggles bit 31 without signed overflow", async () => {
+    const onValueChange = vi.fn();
+    render(SetupParamEditCard, {
+      props: {
+        item: item("LOG_BITMASK", { value: 5 }),
+        type: "bitmask",
+        value: 5,
+        bitmaskOptions: [
+          { bit: 0, label: "PID" },
+          { bit: 2, label: "Fast attitude" },
+          { bit: 31, label: "High rate telemetry" },
+        ],
+        onValueChange,
+      },
+    });
+
+    expect(screen.getByRole("group", { name: "LOG_BITMASK bitmask options" })).toBeTruthy();
+    expect((screen.getByRole("spinbutton") as HTMLInputElement).value).toBe("5");
+
+    await fireEvent.click(screen.getByText("Bit 31 · High rate telemetry"));
+
+    expect(onValueChange).toHaveBeenLastCalledWith(2147483653);
+  });
 });
 
 describe("SetupRcCaptureParamEditCard", () => {

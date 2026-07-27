@@ -3,17 +3,17 @@ import { untrack } from "svelte";
 import { fromStore } from "svelte/store";
 
 import {
-  buildParameterExpertView,
-  type ParameterExpertFilter,
-  type ParameterExpertRow,
-} from "../../../lib/params/parameter-expert-view";
+  buildParameterCatalogView,
+  type ParameterCatalogFilter,
+  type ParameterCatalogItem,
+} from "../../../lib/params/parameter-catalog-view";
 import type { ParameterWorkspaceStatus } from "../../../lib/stores/params";
 import {
   getParameterWorkspaceViewStoreContext,
   getParamsStoreContext,
 } from "../../../app/shell/runtime-context";
 import { Badge, EmptyState, FactTile, HelperText, StatusPill } from "../../../components/ui";
-import ParameterExpertBrowser from "./ParameterExpertBrowser.svelte";
+import ParameterCatalogBrowser from "./ParameterCatalogBrowser.svelte";
 import { parameterWorkspaceTestIds } from "../parameter-workspace-test-ids";
 import { isReplayReadonly } from "../../../lib/replay-readonly";
 
@@ -22,7 +22,7 @@ let {
   initialFilter = "all",
 }: {
   initialSearchText?: string;
-  initialFilter?: ParameterExpertFilter;
+  initialFilter?: ParameterCatalogFilter;
 } = $props();
 
 const store = getParamsStoreContext();
@@ -30,15 +30,14 @@ const paramsState = fromStore(store);
 const parameterViewStore = fromStore(getParameterWorkspaceViewStoreContext());
 
 let searchText = $state(untrack(() => initialSearchText));
-let filter = $state<ParameterExpertFilter>(untrack(() => initialFilter));
+let filter = $state<ParameterCatalogFilter>(untrack(() => initialFilter));
 
 let params = $derived(paramsState.current);
 let view = $derived(parameterViewStore.current);
 let emptyState = $derived(emptyStateCopy(view.status));
-let envelopeKey = $derived(activeEnvelopeKey(view.activeEnvelope));
 let replayReadonly = $derived(isReplayReadonly(view.activeEnvelope?.source_kind ?? null));
 let catalogView = $derived.by(() =>
-  buildParameterExpertView({
+  buildParameterCatalogView({
     paramStore: params.paramStore,
     metadata: params.metadata,
     stagedEdits: params.stagedEdits,
@@ -48,20 +47,12 @@ let catalogView = $derived.by(() =>
   }),
 );
 
-function stageItem(row: ParameterExpertRow, nextValue: number) {
+function stageItem(row: ParameterCatalogItem, nextValue: number) {
   store.stageParameterEdit(row, nextValue);
 }
 
 function discardItem(name: string) {
   store.discardStagedEdit(name);
-}
-
-function activeEnvelopeKey(activeEnvelope: typeof view.activeEnvelope) {
-  if (!activeEnvelope) {
-    return "no-scope";
-  }
-
-  return `${activeEnvelope.session_id}:${activeEnvelope.source_kind}:${activeEnvelope.seek_epoch}:${activeEnvelope.reset_revision}`;
 }
 
 function statusBadgeText(status: ParameterWorkspaceStatus) {
@@ -153,8 +144,7 @@ function emptyStateCopy(status: ParameterWorkspaceStatus) {
   {#if emptyState}
     <EmptyState description={emptyState.description} title={emptyState.title} testId={parameterWorkspaceTestIds.empty} />
   {:else}
-    <ParameterExpertBrowser
-      {envelopeKey}
+    <ParameterCatalogBrowser
       {filter}
       onDiscard={discardItem}
       onFilterChange={(nextFilter) => {

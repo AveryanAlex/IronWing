@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/svelte";
 import { writable } from "svelte/store";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
@@ -14,6 +14,16 @@ import {
 import { withParameterWorkspaceContext } from "../../test/context-harnesses";
 import ParameterWorkspace from "./components/ParameterWorkspace.svelte";
 import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
+
+class ResizeObserverStub {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+}
+
+beforeEach(() => {
+    vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+});
 
 function createMetadata(): ParamMetadataMap {
     return new Map([
@@ -296,10 +306,11 @@ function renderWorkspace(options: {
 
 afterEach(() => {
     cleanup();
+    vi.unstubAllGlobals();
 });
 
-async function expandExpertGroup(groupKey: string) {
-    await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertGroupPrefix}-${groupKey}`));
+async function expandCatalogGroup(groupKey: string) {
+    await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.catalogGroupPrefix}-${groupKey}`));
 }
 
 describe("ParameterWorkspace", () => {
@@ -308,36 +319,36 @@ describe("ParameterWorkspace", () => {
 
         expect(screen.getByTestId(parameterWorkspaceTestIds.root)).toBeTruthy();
         expect(screen.getByTestId(parameterWorkspaceTestIds.state).textContent?.trim()).toBe("Parameters ready");
-        expect(screen.getByTestId(parameterWorkspaceTestIds.expertRoot)).toBeTruthy();
-        expect(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`).textContent).toContain("All");
+        expect(screen.getByTestId(parameterWorkspaceTestIds.catalogRoot)).toBeTruthy();
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.catalogFilterPrefix}-all`).textContent).toContain("All");
 
-        const groupIds = [...container.querySelectorAll('[data-testid^="parameter-expert-group-"]')]
+        const groupIds = [...container.querySelectorAll('[data-testid^="parameter-catalog-group-"]')]
             .map((element) => element.getAttribute("data-testid"));
         expect(groupIds).toEqual([
-            "parameter-expert-group-ARMING",
-            "parameter-expert-group-ATC",
-            "parameter-expert-group-BATT",
-            "parameter-expert-group-FORMAT",
-            "parameter-expert-group-FS",
-            "parameter-expert-group-INS",
-            "parameter-expert-group-LOG",
-            "parameter-expert-group-MOT",
+            "parameter-catalog-group-ARMING",
+            "parameter-catalog-group-ATC",
+            "parameter-catalog-group-BATT",
+            "parameter-catalog-group-FORMAT",
+            "parameter-catalog-group-FS",
+            "parameter-catalog-group-INS",
+            "parameter-catalog-group-LOG",
+            "parameter-catalog-group-MOT",
         ]);
+        expect(container.querySelector(".param-table")).toBeNull();
         expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-ARMING_CHECK`)).toBeNull();
     });
 
     it("supports generated bitmask editing and the shared staged tray state", async () => {
         renderWorkspace();
-        await expandExpertGroup("LOG");
+        await expandCatalogGroup("LOG");
 
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`).textContent).toContain("LOG_BITMASK");
 
-        await fireEvent.click(screen.getByLabelText("Bit 31 - High rate telemetry"));
+        await fireEvent.click(screen.getByText("Bit 31 · High rate telemetry"));
 
-        const diffText = screen.getByTestId(`${parameterWorkspaceTestIds.diffPrefix}-LOG_BITMASK`).textContent ?? "";
         expect(screen.getByTestId(parameterWorkspaceTestIds.pendingCount).textContent).toContain("1 pending");
-        expect(diffText).toContain("2147483653");
-        expect(diffText).not.toContain("-2147483643");
+        expect((screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-LOG_BITMASK`) as HTMLInputElement).value)
+            .toBe("2147483653");
     });
 
     it("initializes the catalog from a deep-linked search and filter", () => {
@@ -346,8 +357,8 @@ describe("ParameterWorkspace", () => {
             initialFilter: "all",
         });
 
-        expect((screen.getByTestId(parameterWorkspaceTestIds.expertSearch) as HTMLInputElement).value).toBe("LOG_");
-        expect(screen.getByTestId(`${parameterWorkspaceTestIds.expertFilterPrefix}-all`).getAttribute("data-variant"))
+        expect((screen.getByTestId(parameterWorkspaceTestIds.catalogSearch) as HTMLInputElement).value).toBe("LOG_");
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.catalogFilterPrefix}-all`).getAttribute("data-variant"))
             .toBe("soft");
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeTruthy();
         expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-ARMING_CHECK`)).toBeNull();
@@ -356,11 +367,11 @@ describe("ParameterWorkspace", () => {
     it("searches metadata fields, expands matching groups, and clears the query", async () => {
         renderWorkspace();
 
-        const search = screen.getByTestId(parameterWorkspaceTestIds.expertSearch);
+        const search = screen.getByTestId(parameterWorkspaceTestIds.catalogSearch);
         await fireEvent.input(search, { target: { value: "high rate telemetry" } });
 
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeTruthy();
-        expect(screen.getByTestId(parameterWorkspaceTestIds.expertSummary).textContent).toContain("Showing 1 of 16");
+        expect(screen.getByTestId(parameterWorkspaceTestIds.catalogSummary).textContent).toContain("Showing 1 of 16");
 
         await fireEvent.click(screen.getByRole("button", { name: "Clear parameter search" }));
 
@@ -376,9 +387,9 @@ describe("ParameterWorkspace", () => {
                 metadataError: "Parameter metadata is unavailable for this vehicle type.",
             }),
         });
-        await expandExpertGroup("ARMING");
+        await expandCatalogGroup("ARMING");
 
-        expect(screen.getByTestId(parameterWorkspaceTestIds.expertMetadataFallback).textContent).toContain(
+        expect(screen.getByTestId(parameterWorkspaceTestIds.catalogMetadataFallback).textContent).toContain(
             "falling back to raw parameter names",
         );
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-ARMING_CHECK`).textContent).toContain("ARMING_CHECK");

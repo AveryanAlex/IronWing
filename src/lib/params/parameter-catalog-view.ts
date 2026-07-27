@@ -7,24 +7,23 @@ import {
 } from "./boolean-enum";
 import {
   buildParameterItemModels,
-  formatParamValue,
   type ParameterItemModel,
 } from "./parameter-item-model";
 
-export type ParameterExpertFilter = "standard" | "all" | "modified";
+export type ParameterCatalogFilter = "standard" | "all" | "modified";
 
-export type ParameterExpertEnumOption = {
+export type ParameterCatalogEnumOption = {
   code: number;
   label: string;
 };
 
-export type ParameterExpertBitmaskOption = {
+export type ParameterCatalogBitmaskOption = {
   bit: number;
   label: string;
   enabled: boolean;
 };
 
-export type ParameterExpertRow = ParameterItemModel & {
+export type ParameterCatalogItem = ParameterItemModel & {
   renderId: string;
   groupKey: string;
   groupLabel: string;
@@ -32,54 +31,51 @@ export type ParameterExpertRow = ParameterItemModel & {
   isStandard: boolean;
   isStaged: boolean;
   stagedValue: number | null;
-  stagedValueText: string | null;
-  stagedValueLabel: string | null;
-  diffText: string | null;
-  failureMessage: string | null;
+  hasFailure: boolean;
   editorKind: "number" | "enum" | "boolean" | "bitmask";
-  enumOptions: ParameterExpertEnumOption[];
+  enumOptions: ParameterCatalogEnumOption[];
   booleanOptions: BooleanEnumDescriptor | null;
-  bitmaskOptions: ParameterExpertBitmaskOption[];
+  bitmaskOptions: ParameterCatalogBitmaskOption[];
 };
 
-export type ParameterExpertGroup = {
+export type ParameterCatalogGroup = {
   key: string;
   label: string;
-  rows: ParameterExpertRow[];
+  rows: ParameterCatalogItem[];
 };
 
-export type ParameterExpertView = {
-  filter: ParameterExpertFilter;
+export type ParameterCatalogView = {
+  filter: ParameterCatalogFilter;
   searchText: string;
   metadataAvailable: boolean;
   totalCount: number;
   matchingCount: number;
   visibleCount: number;
   stagedCount: number;
-  hiddenStagedRows: ParameterExpertRow[];
-  groups: ParameterExpertGroup[];
+  hiddenStagedRows: ParameterCatalogItem[];
+  groups: ParameterCatalogGroup[];
 };
 
-export type ParameterExpertRetainedFailure = {
+export type ParameterCatalogRetainedFailure = {
   message: string;
 };
 
-export function buildParameterExpertView(args: {
+export function buildParameterCatalogView(args: {
   paramStore: ParamStore | null;
   metadata: ParamMetadataMap | null;
   stagedEdits: Record<string, StagedParameterEdit>;
-  retainedFailures: Record<string, ParameterExpertRetainedFailure>;
-  filter: ParameterExpertFilter;
+  retainedFailures: Record<string, ParameterCatalogRetainedFailure>;
+  filter: ParameterCatalogFilter;
   searchText: string;
-}): ParameterExpertView {
+}): ParameterCatalogView {
   const rows = buildParameterItemModels(args.paramStore, args.metadata).map((item, index) =>
-    buildExpertRow(item, index, args.metadata?.get(item.name), args.stagedEdits[item.name], args.retainedFailures[item.name]),
+    buildCatalogItem(item, index, args.metadata?.get(item.name), args.stagedEdits[item.name], args.retainedFailures[item.name]),
   );
   const normalizedSearch = args.searchText.trim().toLowerCase();
 
   const visibility = rows.map((row) => {
-    const matchesFilter = matchesExpertFilter(row, args.filter);
-    const matchesSearch = matchesExpertSearch(row, normalizedSearch);
+    const matchesFilter = matchesCatalogFilter(row, args.filter);
+    const matchesSearch = matchesCatalogSearch(row, normalizedSearch);
     return {
       ...row,
       matchesFilter,
@@ -90,7 +86,7 @@ export function buildParameterExpertView(args: {
 
   const matchingCount = visibility.filter((row) => row.matchesFilter && row.matchesSearch).length;
   const visibleRows = visibility.filter((row) => row.isVisible);
-  const hiddenStagedRows = visibility.filter((row) => (row.isStaged || row.failureMessage !== null) && !row.isVisible);
+  const hiddenStagedRows = visibility.filter((row) => (row.isStaged || row.hasFailure) && !row.isVisible);
 
   return {
     filter: args.filter,
@@ -105,20 +101,18 @@ export function buildParameterExpertView(args: {
   };
 }
 
-function buildExpertRow(
+function buildCatalogItem(
   item: ParameterItemModel,
   index: number,
   meta: ParamMeta | undefined,
   stagedEdit: StagedParameterEdit | undefined,
-  retainedFailure: ParameterExpertRetainedFailure | undefined,
-): ParameterExpertRow {
+  retainedFailure: ParameterCatalogRetainedFailure | undefined,
+): ParameterCatalogItem {
   const enumOptions = normalizeEnumOptions(meta?.values);
   const booleanOptions = detectBooleanEnumOptions(enumOptions);
   const bitmaskOptions = normalizeBitmaskOptions(meta?.bitmask, item.value);
   const isStaged = Boolean(stagedEdit && stagedEdit.nextValue !== item.value);
   const stagedValue = isStaged ? stagedEdit?.nextValue ?? null : null;
-  const stagedValueText = stagedValue === null ? null : formatParamValue(stagedValue, item.increment);
-  const stagedValueLabel = stagedValue === null ? null : resolveValueLabel(stagedValue, meta);
   const prefix = resolveGroupPrefix(item.rawName);
   const userLevel = resolveUserLevel(meta);
 
@@ -131,10 +125,7 @@ function buildExpertRow(
     isStandard: userLevel !== "Advanced",
     isStaged,
     stagedValue,
-    stagedValueText,
-    stagedValueLabel,
-    diffText: stagedValueText === null ? null : `${item.valueText} → ${stagedValueText}`,
-    failureMessage: normalizeOptionalText(retainedFailure?.message) ?? null,
+    hasFailure: Boolean(retainedFailure),
     editorKind: booleanOptions ? "boolean" : enumOptions.length > 0 ? "enum" : bitmaskOptions.length > 0 ? "bitmask" : "number",
     enumOptions,
     booleanOptions,
@@ -142,8 +133,8 @@ function buildExpertRow(
   };
 }
 
-function buildGroups(rows: ParameterExpertRow[]): ParameterExpertGroup[] {
-  const groups = new Map<string, ParameterExpertGroup>();
+function buildGroups(rows: ParameterCatalogItem[]): ParameterCatalogGroup[] {
+  const groups = new Map<string, ParameterCatalogGroup>();
 
   for (const row of rows) {
     const existing = groups.get(row.groupKey);
@@ -167,19 +158,19 @@ function buildGroups(rows: ParameterExpertRow[]): ParameterExpertGroup[] {
     .sort((left, right) => left.label.localeCompare(right.label));
 }
 
-function matchesExpertFilter(row: ParameterExpertRow, filter: ParameterExpertFilter): boolean {
+function matchesCatalogFilter(row: ParameterCatalogItem, filter: ParameterCatalogFilter): boolean {
   switch (filter) {
     case "all":
       return true;
     case "modified":
-      return row.isStaged || row.failureMessage !== null;
+      return row.isStaged || row.hasFailure;
     case "standard":
     default:
       return row.isStandard;
   }
 }
 
-function matchesExpertSearch(row: ParameterExpertRow, normalizedSearch: string): boolean {
+function matchesCatalogSearch(row: ParameterCatalogItem, normalizedSearch: string): boolean {
   if (normalizedSearch.length === 0) {
     return true;
   }
@@ -216,12 +207,12 @@ function resolveUserLevel(meta: ParamMeta | undefined): "Standard" | "Advanced" 
   return "Unknown";
 }
 
-function normalizeEnumOptions(values: ParamMeta["values"] | undefined): ParameterExpertEnumOption[] {
+function normalizeEnumOptions(values: ParamMeta["values"] | undefined): ParameterCatalogEnumOption[] {
   if (!Array.isArray(values)) {
     return [];
   }
 
-  const normalized: ParameterExpertEnumOption[] = [];
+  const normalized: ParameterCatalogEnumOption[] = [];
   for (const value of values) {
     if (typeof value?.code !== "number" || !Number.isFinite(value.code)) {
       continue;
@@ -241,12 +232,12 @@ function normalizeEnumOptions(values: ParamMeta["values"] | undefined): Paramete
 function normalizeBitmaskOptions(
   values: ParamMeta["bitmask"] | undefined,
   currentValue: number,
-): ParameterExpertBitmaskOption[] {
+): ParameterCatalogBitmaskOption[] {
   if (!Array.isArray(values) || !Number.isInteger(currentValue) || currentValue < 0) {
     return [];
   }
 
-  const normalized: ParameterExpertBitmaskOption[] = [];
+  const normalized: ParameterCatalogBitmaskOption[] = [];
   for (const value of values) {
     if (
       typeof value?.bit !== "number"
@@ -270,67 +261,6 @@ function normalizeBitmaskOptions(
   }
 
   return normalized;
-}
-
-function resolveValueLabel(value: number, meta: ParamMeta | undefined): string | null {
-  const enumLabel = resolveEnumLabel(value, meta?.values);
-  if (enumLabel) {
-    return enumLabel;
-  }
-
-  return resolveBitmaskLabel(value, meta?.bitmask);
-}
-
-function resolveEnumLabel(value: number, values: ParamMeta["values"] | undefined): string | null {
-  if (!Array.isArray(values)) {
-    return null;
-  }
-
-  for (const option of values) {
-    if (typeof option?.code !== "number" || !Number.isFinite(option.code)) {
-      continue;
-    }
-
-    const label = normalizeOptionalText(option.label);
-    if (!label) {
-      continue;
-    }
-
-    if (option.code === value) {
-      return label;
-    }
-  }
-
-  return null;
-}
-
-function resolveBitmaskLabel(value: number, values: ParamMeta["bitmask"] | undefined): string | null {
-  if (!Array.isArray(values) || !Number.isInteger(value) || value < 0) {
-    return null;
-  }
-
-  const labels: string[] = [];
-  for (const option of values) {
-    if (
-      typeof option?.bit !== "number"
-      || !Number.isInteger(option.bit)
-      || option.bit < 0
-      || option.bit > 31
-    ) {
-      continue;
-    }
-
-    const label = normalizeOptionalText(option.label);
-    if (!label) {
-      continue;
-    }
-
-    if ((value & (1 << option.bit)) !== 0) {
-      labels.push(label);
-    }
-  }
-
-  return labels.length > 0 ? labels.join(", ") : null;
 }
 
 function normalizeOptionalText(value: string | undefined): string | null {

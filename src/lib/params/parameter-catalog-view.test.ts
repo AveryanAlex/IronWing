@@ -4,9 +4,9 @@ import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
 import type { StagedParameterEdit } from "../stores/params-staged-edits";
 import {
-  buildParameterExpertView,
-  type ParameterExpertFilter,
-} from "./parameter-expert-view";
+  buildParameterCatalogView,
+  type ParameterCatalogFilter,
+} from "./parameter-catalog-view";
 
 function createParamStore(): ParamStore {
   return {
@@ -87,7 +87,7 @@ function createStagedEdits(): Record<string, StagedParameterEdit> {
 }
 
 function buildView(
-  filter: ParameterExpertFilter,
+  filter: ParameterCatalogFilter,
   searchText = "",
   overrides: {
     metadata?: ParamMetadataMap | null;
@@ -95,7 +95,7 @@ function buildView(
     stagedEdits?: Record<string, StagedParameterEdit>;
   } = {},
 ) {
-  return buildParameterExpertView({
+  return buildParameterCatalogView({
     paramStore: createParamStore(),
     metadata: "metadata" in overrides ? (overrides.metadata ?? null) : createMetadata(),
     stagedEdits: overrides.stagedEdits ?? createStagedEdits(),
@@ -105,7 +105,7 @@ function buildView(
   });
 }
 
-describe("buildParameterExpertView renderId", () => {
+describe("buildParameterCatalogView renderId", () => {
   it("produces unique renderId for rows that share the same name", () => {
     const duplicateName = "ACRO_RP_RATE_TC:0";
     const paramStore = {
@@ -116,7 +116,7 @@ describe("buildParameterExpertView renderId", () => {
       },
     } as unknown as ParamStore;
 
-    const view = buildParameterExpertView({
+    const view = buildParameterCatalogView({
       paramStore,
       metadata: null,
       stagedEdits: {},
@@ -133,7 +133,7 @@ describe("buildParameterExpertView renderId", () => {
   });
 });
 
-describe("buildParameterExpertView", () => {
+describe("buildParameterCatalogView", () => {
   it("groups rows alphabetically by prefix and derives metadata editors", () => {
     const view = buildView("all");
 
@@ -209,6 +209,6 @@ describe("buildParameterExpertView", () => {
       bitmaskOptions: [],
     });
     expect(formatRow?.readOnly).toBe(true);
-    expect(formatRow?.failureMessage).toBe("Vehicle kept the read-only value unchanged.");
+    expect(formatRow?.hasFailure).toBe(true);
   });
 });

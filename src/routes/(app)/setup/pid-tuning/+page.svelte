@@ -4,12 +4,17 @@ import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
-import { buildParameterExpertView, type ParameterExpertRow } from "../../../../lib/params/parameter-expert-view";
+import { buildParameterCatalogView, type ParameterCatalogItem } from "../../../../lib/params/parameter-catalog-view";
 import { deriveVehicleProfile } from "../../../../lib/setup/vehicle-profile";
-import ParameterExpertRowComponent from "../../../../features/params/components/ParameterExpertRow.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
-import { SetupFieldStack, SetupGuideCard, SetupNotice, SetupSectionCard } from "../../../../features/setup/shared";
+import {
+  SetupGuideCard,
+  SetupNotice,
+  SetupParamEditCard,
+  SetupParamEditGrid,
+  SetupSectionCard,
+} from "../../../../features/setup/shared";
 import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
 import { Badge } from "../../../../components/ui";
 import {
@@ -27,7 +32,7 @@ type CuratedPidGroup = {
   id: string;
   title: string;
   description: string;
-  rows: ParameterExpertRow[];
+  rows: ParameterCatalogItem[];
 };
 
 type CuratedPidView = {
@@ -186,7 +191,6 @@ const sessionState = fromStore(sessionStore);
 let params = $derived(paramsState.current);
 let session = $derived(sessionState.current);
 let actionsBlocked = $derived(view.checkpoint.blocksActions);
-let rowReadiness = $derived(actionsBlocked ? "degraded" : view.readiness);
 let docsUrl = $derived(resolveDocsUrl("tuning"));
 let vehicleType = $derived(session.sessionDomain.value?.vehicle_state?.vehicle_type ?? null);
 let profile = $derived(
@@ -195,8 +199,8 @@ let profile = $derived(
     stagedEdits: params.stagedEdits,
   }),
 );
-let expertView = $derived(
-  buildParameterExpertView({
+let catalogView = $derived(
+  buildParameterCatalogView({
     paramStore: params.paramStore,
     metadata: params.metadata,
     stagedEdits: params.stagedEdits,
@@ -206,8 +210,8 @@ let expertView = $derived(
   }),
 );
 let rowIndex = $derived.by(() => {
-  const index = new Map<string, ParameterExpertRow>();
-  for (const group of expertView.groups) {
+  const index = new Map<string, ParameterCatalogItem>();
+  for (const group of catalogView.groups) {
     for (const row of group.rows) {
       index.set(row.name, withSafetyFallback(row));
     }
@@ -216,16 +220,7 @@ let rowIndex = $derived.by(() => {
 });
 let curated = $derived(buildCuratedView());
 
-function envelopeKey() {
-  const activeEnvelope = view.activeEnvelope;
-  if (!activeEnvelope) {
-    return "no-scope";
-  }
-
-  return `${activeEnvelope.session_id}:${activeEnvelope.source_kind}:${activeEnvelope.seek_epoch}:${activeEnvelope.reset_revision}`;
-}
-
-function withSafetyFallback(row: ParameterExpertRow): ParameterExpertRow {
+function withSafetyFallback(row: ParameterCatalogItem): ParameterCatalogItem {
   const meta = params.metadata?.get(row.name);
   const hasHumanName = typeof meta?.humanName === "string" && meta.humanName.trim().length > 0;
   const enumBroken = Array.isArray(meta?.values) && meta.values.length > 0 && row.enumOptions.length === 0;
@@ -240,7 +235,7 @@ function withSafetyFallback(row: ParameterExpertRow): ParameterExpertRow {
     label: row.rawName,
     description: row.description ?? "This advanced parameter can be reviewed here; edit it from Parameters if needed.",
     readOnly: true,
-  } satisfies ParameterExpertRow;
+  } satisfies ParameterCatalogItem;
 }
 
 function buildGroups(
@@ -253,7 +248,7 @@ function buildGroups(
       description: definition.description,
       rows: definition.names
         .map((name) => rowIndex.get(name) ?? null)
-        .filter((row): row is ParameterExpertRow => row !== null),
+        .filter((row): row is ParameterCatalogItem => row !== null),
     }))
     .filter((group) => group.rows.length > 0);
 }
@@ -333,12 +328,34 @@ function buildCuratedView(): CuratedPidView {
   };
 }
 
-function stageItem(row: ParameterExpertRow, nextValue: number) {
+function stageItem(row: ParameterCatalogItem, nextValue: number) {
   paramsStore.stageParameterEdit(row, nextValue);
 }
 
 function discardItem(name: string) {
   paramsStore.discardStagedEdit(name);
+}
+
+function cardValue(row: ParameterCatalogItem) {
+  return row.stagedValue ?? row.value;
+}
+
+function stageCardValue(row: ParameterCatalogItem, value: string | number | boolean) {
+  const nextValue =
+    typeof value === "boolean"
+      ? value
+        ? (row.booleanOptions?.on.code ?? 1)
+        : (row.booleanOptions?.off.code ?? 0)
+      : Number(value);
+
+  if (
+    !Number.isFinite(nextValue) ||
+    (row.editorKind === "bitmask" && (!Number.isInteger(nextValue) || nextValue < 0))
+  ) {
+    return;
+  }
+
+  stageItem(row, nextValue);
 }
 </script>
 
@@ -404,17 +421,26 @@ function discardItem(name: string) {
             </Badge>
           {/snippet}
 
-          <SetupFieldStack gap="compact">
+          <SetupParamEditGrid minWidth="20rem" density="compact" ariaLabel={`${group.title} parameters`}>
             {#each group.rows as row (row.renderId)}
-              <ParameterExpertRowComponent
-                envelopeKey={envelopeKey()}
-                onDiscard={discardItem}
-                onStage={stageItem}
-                readiness={rowReadiness}
-                {row}
+              <SetupParamEditCard
+                item={row}
+                inputId={`pid-tuning-${row.renderId}`}
+                type={row.editorKind}
+                value={cardValue(row)}
+                options={row.enumOptions}
+                bitmaskOptions={row.bitmaskOptions}
+                offLabel={row.booleanOptions?.off.label}
+                onLabel={row.booleanOptions?.on.label}
+                disabled={actionsBlocked}
+                stagedName={row.isStaged ? row.name : undefined}
+                stagedTestId={`${setupWorkspaceTestIds.pidTuningGroupPrefix}-staged-${row.name}`}
+                onUnstage={discardItem}
+                inputTestId={`${setupWorkspaceTestIds.pidTuningGroupPrefix}-input-${row.name}`}
+                onValueChange={(value) => stageCardValue(row, value)}
               />
             {/each}
-          </SetupFieldStack>
+          </SetupParamEditGrid>
         </SetupSectionCard>
       {/each}
     </div>

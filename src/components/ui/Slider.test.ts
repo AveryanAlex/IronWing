@@ -22,6 +22,7 @@ afterEach(() => {
 describe("Slider", () => {
   it("keeps logarithmic slider accessibility and keyboard changes in the raw domain", async () => {
     const onValueChange = vi.fn();
+    const onValueCommit = vi.fn();
     render(Slider, {
       props: {
         value: 181,
@@ -32,6 +33,7 @@ describe("Slider", () => {
         unit: " m",
         ariaLabel: "Waypoint radius",
         onValueChange,
+        onValueCommit,
       },
     });
 
@@ -43,10 +45,12 @@ describe("Slider", () => {
 
     await fireEvent.keyDown(slider, { key: "ArrowRight" });
     expect(onValueChange).toHaveBeenLastCalledWith(182);
+    expect(onValueCommit).toHaveBeenLastCalledWith(182);
     expect(slider.getAttribute("aria-valuenow")).toBe("182");
 
     await fireEvent.keyDown(slider, { key: "End" });
     expect(onValueChange).toHaveBeenLastCalledWith(32767);
+    expect(onValueCommit).toHaveBeenLastCalledWith(32767);
   });
 
   it("converts logarithmic pointer positions back to raw values", async () => {

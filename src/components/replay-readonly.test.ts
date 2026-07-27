@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import { writable } from "svelte/store";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ParamsStore, ParamsStoreState } from "../lib/stores/params";
 import type { SessionStoreState } from "../lib/stores/session-state";
@@ -34,6 +34,16 @@ vi.mock("../telemetry", async () => {
 vi.mock("../guided", () => ({
   guidedTakeoff: vi.fn(async () => undefined),
 }));
+
+class ResizeObserverStub {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+beforeEach(() => {
+  vi.stubGlobal("ResizeObserver", ResizeObserverStub);
+});
 
 function createPlaybackParamsState(): ParamsStoreState {
   return {
@@ -157,6 +167,7 @@ function createSessionState(activeSource: "live" | "playback"): SessionStoreStat
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
 });
 
 describe("replay-readonly active command surfaces", () => {
@@ -164,9 +175,9 @@ describe("replay-readonly active command surfaces", () => {
     render(withParameterWorkspaceContext(createParamsHarness(createPlaybackParamsState()), ParameterWorkspace));
 
     expect(screen.queryByTestId("parameter-replay-readonly-banner")).toBeNull();
-    expect(screen.getByTestId(parameterWorkspaceTestIds.expertSearch)).not.toHaveProperty("disabled", true);
+    expect(screen.getByTestId(parameterWorkspaceTestIds.catalogSearch)).not.toHaveProperty("disabled", true);
 
-    await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.expertGroupPrefix}-ARMING`));
+    await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.catalogGroupPrefix}-ARMING`));
 
     expect(screen.getByTestId(`${parameterWorkspaceTestIds.inputPrefix}-ARMING_CHECK`)).toHaveProperty("disabled", true);
   });
