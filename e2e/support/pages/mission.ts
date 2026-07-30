@@ -86,6 +86,15 @@ export class MissionWorkspacePage {
     await expect(upload).toBeEnabled({ timeout: 10_000 });
     await upload.click();
     await expect(upload).toContainText(/Uploaded/i, { timeout: 30_000 });
+
+    const uploadNotification = this.page
+      .getByRole("region", { name: /Notifications/ })
+      .getByRole("listitem")
+      .filter({ hasText: "Mission uploaded to vehicle" });
+    await expect(uploadNotification).toBeVisible();
+    await uploadNotification.getByRole("button", { name: "Close toast" }).click();
+    await expect(uploadNotification).toBeHidden();
+
     await this.auditLayout("mission uploaded");
   }
 

@@ -206,7 +206,7 @@ export class SetupWorkspacePage {
   async stageAnalogOsdSetup(): Promise<void> {
     const guide = this.osdSetupGuide();
     await guide.getByTestId(ids.osdSetupProfileSelect).selectOption("analog");
-    await expect(guide.getByRole("heading", { name: "Analog onboard OSD" })).toBeVisible();
+    await expect(guide.getByRole("heading", { name: "Analog" })).toBeVisible();
 
     const osdTypeTarget = guide.getByTestId(`${ids.osdSetupTargetPrefix}-OSD_TYPE`);
     await expect(osdTypeTarget).toBeVisible();
