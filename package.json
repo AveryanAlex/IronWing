@@ -8,7 +8,7 @@
     "format": "pnpm run format:frontend && pnpm run format:rust",
     "format:frontend": "biome format --write .",
     "format:rust": "cargo fmt --all",
-    "check": "pnpm run check:contracts && pnpm run check:frontend && pnpm run check:rust",
+    "check": "pnpm run check:contracts && pnpm run check:frontend && pnpm run check:workers && pnpm run check:rust",
     "generate:contracts": "cargo run -p ironwing-contract-export --",
     "check:contracts": "cargo run -p ironwing-contract-export -- --check",
     "check:frontend": "pnpm run check:frontend:format && pnpm run check:frontend:types && pnpm run check:e2e:types && pnpm run check:frontend:svelte",
@@ -17,6 +17,7 @@
     "check:frontend:types": "pnpm run sync:sveltekit && tsc --noEmit",
     "check:e2e:types": "pnpm run sync:sveltekit && tsc --noEmit -p tsconfig.e2e.json",
     "check:frontend:svelte": "pnpm run sync:sveltekit && svelte-check --tsconfig ./tsconfig.json",
+    "check:workers": "tsc --noEmit -p workers/assets-proxy/tsconfig.json",
     "check:rust": "pnpm run check:rust:format && pnpm run check:rust:cargo && pnpm run check:rust:clippy",
     "check:rust:format": "cargo fmt --all -- --check",
     "check:rust:cargo": "cargo check --workspace",
@@ -41,6 +42,8 @@
     "profile:hud:web": "node scripts/profile-web-hud.mjs",
     "profile:serve": "node scripts/profile-serve.mjs",
     "profile:compare": "node scripts/profile-compare.mjs",
+    "deploy:app": "wrangler deploy --config workers/app/wrangler.jsonc",
+    "deploy:assets-proxy": "wrangler deploy --config workers/assets-proxy/wrangler.jsonc",
     "internal:wasm": "node scripts/wasm-web-build.mjs",
     "tool:sitl:ws": "node scripts/sitl-ws.mjs"
   },
@@ -87,6 +90,7 @@
     "typescript": "^5.6.3",
     "vite": "^7.3.2",
     "vitest": "^4.0.18",
+    "wrangler": "^4.127.0",
     "ws": "^8.18.3"
   }
 }

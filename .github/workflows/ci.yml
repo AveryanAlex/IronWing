@@ -34,6 +34,9 @@ jobs:
       - name: Check frontend TypeScript
         run: pnpm run check:frontend:types
 
+      - name: Check Worker TypeScript
+        run: pnpm run check:workers
+
       - name: Check Svelte components
         run: pnpm run check:frontend:svelte
 
@@ -146,6 +149,8 @@ jobs:
     env:
       IRONWING_APTABASE_KEY: ${{ vars.IRONWING_APTABASE_KEY }}
       IRONWING_APTABASE_HOST: ${{ vars.IRONWING_APTABASE_HOST }}
+      IRONWING_ARDUPILOT_AUTOTEST_BASE_URL: https://assets.ironwing.dev/autotest
+      IRONWING_ARDUPILOT_FIRMWARE_BASE_URL: https://assets.ironwing.dev/firmware
       VITE_IRONWING_TOMTOM_API_KEY: ${{ vars.TOMTOM_API_KEY }}
     steps:
       - name: Checkout
@@ -226,35 +231,79 @@ jobs:
         env:
           IRONWING_E2E_SKIP_BUILD: "1"
 
-  publish-pages:
-    needs: [frontend, backend, native-e2e, build, e2e]
-    if: github.ref == 'refs/heads/main'
+  preview-cloudflare:
+    needs: [build]
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pages: write
-      id-token: write
     concurrency:
-      group: pages
+      group: cloudflare-preview-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+      name: preview/pr-${{ github.event.pull_request.number }}
+      url: ${{ steps.deploy-preview.outputs.deployment-url }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
       - name: Download web build artifact
         uses: actions/download-artifact@v4
         with:
           name: ironwing-web-dist
           path: dist/web
 
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload app Worker preview
+        id: deploy-preview
+        uses: cloudflare/wrangler-action@v4
         with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          packageManager: pnpm
+          command: versions upload --config workers/app/wrangler.jsonc --preview-alias pr-${{ github.event.pull_request.number }} --message "Preview PR ${{ github.event.pull_request.number }} at ${{ github.sha }}"
+
+  deploy-cloudflare:
+    needs: [frontend, backend, native-e2e, build, e2e]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    concurrency:
+      group: cloudflare-production
+      cancel-in-progress: true
+    environment:
+      name: app.ironwing.dev
+      url: https://app.ironwing.dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Download web build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ironwing-web-dist
           path: dist/web
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy assets proxy Worker
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          packageManager: pnpm
+          command: deploy --config workers/assets-proxy/wrangler.jsonc
+
+      - name: Deploy app Worker
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          packageManager: pnpm
+          command: deploy --config workers/app/wrangler.jsonc

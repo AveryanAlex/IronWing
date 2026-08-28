@@ -49,6 +49,7 @@ vendor/
 !src/vendor/**
 coverage/
 .cache/
+.wrangler/
 tmp/
 src/platform/web/generated/.gitignore
 src/platform/web/generated/ironwing_wasm.js

@@ -194,6 +194,27 @@ Frontend bundles are separated by target under `dist/`:
 
 Set `IRONWING_OUT_DIR` to override a specific build artifact directory.
 
-## CI
+## CI and Cloudflare hosting
 
-- `.github/workflows/ci.yml`: frontend checks/tests, backend checks/tests, native E2E, web build artifact creation, browser E2E from the downloaded artifact, and GitHub Pages publishing on `main` after all checks pass.
+- `.github/workflows/ci.yml`: frontend checks/tests, backend checks/tests, native E2E, web build artifact creation, browser E2E from the downloaded artifact, PR previews, and production deployment after all checks pass.
+
+The production deployment serves `dist/web` from the assets-only `ironwing-app` Worker on `app.ironwing.dev`. It also deploys the `ironwing-assets-proxy` Worker on `assets.ironwing.dev`; `/autotest/*` and `/firmware/*` proxy the corresponding ArduPilot asset origins with browser-compatible CORS headers. The production web bundle uses those routes for parameter metadata, firmware catalogs, and firmware downloads. No Cloudflare Pages project is needed.
+
+### Cloudflare setup
+
+1. In the Cloudflare dashboard, create a custom API token with these permissions:
+   - Account / Workers Scripts / Edit for the account that owns IronWing.
+   - Zone / Workers Routes / Edit for the `ironwing.dev` zone.
+2. Copy the account ID from the Cloudflare account overview.
+3. In the GitHub repository, open Settings / Secrets and variables / Actions and add:
+   - `CLOUDFLARE_API_TOKEN`: the custom token.
+   - `CLOUDFLARE_ACCOUNT_ID`: the account ID.
+4. Make sure the account has a `workers.dev` subdomain configured if PR/version preview URLs are wanted.
+
+The first successful deployment from `main` creates both Workers and provisions `app.ironwing.dev` and `assets.ironwing.dev` from their Wrangler configurations. Wrangler-managed custom domains also create the necessary proxied DNS records, so there is no separate Pages or DNS attachment step.
+
+### Previews and rollbacks
+
+Same-repository pull requests upload the app as an unpublished Worker version and expose it through a `pr-<number>` preview alias. The workflow records the generated immutable preview URL on the PR's GitHub deployment environment. Fork pull requests do not receive Cloudflare secrets and therefore do not deploy previews. Preview URLs use the account's `workers.dev` domain and are public unless protected with Cloudflare Access.
+
+Every production deploy also creates an immutable version with its own preview URL. Older versions can be opened from the Worker's Version History in Cloudflare and the 100 most recently published versions can be rolled back from the dashboard or with `pnpm exec wrangler rollback --config workers/app/wrangler.jsonc`.
