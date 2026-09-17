@@ -129,6 +129,22 @@ pub fn run() {
     if ble_plugin_enabled() {
         builder = builder.plugin(tauri_plugin_blec::init());
     }
+    #[cfg(target_os = "macos")]
+    {
+        builder = builder.on_window_event(|window, event| {
+            if window.label() != "main" {
+                return;
+            }
+            let tauri::WindowEvent::CloseRequested { api, .. } = event else {
+                return;
+            };
+
+            api.prevent_close();
+            if let Err(error) = window.hide() {
+                eprintln!("failed to hide the main window: {error}");
+            }
+        });
+    }
     #[cfg(target_os = "android")]
     {
         builder = builder
@@ -228,7 +244,7 @@ pub fn run() {
         firmware_bootloader_installation
     ]);
 
-    builder
+    let app = builder
         .setup(|_app| {
             let state = _app.state::<AppState>();
             state
@@ -247,6 +263,34 @@ pub fn run() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri app");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri app");
+
+    #[cfg(target_os = "macos")]
+    app.run(|app_handle, event| {
+        let tauri::RunEvent::Reopen {
+            has_visible_windows,
+            ..
+        } = event
+        else {
+            return;
+        };
+        if has_visible_windows {
+            return;
+        }
+        let Some(window) = app_handle.get_webview_window("main") else {
+            return;
+        };
+
+        if let Err(error) = window.show() {
+            eprintln!("failed to show the main window: {error}");
+            return;
+        }
+        if let Err(error) = window.set_focus() {
+            eprintln!("failed to focus the main window: {error}");
+        }
+    });
+
+    #[cfg(not(target_os = "macos"))]
+    app.run(|_, _| {});
 }
