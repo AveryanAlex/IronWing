@@ -397,6 +397,30 @@ mod tests {
             if self.get_tool(&request.name).is_none() {
                 return Err(ErrorData::invalid_params("Unknown tool", None));
             }
+            if request.name == "telemetry_read" {
+                return Ok(super::super::tools::tool_result("telemetry_read", Ok(json!({
+                    "session_id":"test", "requested_count":1, "interval_ms":1000, "completion":"complete",
+                    "points":[{"sampled_at_ms":1000,"values":[{"selector":"flight.altitude_m","value":60,"received_at_ms":990,"age_ms":10,"new_packet":true}]}]
+                }))).into());
+            }
+            if matches!(
+                request.name.as_ref(),
+                "parameters_search" | "parameters_read" | "telemetry_catalog" | "status_text_read"
+            ) {
+                let mode = request.arguments.as_ref().and_then(|args| args.get("mode"));
+                let value = match request.name.as_ref() {
+                    "parameters_search" | "parameters_read" => {
+                        json!({"session_id":"test","source":"live_parameter_cache","sync":"complete","total":1,"truncated":false,"_read_mode":mode,"parameters":[{"id":"A","value":1,"type":"real32","metadata_available":false}]})
+                    }
+                    "telemetry_catalog" => {
+                        json!({"session_id":"test","source":"live","named_fields":[],"observed_messages":[]})
+                    }
+                    _ => {
+                        json!({"session_id":"test","source":"live","entries":[],"cursor":{"session_id":"test","sequence":0},"history_lost":false})
+                    }
+                };
+                return Ok(super::super::tools::tool_result(&request.name, Ok(value)).into());
+            }
             if request.name == "vehicle_status" {
                 self.started.notify_one();
                 context.ct.cancelled().await;
@@ -424,7 +448,15 @@ mod tests {
         let client = ().serve(transport).await.unwrap();
         let tools = client.list_all_tools().await.unwrap();
         assert_eq!(tools.len(), 14);
-        assert!(tools.iter().all(|t| t.output_schema.is_some()));
+        assert!(tools.iter().all(|t| t.output_schema.is_some()
+            == (!matches!(
+                t.name.as_ref(),
+                "telemetry_read"
+                    | "telemetry_catalog"
+                    | "parameters_search"
+                    | "parameters_read"
+                    | "status_text_read"
+            ))));
         let result = client
             .call_tool(CallToolRequestParams::new("connection_status"))
             .await
@@ -436,6 +468,66 @@ mod tests {
                 .await
                 .is_err()
         );
+        let telemetry = client
+            .call_tool(CallToolRequestParams::new("telemetry_read"))
+            .await
+            .unwrap();
+        assert!(telemetry.structured_content.is_none());
+        let text = serde_json::to_value(&telemetry).unwrap();
+        assert!(
+            text["content"][1]["text"]
+                .as_str()
+                .unwrap()
+                .contains("flight.altitude_m,—,60@-10/10+\r\n")
+        );
+        for (name, arguments, header, blocks) in [
+            ("parameters_search", json!({}), "id,value,human_name,", 2),
+            (
+                "parameters_read",
+                json!({"ids":["A"]}),
+                "id,value,type,error\r\n",
+                2,
+            ),
+            (
+                "parameters_read",
+                json!({"ids":["A"],"mode":"details"}),
+                "id,value,type,error,metadata_available,",
+                2,
+            ),
+            (
+                "telemetry_catalog",
+                json!({}),
+                "name,units,message_id,field,scale\r\n",
+                3,
+            ),
+            (
+                "status_text_read",
+                json!({}),
+                "timestamp_usec,severity,sequence,text\r\n",
+                2,
+            ),
+        ] {
+            let result = client
+                .call_tool(
+                    CallToolRequestParams::new(name)
+                        .with_arguments(arguments.as_object().unwrap().clone()),
+                )
+                .await
+                .unwrap();
+            assert!(result.structured_content.is_none(), "{name}");
+            assert_eq!(result.content.len(), blocks);
+            let result = serde_json::to_value(result).unwrap();
+            assert!(
+                result["content"][1]["text"]
+                    .as_str()
+                    .unwrap()
+                    .starts_with(header),
+                "{name}"
+            );
+            let context: serde_json::Value =
+                serde_json::from_str(result["content"][0]["text"].as_str().unwrap()).unwrap();
+            assert_eq!(context["session_id"], "test");
+        }
         let request = client
             .send_cancellable_request(
                 rmcp::model::CallToolRequest::new(CallToolRequestParams::new("vehicle_status"))

@@ -17,24 +17,34 @@ Configuration is persisted in the Tauri app configuration directory as `mcp.json
 | `vehicle_connect` | `transport` with `kind` and settings; optional `replace` and `auto_record_on_connect`. Serial: `{kind:"serial",port:"/dev/ttyACM0",baud:115200}`; TCP: `{kind:"tcp",address:"127.0.0.1:5760"}`; UDP: `{kind:"udp",bind_addr:"0.0.0.0:14550"}`; BLE: `{kind:"bluetooth_ble",address:"…",profile:"nordic_uart"}`; demo: `{kind:"demo",vehicle_preset:"airplane"}`. |
 | `vehicle_disconnect` | Optional expected `session_id`; disconnects the same vehicle visible in the UI. |
 | `vehicle_status` | Live mode/armed state, firmware, hardware, unique IDs, link and sensor health. Connected serial-device USB information includes its serial number when available. The 64-bit UID is a decimal string to avoid precision loss in JSON clients. Unavailable information is null. |
-| `parameters_search` | Optional `regex`, `case_sensitive` (false), `limit`; searches ID, human name and description. Omit regex and limit for all parameters, sorted by ID. Returns total and explicit truncation. |
-| `parameters_read` | `ids: string[]`; confirmed cached values plus metadata and synchronization state. Downloads an empty cache first. Unknown IDs have per-item `not_found` errors. |
+| `parameters_search` | Optional `regex`, `case_sensitive` (false), `limit` (50); searches ID, human name and description. Omit regex to match all parameters, sorted by ID. An explicit limit has no application maximum; set it to the reported total to retrieve all matches. Returns a context header with total/truncation, then brief CSV: `id,value,human_name,units,read_only,reboot_required,metadata_available`. `limit: 0` returns the count and a header-only CSV. |
+| `parameters_read` | `ids: string[]`, optional `mode` (`values` default or `details`). Always CSV: values uses `id,value,type,error`; details adds metadata columns. Downloads an empty cache first. Unknown IDs have per-item `not_found` errors. |
 | `parameters_write` | `params: [{id,value}]`, optional expected `session_id`; immediate batch write with requested/confirmed values and per-item success. No UI approval, clamping, automatic reboot or application of UI-staged edits. Not atomic. |
 | `parameters_refresh` | Optional expected `session_id`; waits for a complete new download and reports count/sync. |
-| `telemetry_catalog` | Named metrics with source message IDs and units, plus observed raw packet fields. |
+| `telemetry_catalog` | Three text blocks: context, CSV named metrics (`name,units,message_id,field,scale`), CSV observed packets (`message_id,name,component_id,instance,fields,age_ms`). |
 | `message_rates_write` | `rates: [{message_id,rate_hz}]`, optional expected `session_id`; rates 0.1–50 Hz. Results acknowledge stream requests; actual receipt is measured separately. Does not change UI refresh cadence. |
-| `telemetry_read` | `fields`, `count` (1), `interval_ms` (1000); returns a timed collection of points. |
-| `status_text_read` | Optional `cursor: {session_id,sequence}` and `severity: string[]`; shared last 100 STATUSTEXT entries with next cursor and `history_lost`. |
+| `telemetry_read` | `fields`, `count` (1), `interval_ms` (1000); returns two text blocks: a brief session/timing legend, then plain CSV. No `structuredContent` or output JSON Schema. |
+| `status_text_read` | Optional `cursor: {session_id,sequence}` and `severity: string[]`; always CSV (`timestamp_usec,severity,sequence,text`), including empty/small histories. Context includes next cursor and `history_lost`; shared last 100 STATUSTEXT entries. |
 | `vehicle_reboot` | Optional expected `session_id`; acknowledges reboot command, not completed boot. Check status and reconnect afterwards if needed. |
 
-All parameter reads identify their cache synchronization state. Metadata includes ID, value/type, human name, description, range, increment, units, enum options, bitmask, read-only/reboot flags and user level. `metadata_available=false` distinguishes missing documentation from an unknown parameter. Backend metadata uses the same versioned/family/SITL/AP_Periph precedence as the frontend, a seven-day disk cache, and stale-cache fallback when offline.
+All parameter reads identify their cache synchronization state. `parameters_search` is compact discovery; use `parameters_read({"ids":["BARO_TYPE"],"mode":"details"})` for full documentation. The default `mode:"values"` does not fetch metadata. Agents should use a focused search regex and deliberate limit, then request `mode:"details"` only for relevant IDs to understand their documentation before interpreting or changing them. Reading all discovered IDs in `mode:"values"` is allowed but moderately expensive (about 17k tokens for the 1438-parameter demo snapshot). Reuse the snapshot instead of repeatedly fetching every value: configuration parameters normally remain stable until changed. Re-read affected IDs after writes, and obtain a fresh snapshot when the vehicle/session changes or freshness is required. Detailed CSV includes ID, value/type, human name, description, range, increment, units, enum options, bitmask, read-only/reboot flags and user level. `metadata_available=false` distinguishes missing documentation from an unknown parameter. Backend metadata uses the same versioned/family/SITL/AP_Periph precedence as the frontend, a seven-day disk cache, and stale-cache fallback when offline.
+
+### Compact read responses
+
+`parameters_search`, `parameters_read`, `telemetry_catalog` and `status_text_read` always return text-only content, with no `structuredContent` or output JSON Schema. The first text block is a small JSON context header (session, source, counts, and synchronization or cursor/history-loss where applicable). Subsequent blocks are plain CSV, without Markdown fences or alignment padding. Parse each CSV block separately. CSV uses comma separators, CRLF records, double-quoted fields when needed, and doubled quotes inside quoted fields. Embedded line breaks in descriptions/alerts are preserved: use a CSV parser, not a line split. `—` denotes an unavailable/null value; `false`, `0` and empty strings remain distinct.
+
+Parameter details extend the value columns with `metadata_available,human_name,description,range,increment,units,unit_text,values,bitmask,read_only,reboot_required,user_level`. `range`, enum `values`, and `bitmask` cells contain compact JSON encoded with ordinary CSV quoting; decode the CSV cell first, then its JSON. No metadata is silently truncated. The observed-packet catalog uses the same convention for its `fields` array. A successful parameter row has `error=—`; unknown IDs have `error=not_found` and unavailable value/type cells. Search remains sorted by ID, defaults to 50 results, and has no application cap on an explicit limit.
+
+The CSV context for parameter reads retains `sync,total,truncated,returned`; `total` for batch reads includes requested IDs that were not found. The catalog context includes `named_count,observed_count`, raw units, a raw-selector example and the stream-rate note. Alert context retains the full `{session_id,sequence}` cursor and `history_lost`, even when filtering yields no entries. Alert timestamps keep the original `timestamp_usec` precision; missing timestamps are `—`. These read tools return text errors with MCP `isError=true`.
+
+`devices_list`, connection/vehicle status, refresh, writes, connection changes and reboot retain their structured JSON results and output schemas. Telemetry samples retain their separate timing legend and time-in-columns CSV format described below.
 
 Writes use the existing live runtime and remain blocked while playback is the effective UI source. Reads are explicitly live, never replay samples. An agent connection session is independent of an MCP HTTP session and is invalidated when the vehicle changes. Pass `session_id` on mutations when decisions were based on an earlier status/read. Concurrent MAVLink parameter/mission operations may return an operation conflict; retry after the active operation completes. A cancelled or failed batch never implies rollback of already acknowledged changes.
 
 ## Example: inspect a barometer and IMU
 
 1. `devices_list`, then `vehicle_connect` using the desired endpoint and baud rate/profile.
-2. `parameters_search({"regex":"^(BARO|INS)_"})` and `parameters_read` for the parameters of interest.
+2. `parameters_search({"regex":"^(BARO|INS)_"})`, then `parameters_read({"ids":["BARO_TYPE"],"mode":"details"})` for documentation, or omit `mode` for just values.
 3. `parameters_write` if changes are needed; inspect confirmation results. Reboot only when necessary.
 4. `telemetry_catalog` to discover sensor names and source message IDs.
 5. Enable the primary pressure and scaled IMU streams:
@@ -53,7 +63,16 @@ Writes use the existing live runtime and remain blocked while playback is the ef
 }
 ```
 
-The first point is sampled immediately, so ten points span nine seconds. Each field has `received_at_ms`, `age_ms`, and `new_packet`. Equal values with `new_packet=true` mean new packets arrived; `new_packet=false` with growing age means a repeated cached observation. This establishes stream activity, not whether the sensor hardware is internally healthy. Missing data is null; reading never enables streams automatically. Normalized flight metrics come from mavkit; barometers and IMUs come from scaled MAVLink packets. Sensor indices 0/1/2 select separate SCALED_PRESSURE / SCALED_PRESSURE2 / SCALED_PRESSURE3 and SCALED_IMU / SCALED_IMU2 / SCALED_IMU3 messages.
+The first point is sampled immediately, so ten points span nine seconds. The second text block is standard comma-separated CSV: sample times are columns, each selected sensor field occupies one row, and the source is listed once per row. The first block contains the session/timing legend; pass only the second block to a CSV parser. CSV records use CRLF; fields containing commas, quotes or line breaks are quoted, and embedded quotes are doubled. No Markdown fencing or padding spaces are added. `t0` is Unix milliseconds; time-column headers and `rx` are millisecond offsets from `t0`. Each cell is `value@rx/age`, with `+` when a new packet arrived since the previous sample. No `+` means a cached packet, and `—` marks missing values. If a field changes source (component/instance/message), `#n` selects its source in the Source column. Values retain their numeric precision; timestamps and age remain recoverable without repeating long JSON keys.
+
+For example, a constant value from two fresh packets followed by a stalled stream is:
+
+```csv
+Field,Source,0,1000,2000
+barometer.0.pressure_hpa,"msg=29, comp=1",1013.25@-10/10+,1013.25@990/10+,1013.25@990/1010
+```
+
+The response header includes the session, actual/requested point counts, interval and completion reason, including partial or empty results after cancellation. Vehicle boot-clock metadata is omitted; packet receipt times use the host clock. This establishes stream activity, not whether the sensor hardware is internally healthy. Reading never enables streams automatically. Normalized flight metrics come from mavkit; barometers and IMUs come from scaled MAVLink packets. Sensor indices 0/1/2 select separate SCALED_PRESSURE / SCALED_PRESSURE2 / SCALED_PRESSURE3 and SCALED_IMU / SCALED_IMU2 / SCALED_IMU3 messages.
 
 Raw fields may be requested even before their first packet, e.g.:
 

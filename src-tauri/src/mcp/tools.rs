@@ -6,13 +6,13 @@ use ironwing_core::{
 use rmcp::{
     ErrorData, RoleServer, ServerHandler,
     model::{
-        CallToolRequestParams, CallToolResponse, CallToolResult, ListToolsResult,
+        CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ListToolsResult,
         PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool, ToolAnnotations,
     },
     service::RequestContext,
 };
 use schemars::JsonSchema;
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 use std::{collections::HashSet, sync::Arc, time::Duration};
 use tauri::Manager;
@@ -114,12 +114,27 @@ struct Search {
     regex: Option<String>,
     #[serde(default)]
     case_sensitive: bool,
-    limit: Option<usize>,
+    /// Maximum results to return, default 50. No application maximum; raise it to fetch more.
+    #[serde(default = "search_limit")]
+    limit: usize,
+}
+fn search_limit() -> usize {
+    50
 }
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct ReadParams {
     ids: Vec<String>,
+    /// values (default): compact CSV; details: CSV with additional metadata columns.
+    #[serde(default)]
+    mode: ParameterReadMode,
+}
+#[derive(Default, Deserialize, Serialize, JsonSchema, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+enum ParameterReadMode {
+    #[default]
+    Values,
+    Details,
 }
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -175,8 +190,20 @@ fn definition<T: JsonSchema>(name: &'static str, description: &'static str, read
             )
             .open_world(true),
     );
-    tool.output_schema = Some(Arc::new(super::schemas::output(name)));
+    if !has_text_output(name) {
+        tool.output_schema = Some(Arc::new(super::schemas::output(name)));
+    }
     tool
+}
+fn has_text_output(name: &str) -> bool {
+    matches!(
+        name,
+        "telemetry_read"
+            | "telemetry_catalog"
+            | "parameters_search"
+            | "parameters_read"
+            | "status_text_read"
+    )
 }
 pub fn definitions() -> Vec<Tool> {
     vec![
@@ -207,12 +234,12 @@ pub fn definitions() -> Vec<Tool> {
         ),
         definition::<Search>(
             "parameters_search",
-            "Search cached vehicle parameters by regex across ID, human name and description (case-insensitive default). Omit regex and limit for ALL parameters. Automatically downloads an empty cache.",
+            "Search cached vehicle parameters by regex across ID, human name and description (case-insensitive default). Omit regex to search all parameters. Returns at most limit (default 50); no maximum on an explicit limit. Returns text blocks: JSON cache/sync/count header, then brief CSV (id,value,human_name,units,read_only,reboot_required,metadata_available). Use a focused regex and a deliberate limit to find relevant IDs, then call parameters_read with mode=details for full metadata: this is important for understanding parameter documentation before interpreting or changing values. Fetch details only for relevant IDs; descriptions and enums can be large. Reading all discovered IDs with parameters_read mode=values is allowed but moderately expensive. Reuse that snapshot instead of repeatedly reading all parameters: configuration values normally remain stable until changed. Re-read affected IDs after writes, or obtain a new snapshot when the vehicle/session changes or freshness is required. Automatically downloads an empty cache.",
             true,
         ),
         definition::<ReadParams>(
             "parameters_read",
-            "Read several parameter IDs from the shared confirmed cache with metadata and synchronization state. An empty cache is downloaded first; use parameters_refresh for a new download.",
+            "Read several parameter IDs from the shared confirmed cache. mode=values (default): text blocks with JSON cache/sync header and CSV id,value,type,error; mode=details: CSV with additional metadata columns, including ranges, enums and bitmasks as JSON cells. Use mode=details to understand parameter documentation; first narrow the IDs with parameters_search regex and limit. Reading all IDs in mode=values is allowed but moderately expensive (about 17k tokens for 1.4k demo parameters; actual size varies). Avoid repeated full reads: configuration values normally remain stable until changed. Reuse the snapshot and re-read affected IDs after writes; refresh the snapshot on vehicle/session changes or when freshness is required. Unknown IDs have not_found errors. An empty cache is downloaded first; use parameters_refresh for a new download.",
             true,
         ),
         definition::<WriteParams>(
@@ -227,7 +254,7 @@ pub fn definitions() -> Vec<Tool> {
         ),
         definition::<Empty>(
             "telemetry_catalog",
-            "Named live metrics (including barometers/IMUs), source message IDs, units and fields of observed MAVLink packets. Reading does not enable streams.",
+            "Three text blocks: session/context header, CSV named metrics (name,units,message_id,field,scale), then CSV observed MAVLink packets with field lists as JSON cells, including component and instance IDs. No duplicated structuredContent. Reading does not enable streams.",
             true,
         ),
         definition::<Rates>(
@@ -237,12 +264,12 @@ pub fn definitions() -> Vec<Tool> {
         ),
         definition::<telemetry::ReadRequest>(
             "telemetry_read",
-            "Sample multiple named metrics or raw MAVLink fields. First point immediately; defaults count=1, interval_ms=1000. At most 1000 points/64 fields/60 seconds. Per-field receive timestamps and new_packet distinguish frozen streams from unchanged values. Does not enable streams.",
+            "Return text-only CSV (second content block; first block describes session and timing). Time is in columns; sensor fields are rows. Compact samples of multiple named metrics or raw MAVLink fields. First point immediately; defaults count=1, interval_ms=1000. At most 1000 points/64 fields/60 seconds. Cells show value@rx/age (+ = new packet); rx is relative to the reported t0 Unix milliseconds. Missing values are marked —. Does not enable streams.",
             true,
         ),
         definition::<StatusTexts>(
             "status_text_read",
-            "Read the same last 100 STATUSTEXT alerts as the dashboard. Severity is an exact-name filter. Cursor includes session_id and sequence; reports history loss.",
+            "Read the same last 100 STATUSTEXT alerts as the dashboard. Severity is an exact-name filter. Cursor includes session_id and sequence; reports history loss. Always returns CSV in two text blocks: JSON cursor/history header, then timestamp_usec,severity,sequence,text; no structuredContent.",
             true,
         ),
         definition::<SessionRequest>(
@@ -288,11 +315,31 @@ impl ServerHandler for IronWingMcp {
                 result=tokio::time::timeout(Duration::from_secs(120),self.dispatch(&request.name,args,&context.ct))=>result.unwrap_or_else(|_|Err("operation timed out; already acknowledged writes are not rolled back".into()))
             }
         };
-        Ok(match result {
-            Ok(value) => CallToolResult::structured(value),
-            Err(message) => CallToolResult::structured_error(json!({"error":message})),
+        Ok(tool_result(&request.name, result).into())
+    }
+}
+pub(super) fn tool_result(name: &str, result: Result<Value, String>) -> CallToolResult {
+    match result {
+        Ok(mut value) => {
+            // Presentation markers are internal and never part of the public JSON response.
+            let mode = value.as_object_mut().and_then(|v| v.remove("_read_mode"));
+            let blocks = match name {
+                "telemetry_read" => super::telemetry_csv::render(&value).to_vec(),
+                "telemetry_catalog" => super::csv::catalog(value),
+                "parameters_search" => super::csv::parameter_search(value),
+                "parameters_read" => super::csv::parameter_read(
+                    value,
+                    mode.as_ref().and_then(Value::as_str) == Some("details"),
+                ),
+                "status_text_read" => super::csv::status_text(value),
+                _ => return CallToolResult::structured(value),
+            };
+            CallToolResult::success(blocks.into_iter().map(ContentBlock::text).collect())
         }
-        .into())
+        Err(message) if has_text_output(name) => {
+            CallToolResult::error(vec![ContentBlock::text(message)])
+        }
+        Err(message) => CallToolResult::structured_error(json!({"error":message})),
     }
 }
 fn parse<T: DeserializeOwned>(args: Value) -> Result<T, String> {
@@ -402,8 +449,8 @@ fn select_parameters(
     };
     params.sort_by(|a, b| a["id"].as_str().cmp(&b["id"].as_str()));
     let total = params.len();
-    if let Some(limit) = query.and_then(|q| q.limit) {
-        params.truncate(limit);
+    if let Some(query) = query {
+        params.truncate(query.limit);
     }
     json!({"total":total,"truncated":params.len()<total,"parameters":params})
 }
@@ -499,16 +546,25 @@ impl IronWingMcp {
                 )
             }
             "parameters_search" | "parameters_read" => {
-                let (query, ids) = if name == "parameters_search" {
-                    (Some(parse::<Search>(args)?), None)
+                let (query, ids, mode) = if name == "parameters_search" {
+                    (
+                        Some(parse::<Search>(args)?),
+                        None,
+                        ParameterReadMode::Details,
+                    )
                 } else {
-                    (None, Some(parse::<ReadParams>(args)?.ids))
+                    let request: ReadParams = parse(args)?;
+                    (None, Some(request.ids), request.mode)
                 };
                 let regex = compile_query(query.as_ref())?;
                 let (s, v) = session(&state, None)?;
                 bound(&s, async {
                     let store = ensure_params(&v).await?;
-                    let metadata = state.mcp.metadata.get(&self.app, &v).await;
+                    let metadata = if mode == ParameterReadMode::Details {
+                        state.mcp.metadata.get(&self.app, &v).await
+                    } else {
+                        Default::default()
+                    };
                     let mut result = select_parameters(
                         &store,
                         &metadata,
@@ -519,6 +575,7 @@ impl IronWingMcp {
                     result["session_id"] = json!(s.id);
                     result["source"] = json!("live_parameter_cache");
                     result["sync"] = json!(v.params().latest().map(|state| state.sync));
+                    result["_read_mode"] = json!(mode);
                     Ok(result)
                 })
                 .await
@@ -631,6 +688,7 @@ impl IronWingMcp {
                 .await;
                 result["session_id"] = json!(s.id);
                 result["source"] = json!("live");
+                result["fields"] = json!(request.fields);
                 Ok(result)
             }
             "status_text_read" => {
@@ -684,6 +742,125 @@ impl IronWingMcp {
 mod tests {
     use super::*;
     #[test]
+    fn compact_tools_never_send_duplicate_structured_content() {
+        for name in [
+            "parameters_search",
+            "parameters_read",
+            "telemetry_catalog",
+            "status_text_read",
+        ] {
+            let result = tool_result(name, Ok(json!({})));
+            assert!(result.structured_content.is_none(), "{name}");
+            assert_eq!(
+                result.content.len(),
+                if name == "telemetry_catalog" { 3 } else { 2 }
+            );
+            assert!(
+                tool_result(name, Err("invalid_arguments".into()))
+                    .structured_content
+                    .is_none()
+            );
+        }
+        let json_result = tool_result("parameters_write", Ok(json!({"results":[]})));
+        assert_eq!(
+            json_result.structured_content.unwrap()["results"],
+            json!([])
+        );
+    }
+    #[test]
+    fn parameter_read_details_expand_csv_instead_of_switching_format() {
+        let default: ReadParams = parse(json!({"ids":["A"]})).unwrap();
+        assert!(default.mode == ParameterReadMode::Values);
+        assert!(parse::<ReadParams>(json!({"ids":[],"mode":"json"})).is_err());
+        let details: ReadParams = parse(json!({"ids":["A"],"mode":"details"})).unwrap();
+        let result = tool_result(
+            "parameters_read",
+            Ok(json!({
+                "_read_mode":details.mode,"parameters":[{"id":"A","value":0,"type":"real32"}]
+            })),
+        );
+        assert!(result.structured_content.is_none());
+        let content = serde_json::to_value(result).unwrap();
+        assert!(
+            content["content"][1]["text"].as_str().unwrap().starts_with(
+                "id,value,type,error,metadata_available,human_name,description,range,"
+            )
+        );
+        assert!(
+            !content["content"][0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("_read_mode")
+        );
+    }
+    #[test]
+    fn search_defaults_to_fifty_and_explicit_limits_are_not_capped() {
+        let mut store = mavkit::ParamStore::default();
+        for index in 0..80 {
+            let name = format!("P{index:03}");
+            store.params.insert(
+                name.clone(),
+                mavkit::Param {
+                    name,
+                    value: 1.0,
+                    param_type: mavkit::ParamType::Real32,
+                    index,
+                },
+            );
+        }
+        let metadata = Default::default();
+        let query: Search = parse(json!({})).unwrap();
+        let result = select_parameters(&store, &metadata, None, Some(&query), None);
+        assert_eq!(result["parameters"].as_array().unwrap().len(), 50);
+        assert_eq!(result["parameters"][49]["id"], "P049");
+        assert_eq!(result["total"], 80);
+        assert_eq!(result["truncated"], true);
+        for limit in [0, 1, 75, 1_000_000] {
+            let query: Search = parse(json!({"limit":limit})).unwrap();
+            let result = select_parameters(&store, &metadata, None, Some(&query), None);
+            assert_eq!(
+                result["parameters"].as_array().unwrap().len(),
+                limit.min(80)
+            );
+            assert_eq!(result["truncated"], limit < 80);
+        }
+        // Batch reads are unaffected by the search default.
+        let ids: Vec<_> = store.iter().map(|(id, _)| id.clone()).collect();
+        assert_eq!(
+            select_parameters(&store, &metadata, Some(&ids), None, None)["parameters"]
+                .as_array()
+                .unwrap()
+                .len(),
+            80
+        );
+        let schema = serde_json::to_value(schemars::schema_for!(Search)).unwrap();
+        assert_eq!(schema["properties"]["limit"]["default"], 50);
+        assert!(schema["properties"]["limit"].get("maximum").is_none());
+    }
+    #[test]
+    fn telemetry_success_and_errors_are_text_only() {
+        let result = tool_result(
+            "telemetry_read",
+            Ok(
+                json!({"session_id":"demo","requested_count":1,"interval_ms":1000,"completion":"cancelled","points":[]}),
+            ),
+        );
+        assert!(result.structured_content.is_none());
+        assert_eq!(result.content.len(), 2);
+        assert_eq!(result.is_error, Some(false));
+        let error = tool_result("telemetry_read", Err("invalid_arguments".into()));
+        assert!(error.structured_content.is_none());
+        assert_eq!(error.is_error, Some(true));
+        assert!(
+            definitions()
+                .iter()
+                .find(|t| t.name == "telemetry_read")
+                .unwrap()
+                .output_schema
+                .is_none()
+        );
+    }
+    #[test]
     fn regex_search_all_and_missing_metadata_keep_confirmed_values() {
         let mut store = mavkit::ParamStore::default();
         for (index, id) in ["BARO_TEST", "INS_TEST"].into_iter().enumerate() {
@@ -704,7 +881,7 @@ mod tests {
         let query = Search {
             regex: Some("barometer".into()),
             case_sensitive: false,
-            limit: None,
+            limit: search_limit(),
         };
         let regex = compile_query(Some(&query)).unwrap();
         let selected = select_parameters(&store, &metadata, None, Some(&query), regex.as_ref());
@@ -716,7 +893,7 @@ mod tests {
         let invalid = Search {
             regex: Some("[".into()),
             case_sensitive: false,
-            limit: None,
+            limit: search_limit(),
         };
         assert!(compile_query(Some(&invalid)).is_err());
     }

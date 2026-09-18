@@ -4,6 +4,8 @@ use ironwing_core::ipc::mcp::{McpSettings, McpSettingsResult};
 use tauri::Manager;
 
 #[cfg(not(target_os = "android"))]
+mod csv;
+#[cfg(not(target_os = "android"))]
 mod metadata;
 #[cfg(not(target_os = "android"))]
 mod schemas;
@@ -11,6 +13,8 @@ mod schemas;
 mod server;
 #[cfg(not(target_os = "android"))]
 mod telemetry;
+#[cfg(not(target_os = "android"))]
+mod telemetry_csv;
 #[cfg(not(target_os = "android"))]
 mod tools;
 #[cfg(not(target_os = "android"))]

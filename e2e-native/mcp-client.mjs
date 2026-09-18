@@ -45,12 +45,20 @@ export async function connectMcp(endpoint, token) {
   }
   await request("initialize", { protocolVersion: "2025-11-25", capabilities: {}, clientInfo: { name: "ironwing-native-smoke", version: "1" } });
   await request("notifications/initialized", {}, true);
+  async function callTool(name, args) {
+    const result = await request("tools/call", { name, arguments: args });
+    if (result.isError) throw new Error(`${name}: ${JSON.stringify(result.structuredContent ?? result.content)}`);
+    return result;
+  }
   return {
     listTools: () => request("tools/list", {}),
     async call(name, args = {}) {
-      const result = await request("tools/call", { name, arguments: args });
-      if (result.isError) throw new Error(`${name}: ${JSON.stringify(result.structuredContent ?? result.content)}`);
-      return result.structuredContent;
+      return (await callTool(name, args)).structuredContent;
+    },
+    async callTextBlocks(name, args = {}) {
+      const result = await callTool(name, args);
+      if (result.structuredContent !== undefined) throw new Error(`${name}: expected text-only result`);
+      return result.content.filter((item) => item.type === "text").map((item) => item.text);
     },
   };
 }
