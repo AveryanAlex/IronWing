@@ -3,7 +3,9 @@ import { untrack } from "svelte";
 import { fromStore } from "svelte/store";
 
 import {
+  buildParameterCatalogSnapshot,
   buildParameterCatalogView,
+  prepareParameterCatalog,
   type ParameterCatalogFilter,
   type ParameterCatalogItem,
 } from "../../../lib/params/parameter-catalog-view";
@@ -32,16 +34,24 @@ const parameterViewStore = fromStore(getParameterWorkspaceViewStoreContext());
 let searchText = $state(untrack(() => initialSearchText));
 let filter = $state<ParameterCatalogFilter>(untrack(() => initialFilter));
 
-let params = $derived(paramsState.current);
 let view = $derived(parameterViewStore.current);
 let emptyState = $derived(emptyStateCopy(view.status));
 let replayReadonly = $derived(isReplayReadonly(view.activeEnvelope?.source_kind ?? null));
+let paramStore = $derived(paramsState.current.paramStore);
+let metadata = $derived(paramsState.current.metadata);
+let stagedEdits = $derived(paramsState.current.stagedEdits);
+let retainedFailures = $derived(paramsState.current.retainedFailures);
+let preparedCatalog = $derived(prepareParameterCatalog(paramStore, metadata));
+let catalogSnapshot = $derived(
+  buildParameterCatalogSnapshot({
+    catalog: preparedCatalog,
+    stagedEdits,
+    retainedFailures,
+  }),
+);
 let catalogView = $derived.by(() =>
   buildParameterCatalogView({
-    paramStore: params.paramStore,
-    metadata: params.metadata,
-    stagedEdits: params.stagedEdits,
-    retainedFailures: params.retainedFailures,
+    catalog: catalogSnapshot,
     filter,
     searchText,
   }),

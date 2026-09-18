@@ -56,11 +56,20 @@ export type ParameterWorkspaceView = {
 };
 
 export function createParameterWorkspaceViewStore(store: Readable<ParamsStoreState>) {
+  let previousParamStore: ParamsStoreState["paramStore"] | undefined;
+  let previousMetadata: ParamsStoreState["metadata"] | undefined;
+  let cachedBaseSections: ParameterWorkspaceSection[] = [];
+
   return derived(store, ($params): ParameterWorkspaceView => {
     const status = resolveWorkspaceStatus($params);
     const readiness = resolveWorkspaceReadiness($params, status);
-    const baseSections = buildParameterWorkspaceSections($params.paramStore, $params.metadata);
-    const sections = baseSections.map((section) => ({
+    if ($params.paramStore !== previousParamStore || $params.metadata !== previousMetadata) {
+      previousParamStore = $params.paramStore;
+      previousMetadata = $params.metadata;
+      cachedBaseSections = buildParameterWorkspaceSections($params.paramStore, $params.metadata);
+    }
+
+    const sections = cachedBaseSections.map((section) => ({
       ...section,
       items: section.items.map((item) => applyStagedItemState(item, $params.stagedEdits[item.name])),
     }));

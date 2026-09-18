@@ -42,6 +42,7 @@ export type ParameterCatalogGroup = {
   key: string;
   label: string;
   rows: ParameterCatalogItem[];
+  modifiedCount: number;
 };
 
 export type ParameterCatalogView = {
@@ -60,59 +61,121 @@ export type ParameterCatalogRetainedFailure = {
   message: string;
 };
 
-export function buildParameterCatalogView(args: {
-  paramStore: ParamStore | null;
-  metadata: ParamMetadataMap | null;
-  stagedEdits: Record<string, StagedParameterEdit>;
-  retainedFailures: Record<string, ParameterCatalogRetainedFailure>;
-  filter: ParameterCatalogFilter;
-  searchText: string;
-}): ParameterCatalogView {
-  const rows = buildParameterItemModels(args.paramStore, args.metadata).map((item, index) =>
-    buildCatalogItem(item, index, args.metadata?.get(item.name), args.stagedEdits[item.name], args.retainedFailures[item.name]),
-  );
-  const normalizedSearch = args.searchText.trim().toLowerCase();
+type PreparedParameterCatalogItem = Omit<
+  ParameterCatalogItem,
+  "isStaged" | "stagedValue" | "hasFailure"
+>;
 
-  const visibility = rows.map((row) => {
-    const matchesFilter = matchesCatalogFilter(row, args.filter);
-    const matchesSearch = matchesCatalogSearch(row, normalizedSearch);
+type PreparedParameterCatalogRow = {
+  item: PreparedParameterCatalogItem;
+  searchKey: string;
+};
+
+type ParameterCatalogSnapshotRow = {
+  item: ParameterCatalogItem;
+  searchKey: string;
+};
+
+export type PreparedParameterCatalog = {
+  metadataAvailable: boolean;
+  rows: PreparedParameterCatalogRow[];
+};
+
+export type ParameterCatalogSnapshot = {
+  metadataAvailable: boolean;
+  rows: ParameterCatalogSnapshotRow[];
+  stagedCount: number;
+};
+
+export function prepareParameterCatalog(
+  paramStore: ParamStore | null,
+  metadata: ParamMetadataMap | null,
+): PreparedParameterCatalog {
+  const rows = buildParameterItemModels(paramStore, metadata).map((item, index) => {
+    const catalogItem = buildPreparedCatalogItem(item, index, metadata?.get(item.name));
     return {
-      ...row,
-      matchesFilter,
-      matchesSearch,
-      isVisible: matchesFilter && matchesSearch,
+      item: catalogItem,
+      searchKey: buildCatalogSearchKey(catalogItem),
     };
   });
 
-  const matchingCount = visibility.filter((row) => row.matchesFilter && row.matchesSearch).length;
-  const visibleRows = visibility.filter((row) => row.isVisible);
-  const hiddenStagedRows = visibility.filter((row) => (row.isStaged || row.hasFailure) && !row.isVisible);
+  return {
+    metadataAvailable: metadata !== null,
+    rows,
+  };
+}
+
+export function buildParameterCatalogSnapshot(args: {
+  catalog: PreparedParameterCatalog;
+  stagedEdits: Record<string, StagedParameterEdit>;
+  retainedFailures: Record<string, ParameterCatalogRetainedFailure>;
+}): ParameterCatalogSnapshot {
+  let stagedCount = 0;
+  const rows = args.catalog.rows.map(({ item, searchKey }) => {
+    const stagedEdit = args.stagedEdits[item.name];
+    const isStaged = Boolean(stagedEdit && stagedEdit.nextValue !== item.value);
+    if (isStaged) {
+      stagedCount += 1;
+    }
+
+    return {
+      searchKey,
+      item: {
+        ...item,
+        isStaged,
+        stagedValue: isStaged ? stagedEdit?.nextValue ?? null : null,
+        hasFailure: Boolean(args.retainedFailures[item.name]),
+      },
+    };
+  });
+
+  return {
+    metadataAvailable: args.catalog.metadataAvailable,
+    rows,
+    stagedCount,
+  };
+}
+
+export function buildParameterCatalogView(args: {
+  catalog: ParameterCatalogSnapshot;
+  filter: ParameterCatalogFilter;
+  searchText: string;
+}): ParameterCatalogView {
+  const normalizedSearch = args.searchText.trim().toLowerCase();
+  const visibleRows: ParameterCatalogItem[] = [];
+  const hiddenStagedRows: ParameterCatalogItem[] = [];
+
+  for (const row of args.catalog.rows) {
+    const matchesFilter = matchesCatalogFilter(row.item, args.filter);
+    const matchesSearch = normalizedSearch.length === 0 || row.searchKey.includes(normalizedSearch);
+    if (matchesFilter && matchesSearch) {
+      visibleRows.push(row.item);
+    } else if (row.item.isStaged || row.item.hasFailure) {
+      hiddenStagedRows.push(row.item);
+    }
+  }
 
   return {
     filter: args.filter,
     searchText: args.searchText,
-    metadataAvailable: args.metadata !== null,
-    totalCount: rows.length,
-    matchingCount,
+    metadataAvailable: args.catalog.metadataAvailable,
+    totalCount: args.catalog.rows.length,
+    matchingCount: visibleRows.length,
     visibleCount: visibleRows.length,
-    stagedCount: rows.filter((row) => row.isStaged).length,
+    stagedCount: args.catalog.stagedCount,
     hiddenStagedRows,
     groups: buildGroups(visibleRows),
   };
 }
 
-function buildCatalogItem(
+function buildPreparedCatalogItem(
   item: ParameterItemModel,
   index: number,
   meta: ParamMeta | undefined,
-  stagedEdit: StagedParameterEdit | undefined,
-  retainedFailure: ParameterCatalogRetainedFailure | undefined,
-): ParameterCatalogItem {
+): PreparedParameterCatalogItem {
   const enumOptions = normalizeEnumOptions(meta?.values);
   const booleanOptions = detectBooleanEnumOptions(enumOptions);
   const bitmaskOptions = normalizeBitmaskOptions(meta?.bitmask, item.value);
-  const isStaged = Boolean(stagedEdit && stagedEdit.nextValue !== item.value);
-  const stagedValue = isStaged ? stagedEdit?.nextValue ?? null : null;
   const prefix = resolveGroupPrefix(item.rawName);
   const userLevel = resolveUserLevel(meta);
 
@@ -123,9 +186,6 @@ function buildCatalogItem(
     groupLabel: prefix,
     userLevel,
     isStandard: userLevel !== "Advanced",
-    isStaged,
-    stagedValue,
-    hasFailure: Boolean(retainedFailure),
     editorKind: booleanOptions ? "boolean" : enumOptions.length > 0 ? "enum" : bitmaskOptions.length > 0 ? "bitmask" : "number",
     enumOptions,
     booleanOptions,
@@ -140,6 +200,9 @@ function buildGroups(rows: ParameterCatalogItem[]): ParameterCatalogGroup[] {
     const existing = groups.get(row.groupKey);
     if (existing) {
       existing.rows.push(row);
+      if (row.isStaged || row.hasFailure) {
+        existing.modifiedCount += 1;
+      }
       continue;
     }
 
@@ -147,15 +210,11 @@ function buildGroups(rows: ParameterCatalogItem[]): ParameterCatalogGroup[] {
       key: row.groupKey,
       label: row.groupLabel,
       rows: [row],
+      modifiedCount: row.isStaged || row.hasFailure ? 1 : 0,
     });
   }
 
-  return Array.from(groups.values())
-    .map((group) => ({
-      ...group,
-      rows: group.rows.sort((left, right) => left.order - right.order || left.name.localeCompare(right.name)),
-    }))
-    .sort((left, right) => left.label.localeCompare(right.label));
+  return Array.from(groups.values()).sort((left, right) => left.label.localeCompare(right.label));
 }
 
 function matchesCatalogFilter(row: ParameterCatalogItem, filter: ParameterCatalogFilter): boolean {
@@ -170,12 +229,8 @@ function matchesCatalogFilter(row: ParameterCatalogItem, filter: ParameterCatalo
   }
 }
 
-function matchesCatalogSearch(row: ParameterCatalogItem, normalizedSearch: string): boolean {
-  if (normalizedSearch.length === 0) {
-    return true;
-  }
-
-  const haystack = [
+function buildCatalogSearchKey(row: PreparedParameterCatalogItem): string {
+  return [
     row.name,
     row.rawName,
     row.label,
@@ -189,8 +244,6 @@ function matchesCatalogSearch(row: ParameterCatalogItem, normalizedSearch: strin
     .filter((value): value is string => typeof value === "string" && value.length > 0)
     .join(" ")
     .toLowerCase();
-
-  return haystack.includes(normalizedSearch);
 }
 
 function resolveGroupPrefix(rawName: string): string {

@@ -1,7 +1,7 @@
 import type { ParamMetadataMap } from "../../param-metadata";
-import type { ParamStore } from "../../params";
+import { isNonNullParam, type NonNullParam, type ParamStore } from "../../params";
 import {
-  buildParameterItemIndex,
+  buildParameterItemModel,
   buildParameterItemModels,
   type ParameterItemModel,
 } from "./parameter-item-model";
@@ -59,18 +59,17 @@ export function buildParameterWorkspaceSections(
     return [];
   }
 
-  const itemIndex = buildParameterItemIndex(paramStore, metadata);
-  const sorted = buildParameterItemModels(paramStore, metadata);
-  const used = new Set<string>();
+  const paramsByName = new Map(
+    Object.values(paramStore.params ?? {})
+      .filter(isNonNullParam)
+      .map((param) => [param.name, param]),
+  );
   const sections = starterSections
     .map((section) => {
       const items = section.paramNames
-        .map((name) => itemIndex.get(name) ?? null)
-        .filter((item): item is ParameterWorkspaceItem => Boolean(item))
-        .map((item) => {
-          used.add(item.name);
-          return item;
-        });
+        .map((name) => paramsByName.get(name) ?? null)
+        .filter((param): param is NonNullParam => param !== null)
+        .map((param) => buildParameterItemModel(param, metadata));
 
       return {
         id: section.id,
@@ -86,9 +85,7 @@ export function buildParameterWorkspaceSections(
     return sections;
   }
 
-  const fallbackItems = sorted
-    .filter((item) => !used.has(item.name))
-    .slice(0, 6);
+  const fallbackItems = buildParameterItemModels(paramStore, metadata).slice(0, 6);
 
   if (fallbackItems.length === 0) {
     return [];

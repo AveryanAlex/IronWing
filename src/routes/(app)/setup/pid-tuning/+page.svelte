@@ -4,7 +4,11 @@ import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
-import { buildParameterCatalogView, type ParameterCatalogItem } from "../../../../lib/params/parameter-catalog-view";
+import {
+  buildParameterCatalogSnapshot,
+  prepareParameterCatalog,
+  type ParameterCatalogItem,
+} from "../../../../lib/params/parameter-catalog-view";
 import { deriveVehicleProfile } from "../../../../lib/setup/vehicle-profile";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
@@ -183,6 +187,10 @@ const sessionState = fromStore(sessionStore);
 
 let params = $derived(paramsState.current);
 let session = $derived(sessionState.current);
+let paramStore = $derived(params.paramStore);
+let metadata = $derived(params.metadata);
+let stagedEdits = $derived(params.stagedEdits);
+let retainedFailures = $derived(params.retainedFailures);
 let actionsBlocked = $derived(view.checkpoint.blocksActions);
 let docsUrl = $derived(resolveDocsUrl("tuning"));
 let vehicleType = $derived(session.sessionDomain.value?.vehicle_state?.vehicle_type ?? null);
@@ -192,29 +200,25 @@ let profile = $derived(
     stagedEdits: params.stagedEdits,
   }),
 );
-let catalogView = $derived(
-  buildParameterCatalogView({
-    paramStore: params.paramStore,
-    metadata: params.metadata,
-    stagedEdits: params.stagedEdits,
-    retainedFailures: params.retainedFailures,
-    filter: "all",
-    searchText: "",
+let preparedCatalog = $derived(prepareParameterCatalog(paramStore, metadata));
+let catalogSnapshot = $derived(
+  buildParameterCatalogSnapshot({
+    catalog: preparedCatalog,
+    stagedEdits,
+    retainedFailures,
   }),
 );
 let rowIndex = $derived.by(() => {
   const index = new Map<string, ParameterCatalogItem>();
-  for (const group of catalogView.groups) {
-    for (const row of group.rows) {
-      index.set(row.name, withSafetyFallback(row));
-    }
+  for (const row of catalogSnapshot.rows) {
+    index.set(row.item.name, withSafetyFallback(row.item));
   }
   return index;
 });
 let curated = $derived(buildCuratedView());
 
 function withSafetyFallback(row: ParameterCatalogItem): ParameterCatalogItem {
-  const meta = params.metadata?.get(row.name);
+  const meta = metadata?.get(row.name);
   const hasHumanName = typeof meta?.humanName === "string" && meta.humanName.trim().length > 0;
   const enumBroken = Array.isArray(meta?.values) && meta.values.length > 0 && row.enumOptions.length === 0;
   const bitmaskBroken = Array.isArray(meta?.bitmask) && meta.bitmask.length > 0 && row.bitmaskOptions.length === 0;

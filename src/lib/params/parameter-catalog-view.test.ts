@@ -4,7 +4,9 @@ import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
 import type { StagedParameterEdit } from "../stores/params-staged-edits";
 import {
+  buildParameterCatalogSnapshot,
   buildParameterCatalogView,
+  prepareParameterCatalog,
   type ParameterCatalogFilter,
 } from "./parameter-catalog-view";
 
@@ -95,11 +97,17 @@ function buildView(
     stagedEdits?: Record<string, StagedParameterEdit>;
   } = {},
 ) {
-  return buildParameterCatalogView({
-    paramStore: createParamStore(),
-    metadata: "metadata" in overrides ? (overrides.metadata ?? null) : createMetadata(),
+  const paramStore = createParamStore();
+  const metadata = "metadata" in overrides ? (overrides.metadata ?? null) : createMetadata();
+  const catalog = prepareParameterCatalog(paramStore, metadata);
+  const snapshot = buildParameterCatalogSnapshot({
+    catalog,
     stagedEdits: overrides.stagedEdits ?? createStagedEdits(),
     retainedFailures: overrides.retainedFailures ?? {},
+  });
+
+  return buildParameterCatalogView({
+    catalog: snapshot,
     filter,
     searchText,
   });
@@ -116,11 +124,14 @@ describe("buildParameterCatalogView renderId", () => {
       },
     } as unknown as ParamStore;
 
-    const view = buildParameterCatalogView({
-      paramStore,
-      metadata: null,
+    const catalog = prepareParameterCatalog(paramStore, null);
+    const snapshot = buildParameterCatalogSnapshot({
+      catalog,
       stagedEdits: {},
       retainedFailures: {},
+    });
+    const view = buildParameterCatalogView({
+      catalog: snapshot,
       filter: "all",
       searchText: "",
     });
@@ -134,6 +145,19 @@ describe("buildParameterCatalogView renderId", () => {
 });
 
 describe("buildParameterCatalogView", () => {
+  it("preserves row identity while applying different searches", () => {
+    const catalog = prepareParameterCatalog(createParamStore(), createMetadata());
+    const snapshot = buildParameterCatalogSnapshot({
+      catalog,
+      stagedEdits: createStagedEdits(),
+      retainedFailures: {},
+    });
+    const broadView = buildParameterCatalogView({ catalog: snapshot, filter: "all", searchText: "arming" });
+    const narrowView = buildParameterCatalogView({ catalog: snapshot, filter: "all", searchText: "arming checks" });
+
+    expect(narrowView.groups[0]?.rows[0]).toBe(broadView.groups[0]?.rows[0]);
+  });
+
   it("groups rows alphabetically by prefix and derives metadata editors", () => {
     const view = buildView("all");
 

@@ -1,3 +1,7 @@
+<script module lang="ts">
+export const PARAMETER_CATALOG_PAGE_SIZE = 36;
+</script>
+
 <script lang="ts">
 import { ChevronDown, ChevronRight, Search, X } from "lucide-svelte";
 
@@ -33,7 +37,16 @@ let {
   onDiscard: (name: string) => void;
 } = $props();
 
-let expandedGroupIds = $state<string[]>([]);
+let expandedGroupKey = $state<string | null>(null);
+let pageByGroup = $state.raw<Record<string, number>>({});
+let automaticallyExpandFirstGroup = $derived(searchText.trim().length > 0 || filter === "modified");
+let activeGroupKey = $derived.by(() => {
+  if (expandedGroupKey && view.groups.some((group) => group.key === expandedGroupKey)) {
+    return expandedGroupKey;
+  }
+
+  return automaticallyExpandFirstGroup ? view.groups[0]?.key ?? null : null;
+});
 
 const filterOptions: Array<{ value: ParameterCatalogFilter; label: string }> = [
   { value: "all", label: "All" },
@@ -47,29 +60,59 @@ function summaryText() {
   }
 
   const staged = view.stagedCount > 0 ? ` · ${view.stagedCount} staged` : "";
-  return `Showing ${view.visibleCount} of ${view.totalCount} parameters${staged}.`;
-}
-
-function shouldForceExpanded(group: ParameterCatalogGroup) {
-  return searchText.trim().length > 0
-    || filter === "modified"
-    || group.rows.some((row) => row.isStaged || row.hasFailure);
+  return `${view.visibleCount} of ${view.totalCount} parameters match${staged}.`;
 }
 
 function isGroupExpanded(group: ParameterCatalogGroup) {
-  return expandedGroupIds.includes(group.key) || shouldForceExpanded(group);
+  return activeGroupKey === group.key;
 }
 
 function toggleGroup(group: ParameterCatalogGroup) {
-  if (shouldForceExpanded(group)) {
+  if (activeGroupKey === group.key && automaticallyExpandFirstGroup) {
     return;
   }
 
-  if (expandedGroupIds.includes(group.key)) {
-    expandedGroupIds = expandedGroupIds.filter((key) => key !== group.key);
-  } else {
-    expandedGroupIds = [...expandedGroupIds, group.key];
-  }
+  expandedGroupKey = activeGroupKey === group.key ? null : group.key;
+  pageByGroup = { ...pageByGroup, [group.key]: 0 };
+}
+
+function resetCatalogNavigation() {
+  expandedGroupKey = null;
+  pageByGroup = {};
+}
+
+function updateSearchText(value: string) {
+  resetCatalogNavigation();
+  onSearchText(value);
+}
+
+function updateFilter(value: ParameterCatalogFilter) {
+  resetCatalogNavigation();
+  onFilterChange(value);
+}
+
+function groupPageIndex(group: ParameterCatalogGroup) {
+  const lastPage = Math.max(0, Math.ceil(group.rows.length / PARAMETER_CATALOG_PAGE_SIZE) - 1);
+  return Math.min(pageByGroup[group.key] ?? 0, lastPage);
+}
+
+function pagedRows(group: ParameterCatalogGroup) {
+  const start = groupPageIndex(group) * PARAMETER_CATALOG_PAGE_SIZE;
+  return group.rows.slice(start, start + PARAMETER_CATALOG_PAGE_SIZE);
+}
+
+function pageRangeText(group: ParameterCatalogGroup) {
+  const start = groupPageIndex(group) * PARAMETER_CATALOG_PAGE_SIZE;
+  const end = Math.min(start + PARAMETER_CATALOG_PAGE_SIZE, group.rows.length);
+  return `${start + 1}–${end} of ${group.rows.length}`;
+}
+
+function setGroupPage(group: ParameterCatalogGroup, page: number) {
+  const lastPage = Math.max(0, Math.ceil(group.rows.length / PARAMETER_CATALOG_PAGE_SIZE) - 1);
+  pageByGroup = {
+    ...pageByGroup,
+    [group.key]: Math.max(0, Math.min(page, lastPage)),
+  };
 }
 
 function cardValue(row: ParameterCatalogItem) {
@@ -102,7 +145,7 @@ function stageCardValue(row: ParameterCatalogItem, value: string | number | bool
         <Button
           shape="pill"
           testId={`${parameterWorkspaceTestIds.catalogFilterPrefix}-${option.value}`}
-          onclick={() => onFilterChange(option.value)}
+          onclick={() => updateFilter(option.value)}
           size="sm"
           tone="accent"
           variant={filter === option.value ? "soft" : "ghost"}
@@ -122,7 +165,7 @@ function stageCardValue(row: ParameterCatalogItem, value: string | number | bool
         <Input
           class="min-w-0"
           testId={parameterWorkspaceTestIds.catalogSearch}
-          oninput={(event) => onSearchText((event.currentTarget as HTMLInputElement).value)}
+          oninput={(event) => updateSearchText((event.currentTarget as HTMLInputElement).value)}
           placeholder="Search names, labels, descriptions..."
           type="search"
           value={searchText}
@@ -131,7 +174,7 @@ function stageCardValue(row: ParameterCatalogItem, value: string | number | bool
       {#if searchText.length > 0}
         <Button
           ariaLabel="Clear parameter search"
-          onclick={() => onSearchText("")}
+          onclick={() => updateSearchText("")}
           size="sm"
           variant="ghost"
         >
@@ -186,9 +229,9 @@ function stageCardValue(row: ParameterCatalogItem, value: string | number | bool
             {/if}
             <Eyebrow as="span" class="text-base" tone="primary">{group.label}</Eyebrow>
             <span class="text-sm text-text-muted">({group.rows.length})</span>
-            {#if group.rows.some((row) => row.isStaged || row.hasFailure)}
+            {#if group.modifiedCount > 0}
               <Badge shape="rounded" size="sm" variant="warning">
-                {group.rows.filter((row) => row.isStaged || row.hasFailure).length} modified
+                {group.modifiedCount} modified
               </Badge>
             {/if}
           </Button>
@@ -196,7 +239,7 @@ function stageCardValue(row: ParameterCatalogItem, value: string | number | bool
           {#if isGroupExpanded(group)}
             <div class="border-t border-border px-3 py-3">
               <SetupParamEditGrid minWidth="20rem" density="compact" ariaLabel={`${group.label} parameters`}>
-                {#each group.rows as row (row.renderId)}
+                {#each pagedRows(group) as row (row.renderId)}
                   <SetupParamEditCard
                     item={row}
                     inputId={`parameter-catalog-${row.renderId}`}
@@ -216,6 +259,32 @@ function stageCardValue(row: ParameterCatalogItem, value: string | number | bool
                   />
                 {/each}
               </SetupParamEditGrid>
+
+              {#if group.rows.length > PARAMETER_CATALOG_PAGE_SIZE}
+                <div class="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-border/70 pt-3">
+                  <span class="text-xs text-text-muted">{pageRangeText(group)}</span>
+                  <div class="flex items-center gap-2">
+                    <Button
+                      ariaLabel={`Previous ${group.label} parameter page`}
+                      disabled={groupPageIndex(group) === 0}
+                      onclick={() => setGroupPage(group, groupPageIndex(group) - 1)}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      Previous
+                    </Button>
+                    <Button
+                      ariaLabel={`Next ${group.label} parameter page`}
+                      disabled={(groupPageIndex(group) + 1) * PARAMETER_CATALOG_PAGE_SIZE >= group.rows.length}
+                      onclick={() => setGroupPage(group, groupPageIndex(group) + 1)}
+                      size="sm"
+                      variant="ghost"
+                    >
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              {/if}
             </div>
           {/if}
         </Card.Root>

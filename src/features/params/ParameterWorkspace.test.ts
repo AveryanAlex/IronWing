@@ -12,6 +12,7 @@ import {
     type ParamsStoreState,
 } from "../../lib/stores/params";
 import { withParameterWorkspaceContext } from "../../test/context-harnesses";
+import { PARAMETER_CATALOG_PAGE_SIZE } from "./components/ParameterCatalogBrowser.svelte";
 import ParameterWorkspace from "./components/ParameterWorkspace.svelte";
 import { parameterWorkspaceTestIds } from "./parameter-workspace-test-ids";
 
@@ -340,8 +341,12 @@ describe("ParameterWorkspace", () => {
 
     it("supports generated bitmask editing and the shared staged tray state", async () => {
         renderWorkspace();
+        await expandCatalogGroup("ARMING");
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-ARMING_CHECK`)).toBeTruthy();
+
         await expandCatalogGroup("LOG");
 
+        expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-ARMING_CHECK`)).toBeNull();
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`).textContent).toContain("LOG_BITMASK");
 
         await fireEvent.click(screen.getByText("Bit 31 · High rate telemetry"));
@@ -371,12 +376,76 @@ describe("ParameterWorkspace", () => {
         await fireEvent.input(search, { target: { value: "high rate telemetry" } });
 
         expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeTruthy();
-        expect(screen.getByTestId(parameterWorkspaceTestIds.catalogSummary).textContent).toContain("Showing 1 of 16");
+        expect(screen.getByTestId(parameterWorkspaceTestIds.catalogSummary).textContent).toContain("1 of 16 parameters match");
 
         await fireEvent.click(screen.getByRole("button", { name: "Clear parameter search" }));
 
         expect((search as HTMLInputElement).value).toBe("");
         expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeNull();
+    });
+
+    it("bounds broad search rendering and pages through a large parameter group", async () => {
+        const largeParams = Object.fromEntries(
+            Array.from({ length: 80 }, (_, index) => {
+                const name = `SIM_PARAM_${String(index).padStart(3, "0")}`;
+                return [name, { name, value: index, param_type: "real32" as const, index }];
+            }),
+        );
+        const { container } = renderWorkspace({
+            state: createState({
+                paramStore: {
+                    expected_count: 80,
+                    params: largeParams,
+                },
+                metadata: null,
+                metadataState: "unavailable",
+            }),
+        });
+
+        await fireEvent.input(screen.getByTestId(parameterWorkspaceTestIds.catalogSearch), {
+            target: { value: "SIM_" },
+        });
+
+        expect(container.querySelectorAll(`[data-testid^="${parameterWorkspaceTestIds.itemPrefix}-"]`))
+            .toHaveLength(PARAMETER_CATALOG_PAGE_SIZE);
+        expect(screen.getByText(`1–${PARAMETER_CATALOG_PAGE_SIZE} of 80`)).toBeTruthy();
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-SIM_PARAM_000`)).toBeTruthy();
+
+        await fireEvent.click(screen.getByRole("button", { name: "Next SIM parameter page" }));
+
+        expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-SIM_PARAM_000`)).toBeNull();
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-SIM_PARAM_036`)).toBeTruthy();
+        expect(screen.getByText("37–72 of 80")).toBeTruthy();
+    });
+
+    it("keeps staged groups collapsed until the modified filter is selected", async () => {
+        renderWorkspace({
+            state: createState({
+                stagedEdits: {
+                    LOG_BITMASK: {
+                        name: "LOG_BITMASK",
+                        label: "Log bitmask",
+                        rawName: "LOG_BITMASK",
+                        description: "Enabled log streams.",
+                        currentValue: 5,
+                        currentValueText: "5",
+                        nextValue: 1,
+                        nextValueText: "1",
+                        units: null,
+                        rebootRequired: false,
+                        order: 14,
+                    },
+                },
+            }),
+        });
+
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.catalogGroupPrefix}-LOG`).textContent)
+            .toContain("1 modified");
+        expect(screen.queryByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeNull();
+
+        await fireEvent.click(screen.getByTestId(`${parameterWorkspaceTestIds.catalogFilterPrefix}-modified`));
+
+        expect(screen.getByTestId(`${parameterWorkspaceTestIds.itemPrefix}-LOG_BITMASK`)).toBeTruthy();
     });
 
     it("falls back to editable raw numeric rows when metadata is unavailable", async () => {
