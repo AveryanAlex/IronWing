@@ -27,7 +27,7 @@ Configuration is persisted in the Tauri app configuration directory as `mcp.json
 | `status_text_read` | Optional `cursor: {session_id,sequence}` and `severity: string[]`; always CSV (`timestamp_usec,severity,sequence,text`), including empty/small histories. Context includes next cursor and `history_lost`; shared last 100 STATUSTEXT entries. |
 | `vehicle_reboot` | Optional expected `session_id`; acknowledges reboot command, not completed boot. Check status and reconnect afterwards if needed. |
 
-All parameter reads identify their cache synchronization state. `parameters_search` is compact discovery; use `parameters_read({"ids":["BARO_TYPE"],"mode":"details"})` for full documentation. The default `mode:"values"` does not fetch metadata. Agents should use a focused search regex and deliberate limit, then request `mode:"details"` only for relevant IDs to understand their documentation before interpreting or changing them. Reading all discovered IDs in `mode:"values"` is allowed but moderately expensive (about 17k tokens for the 1438-parameter demo snapshot). Reuse the snapshot instead of repeatedly fetching every value: configuration parameters normally remain stable until changed. Re-read affected IDs after writes, and obtain a fresh snapshot when the vehicle/session changes or freshness is required. Detailed CSV includes ID, value/type, human name, description, range, increment, units, enum options, bitmask, read-only/reboot flags and user level. `metadata_available=false` distinguishes missing documentation from an unknown parameter. Backend metadata uses the same versioned/family/SITL/AP_Periph precedence as the frontend, a seven-day disk cache, and stale-cache fallback when offline.
+All parameter reads identify their cache synchronization state. `parameters_search` is compact discovery; use `parameters_read({"ids":["BARO_TYPE"],"mode":"details"})` for full documentation. The default `mode:"values"` does not fetch metadata. Agents should use a focused search regex and deliberate limit, then request `mode:"details"` only for relevant IDs to understand their documentation before interpreting or changing them. Reading all discovered IDs in `mode:"values"` is allowed but moderately expensive (about 17k tokens for the 1438-parameter demo snapshot). Reuse the snapshot instead of repeatedly fetching every value: configuration parameters normally remain stable until changed. Successful writes return vehicle-echoed values and update the app cache, so a confirmation-only `parameters_read` is unnecessary. Obtain a fresh snapshot when the vehicle/session changes or freshness is required, following the flight-state/consent rule below. Detailed CSV includes ID, value/type, human name, description, range, increment, units, enum options, bitmask, read-only/reboot flags and user level. `metadata_available=false` distinguishes missing documentation from an unknown parameter. Backend metadata uses the same versioned/family/SITL/AP_Periph precedence as the frontend, a seven-day disk cache, and stale-cache fallback when offline.
 
 ### Compact read responses
 
@@ -41,13 +41,23 @@ The CSV context for parameter reads retains `sync,total,truncated,returned`; `to
 
 Writes use the existing live runtime and remain blocked while playback is the effective UI source. Reads are explicitly live, never replay samples. An agent connection session is independent of an MCP HTTP session and is invalidated when the vehicle changes. Pass `session_id` on mutations when decisions were based on an earlier status/read. Concurrent MAVLink parameter/mission operations may return an operation conflict; retry after the active operation completes. A cancelled or failed batch never implies rollback of already acknowledged changes.
 
+## Agent workflow and write confirmation
+
+Start with `connection_status`. Reuse the intended connection, or discover devices and call `vehicle_connect` if needed, then `vehicle_status` for basic vehicle information. Request telemetry as needed.
+
+Before starting parameter work, check whether the vehicle is flying, then call `parameters_refresh` once. `vehicle_status` exposes armed/mode, but armed alone is not proof of flight or ground state; inspect telemetry if needed (for example raw `EXTENDED_SYS_STATE`, message 245, field `landed_state`, when available). A full download can saturate the link: an airborne vehicle requires explicit user consent. If ground state is uncertain, establish it or obtain consent first. This also applies to search/read/write calls that automatically download an empty cache. This is guidance supplied to the agent, not a backend flight-state interlock.
+
+Search the refreshed cache using focused regex/limits. Reading all values is allowed; reuse that snapshot. Before working with a parameter, the agent must load its documentation through `parameters_read(mode:"details")`, limited to relevant IDs.
+
+`parameters_write` immediately sends `PARAM_SET` for each item and waits for its `PARAM_VALUE` echo. The echoed value becomes `confirmed_value` and updates the shared app cache; `success` checks it against the requested value within the SDK tolerance. It does **not** send an independent `PARAM_REQUEST_READ` after the write or redownload all parameters. A confirmation-only `parameters_read` would just read the same updated cache and is unnecessary for successful writes. For failed items, `confirmed_value` can be either a mismatching echo or the SDK's `0.0` placeholder after timeout/other errors; `success:false` must not be interpreted as a verified zero value.
+
 ## Example: inspect a barometer and IMU
 
-1. `devices_list`, then `vehicle_connect` using the desired endpoint and baud rate/profile.
-2. `parameters_search({"regex":"^(BARO|INS)_"})`, then `parameters_read({"ids":["BARO_TYPE"],"mode":"details"})` for documentation, or omit `mode` for just values.
-3. `parameters_write` if changes are needed; inspect confirmation results. Reboot only when necessary.
-4. `telemetry_catalog` to discover sensor names and source message IDs.
-5. Enable the primary pressure and scaled IMU streams:
+1. `connection_status`; if needed, `devices_list` and `vehicle_connect`, then `vehicle_status`.
+2. Check flight state and obtain user consent if airborne (or unable to establish ground state), then `parameters_refresh`.
+3. `parameters_search({"regex":"^(BARO|INS)_","limit":50})`, then `parameters_read({"ids":["BARO_TYPE"],"mode":"details"})` for each parameter being worked on.
+4. `parameters_write` if changes are needed; inspect each result and reuse successful echoed values. Reboot only when necessary.
+5. When telemetry is needed, use `telemetry_catalog` to discover sensor names and source message IDs. Enable the primary pressure and scaled IMU streams if absent:
 
 ```json
 {"rates":[{"message_id":29,"rate_hz":5},{"message_id":26,"rate_hz":5}]}
