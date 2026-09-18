@@ -250,7 +250,7 @@ pub fn definitions() -> Vec<Tool> {
         ),
         definition::<Empty>(
             "vehicle_status",
-            "Get basic vehicle information after checking/establishing the connection: identity, armed/mode, firmware, hardware, UID and sensor health. Armed alone does not establish whether the vehicle is airborne; inspect telemetry if needed before parameter downloads. Missing identity fields are null.",
+            "Get basic vehicle information after checking/establishing the connection: identity, armed/mode, firmware, hardware, UID and sensor health. Immediately after connecting, firmware, hardware, UID and other identity fields may still be null while vehicle initialization completes; briefly retry vehicle_status when those fields are needed instead of reconnecting. Armed alone does not establish whether the vehicle is airborne; inspect telemetry if needed before parameter downloads. Unavailable identity fields remain null.",
             true,
         ),
         definition::<Search>(
@@ -303,7 +303,7 @@ pub fn definitions() -> Vec<Tool> {
 impl ServerHandler for IronWingMcp {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(concat!(
-            "This is the MCP server of IronWing, an application for configuring and diagnosing ArduPilot vehicles. It shares the application's live vehicle connection with the UI. Start with connection_status; connect only if needed (devices_list for discovery), then vehicle_status for basic information. devices_list does not scan Bluetooth unless include_ble=true; request that scan only when BLE discovery is needed because it may trigger an OS permission prompt. Request telemetry only as needed. ",
+            "This is the MCP server of IronWing, an application for configuring and diagnosing ArduPilot vehicles. It shares the application's live vehicle connection with the UI. Start with connection_status; connect only if needed (devices_list for discovery), then vehicle_status for basic information. Immediately after connecting, some identity fields may still be null while vehicle initialization completes; briefly retry vehicle_status when those fields are needed instead of reconnecting. devices_list does not scan Bluetooth unless include_ble=true; request that scan only when BLE discovery is needed because it may trigger an OS permission prompt. Request telemetry only as needed. ",
             "Before parameter work, check whether the vehicle is flying, then parameters_refresh once. Full downloads can saturate the link: explicit user consent is required if airborne; if ground status is uncertain, establish it or obtain consent. This also applies to automatic empty-cache downloads. ",
             "Parameters are cached in the app. Use focused search regex/limits; all values may be read, but reuse the moderately expensive snapshot. Before working with any parameter, MUST read its documentation via parameters_read mode=details; fetch details only for relevant IDs. ",
             "parameters_write writes immediately, waits for vehicle PARAM_VALUE echoes and updates the cache. Successful results already contain echoed values; no confirmation reread is needed, and no independent post-write read is performed. Inspect per-item failures. ",

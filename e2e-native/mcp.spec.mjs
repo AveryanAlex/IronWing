@@ -91,8 +91,16 @@ describe("native MCP + ArduPilot SITL", () => {
         try { await client.call("vehicle_connect", { transport: { kind: "tcp", address }, replace: true }); return true; }
         catch { return false; }
       }, { timeout: 90_000, interval: 2000 });
-      const recovered = await client.call("vehicle_status");
-      assert.ok(recovered.firmware);
+      let recovered;
+      await browser.waitUntil(async () => {
+        recovered = await client.call("vehicle_status");
+        return Boolean(recovered.firmware?.version);
+      }, {
+        timeout: 10_000,
+        interval: 250,
+        timeoutMsg: "firmware version was not populated after reconnect",
+      });
+      assert.ok(recovered.firmware?.version);
       // The shell sees the same connection made by MCP.
       await $('[data-testid="app-shell-connection-indicator"]').waitForDisplayed();
       await browser.waitUntil(async () => (await $('[data-testid="app-shell-connection-indicator"]').getAttribute("class")).includes("is-positive"), { timeout: 30_000 });
