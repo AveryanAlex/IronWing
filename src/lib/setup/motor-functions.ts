@@ -11,12 +11,33 @@ export const MOTOR_FUNCTION_BY_NUMBER = {
   10: 83,
   11: 84,
   12: 85,
+  13: 160,
+  14: 161,
+  15: 162,
+  16: 163,
+  17: 164,
+  18: 165,
+  19: 166,
+  20: 167,
+  21: 168,
+  22: 169,
+  23: 170,
+  24: 171,
+  25: 172,
+  26: 173,
+  27: 174,
+  28: 175,
+  29: 176,
+  30: 177,
+  31: 178,
+  32: 179,
 } as const;
 
 export const THROTTLE_OUTPUT_FUNCTIONS = {
   throttle: 70,
   left: 73,
   right: 74,
+  boost: 81,
 } as const;
 
 export const TILT_OUTPUT_FUNCTIONS = {
@@ -71,6 +92,8 @@ export function propulsionFunctionLabel(functionValue: number): string | null {
       return "Throttle left";
     case THROTTLE_OUTPUT_FUNCTIONS.right:
       return "Throttle right";
+    case THROTTLE_OUTPUT_FUNCTIONS.boost:
+      return "Boost throttle";
     default:
       return null;
   }

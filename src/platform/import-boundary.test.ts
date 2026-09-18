@@ -57,7 +57,7 @@ const ACTIVE_RUNTIME_ROOTS = [
   "src/routes/(app)/setup/navigation/+page.svelte",
   "src/routes/(app)/setup/battery-monitor/+page.svelte",
   "src/routes/(app)/setup/motors-esc/+page.svelte",
-  "src/routes/(app)/setup/servo-outputs/+page.svelte",
+  "src/routes/(app)/setup/outputs/+page.svelte",
   "src/routes/(app)/setup/serial-ports/+page.svelte",
   "src/routes/(app)/setup/flight-modes/+page.svelte",
   "src/routes/(app)/setup/failsafe/+page.svelte",

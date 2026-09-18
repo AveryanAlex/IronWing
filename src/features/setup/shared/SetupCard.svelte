@@ -12,6 +12,7 @@ type CardPadding = "inherit" | "none" | "compact" | "default" | "comfortable";
 type CardJustify = "start" | "center";
 
 type Props = {
+  id?: string;
   variant?: Variant;
   surface?: CardSurface;
   tone?: CardTone;
@@ -33,6 +34,7 @@ const variantSurface: Record<Variant, "default" | "elevated" | "muted" | "transp
 };
 
 let {
+  id,
   variant = "default",
   surface,
   tone = "neutral",
@@ -49,6 +51,6 @@ let {
 
 </script>
 
-<Card.Root surface={surface ?? variantSurface[variant]} {tone} {appearance} density="default" {layout} {gap} {padding} {justify} class={className} data-step={dataStep} {testId}>
+<Card.Root {id} surface={surface ?? variantSurface[variant]} {tone} {appearance} density="default" {layout} {gap} {padding} {justify} class={className} data-step={dataStep} {testId}>
   {@render children()}
 </Card.Root>

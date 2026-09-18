@@ -42,12 +42,13 @@ import {
   getSetupWorkspaceRouteContext,
   setupRouteSection,
 } from "../../../../features/setup/components/setup-workspace-route-context";
+import OutputModeTabs from "./OutputModeTabs.svelte";
 
 const route = getSetupWorkspaceRouteContext();
 const viewStore = fromStore(route.viewStore);
 
 let view = $derived(viewStore.current);
-let section = $derived(setupRouteSection(view, "servo_outputs"));
+let section = $derived(setupRouteSection(view, "outputs"));
 
 type Tone = "info" | "warning" | "danger";
 type Banner = { id: string; tone: Tone; text: string };
@@ -72,7 +73,6 @@ let testSuccessByOutput = $state<Record<number, boolean>>({});
 let directionResultByOutput = $state<Record<number, DirectionResult>>({});
 let commandErrorByOutput = $state<Record<number, string>>({});
 let rawPwmByOutput = $state<Record<number, number>>({});
-let trackedScopeKey = $state<string | null>(null);
 let lastScopedGoodReadbacks = $state<Record<number, number>>({});
 
 let params = $derived(paramsState.current);
@@ -267,18 +267,6 @@ function requestedOutputIndex(): number | null {
 }
 
 $effect(() => {
-  if (view.activeScopeKey !== trackedScopeKey) {
-    trackedScopeKey = view.activeScopeKey;
-    testUnlocked = false;
-    activeOutputIndex = null;
-    selectedOutputIndex = requestedOutputIndex();
-    testSuccessByOutput = {};
-    directionResultByOutput = {};
-    commandErrorByOutput = {};
-    rawPwmByOutput = {};
-    lastScopedGoodReadbacks = {};
-  }
-
   if (!Array.isArray(telemetry.servo_outputs)) {
     return;
   }
@@ -572,12 +560,14 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
 <SetupSectionShell
   sectionId={section.id}
   eyebrow={section.title}
-  title="Servo outputs grouped by function with an advanced output list"
-  description="Review SERVOn_FUNCTION mappings first, test supported non-motor outputs by function, and use the advanced output list for per-servo PWM checks when needed."
-  testId={setupWorkspaceTestIds.servoOutputsSection}
+  title="Test servo outputs and verify direction"
+  description="Exercise the applied non-motor output map by function, confirm surface direction, and use the advanced list for precise PWM checks."
+  testId={setupWorkspaceTestIds.outputsSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.servoOutputsDocsLink }]}
 >
   {#snippet body()}
+    <OutputModeTabs />
+
     <SetupSectionCard
       icon={Cable}
       title="Output map overview"

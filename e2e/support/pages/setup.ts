@@ -49,6 +49,16 @@ const ids = {
   vtolTopologyDiagram: "vtol-topology-diagram",
   motorsEscQueuedLayout: "setup-workspace-motors-esc-banner-queued-layout",
   motorsEscRowPrefix: "setup-workspace-motors-esc-row",
+  outputsSection: "setup-workspace-outputs-section",
+  outputsPropulsionSection: "setup-workspace-outputs-propulsion-section",
+  outputsServoSection: "setup-workspace-outputs-servo-section",
+  outputsFunctionRowPrefix: "setup-workspace-outputs-function-row",
+  outputsFunctionOwnersPrefix: "setup-workspace-outputs-function-owners",
+  outputsEditFunctionPrefix: "setup-workspace-outputs-edit-function",
+  outputsOutputOptionPrefix: "setup-workspace-outputs-output-option",
+  outputsStageAssignment: "setup-workspace-outputs-stage-assignment",
+  outputsReassignmentConfirmation: "setup-workspace-outputs-reassignment-confirmation",
+  servoOutputsRowPrefix: "setup-workspace-servo-outputs-row",
 } as const;
 
 export class SetupWorkspacePage {
@@ -185,6 +195,58 @@ export class SetupWorkspacePage {
     await this.page.getByTestId("app-shell-parameter-review-discard-Q_FRAME_CLASS").click();
     await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-Q_FRAME_CLASS`)).toHaveCount(0);
     await this.auditLayout("setup proposed Tri and applied Quad motor map");
+  }
+
+  async expectUnifiedOutputsWorkflow(): Promise<void> {
+    await this.openSectionById("vtol");
+    const airframe = this.page.getByTestId(ids.vtolAirframe);
+    await expect(airframe).toBeVisible({ timeout: 10_000 });
+    await airframe.getByTestId("vtol-architecture-select").selectOption("tiltrotor");
+
+    const outputStatus = this.page.getByTestId("vtol-output-assignment-status");
+    await expect(outputStatus).toBeVisible();
+    await outputStatus.getByRole("link", { name: "Open Outputs" }).click();
+    await expect(this.page).toHaveURL(/\/setup\/outputs\?mode=assign/);
+    await expect(this.page.getByTestId(ids.outputsSection)).toBeVisible({ timeout: 15_000 });
+    await expect(this.page.getByTestId(ids.outputsPropulsionSection)).toBeVisible();
+    await expect(this.page.getByTestId(ids.outputsServoSection)).toBeVisible();
+    await expect(this.page.getByTestId(`${ids.outputsFunctionRowPrefix}-33`)).toBeVisible();
+    await expect(this.page.getByTestId(`${ids.outputsFunctionRowPrefix}-41`)).toBeVisible();
+    await expect(this.page.getByTestId(`${ids.outputsFunctionRowPrefix}-4`)).toBeVisible();
+    await expect(this.page.getByTestId(`${ids.outputsFunctionRowPrefix}-19`)).toBeVisible();
+    await this.auditLayout("setup unified output assignments");
+
+    await this.page.getByTestId(`${ids.outputsEditFunctionPrefix}-4`).click();
+    await expect(this.page.getByTestId(`${ids.outputsOutputOptionPrefix}-1`)).toBeChecked();
+    await this.page.getByTestId(`${ids.outputsOutputOptionPrefix}-9`).check();
+    await this.page.getByTestId(ids.outputsStageAssignment).click();
+    await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-SERVO9_FUNCTION`)).toBeVisible({ timeout: 10_000 });
+    await expect(this.page.getByTestId(`${ids.outputsFunctionOwnersPrefix}-4`)).toContainText("SERVO1");
+    await expect(this.page.getByTestId(`${ids.outputsFunctionOwnersPrefix}-4`)).toContainText("SERVO9");
+
+    await this.page.getByTestId(`${ids.outputsEditFunctionPrefix}-4`).click();
+    await this.page.getByTestId(`${ids.outputsOutputOptionPrefix}-2`).check();
+    await this.page.getByTestId(ids.outputsStageAssignment).click();
+    const confirmation = this.page.getByTestId(ids.outputsReassignmentConfirmation);
+    await expect(confirmation).toBeVisible();
+    await expect(confirmation).toContainText("SERVO2: Elevator → Aileron");
+    await confirmation
+      .locator("xpath=..")
+      .getByRole("button", { name: /Stage 1 change/ })
+      .click();
+    await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-SERVO2_FUNCTION`)).toBeVisible({ timeout: 10_000 });
+
+    await this.page.getByRole("link", { name: "Servo test", exact: true }).first().click();
+    await expect(this.page).toHaveURL(/\/setup\/outputs\?mode=test/);
+    await expect(this.page.getByTestId(`${ids.servoOutputsRowPrefix}-2`)).toContainText("Elevator");
+    await this.auditLayout("setup output servo test");
+
+    await this.ensureReviewSurfaceVisible();
+    for (const name of ["SERVO2_FUNCTION", "SERVO9_FUNCTION", "Q_TILT_ENABLE"]) {
+      const discard = this.page.getByTestId(`app-shell-parameter-review-discard-${name}`);
+      if (await isVisible(discard)) await discard.click();
+      await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-${name}`)).toHaveCount(0);
+    }
   }
 
   async expectDisabledOsdWithoutLayoutParameters(): Promise<void> {

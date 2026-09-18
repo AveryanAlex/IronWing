@@ -272,7 +272,7 @@ describe("setup workspace store", () => {
       "navigation",
       "battery_monitor",
       "motors_esc",
-      "servo_outputs",
+      "outputs",
       "serial_ports",
       "osd",
       "rc_receiver",

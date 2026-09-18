@@ -23,7 +23,7 @@ describe("setup section routes", () => {
       ["navigation", "/setup/navigation"],
       ["battery_monitor", "/setup/battery-monitor"],
       ["motors_esc", "/setup/motors-esc"],
-      ["servo_outputs", "/setup/servo-outputs"],
+      ["outputs", "/setup/outputs"],
       ["serial_ports", "/setup/serial-ports"],
       ["osd", "/setup/osd"],
       ["rc_receiver", "/setup/rc-receiver"],
@@ -102,7 +102,7 @@ describe("setup section navigation", () => {
 
     expect(navGroups.map((group) => [group.title, group.sections.map((section) => section.id)])).toEqual([
       ["Essential Setup", ["overview", "frame_orientation", "vtol", "calibration", "rc_receiver", "flight_modes"]],
-      ["Hardware", ["navigation", "battery_monitor", "motors_esc", "servo_outputs", "serial_ports", "osd"]],
+      ["Hardware", ["navigation", "battery_monitor", "outputs", "motors_esc", "serial_ports", "osd"]],
       ["Safety", ["failsafe", "rtl_return", "geofence", "arming"]],
       ["Tuning", ["initial_params", "pid_tuning"]],
       ["Advanced", ["parameters"]],

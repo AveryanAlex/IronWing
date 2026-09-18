@@ -20,6 +20,7 @@ import type { SetupParamRef } from "../../../../features/setup/shared/setup-para
 import { Eyebrow, HelperText, InternalLink } from "../../../../components/ui";
 import { buildParameterItemIndex } from "../../../../lib/params/parameter-item-model";
 import { setupSectionPath } from "../../../../lib/setup-sections";
+import { buildOutputMappingModel } from "../../../../lib/setup/output-mapping-model";
 import { deriveVehicleProfile, getVehicleSlug } from "../../../../lib/setup/vehicle-profile";
 
 const route = getSetupWorkspaceRouteContext();
@@ -66,6 +67,17 @@ let frameTypeValue = $derived(profile.frameParamFamily === "copter" ? profile.fr
 let standardLayout = $derived(
   frameClassValue === null || frameTypeValue === null ? null : getMotorLayout(frameClassValue, frameTypeValue),
 );
+let outputModel = $derived(
+  buildOutputMappingModel({
+    paramStore: params.paramStore,
+    metadata: params.metadata,
+    stagedEdits: params.stagedEdits,
+    vehicleType,
+  }),
+);
+let assignedRequiredOutputCount = $derived(
+  outputModel.requiredFunctionValues.length - outputModel.missingRequiredCount,
+);
 let retainedFailures = $derived(
   FRAME_RECOVERY_NAMES.map((name) => params.retainedFailures[name]).filter(
     (failure): failure is NonNullable<typeof failure> => failure != null,
@@ -90,6 +102,10 @@ let layoutStateText = $derived(
 
 function handleVtolLinkClick(event: MouseEvent) {
   route.handleSectionLinkClick("vtol", event);
+}
+
+function handleOutputsLinkClick(event: MouseEvent) {
+  route.handleSectionLinkClick("outputs", event);
 }
 </script>
 
@@ -135,6 +151,34 @@ function handleVtolLinkClick(event: MouseEvent) {
           </p>
           <HelperText class="mt-1">Match this to the physical arrow and mounting rotation of the flight controller.</HelperText>
         </div>
+      </div>
+    </SetupSectionCard>
+
+    <SetupSectionCard
+      icon={Box}
+      title="Physical output assignments"
+      description="Frame & Orientation defines geometry. Outputs is the single editor for mapping motor, control-surface, tilt, and auxiliary functions to SERVO connectors."
+      surface="elevated"
+    >
+      <div class="flex flex-col gap-3 rounded-lg border border-border bg-bg-secondary/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p class="text-sm font-semibold text-text-primary">
+            {#if outputModel.requiredFunctionValues.length > 0}
+              {assignedRequiredOutputCount}/{outputModel.requiredFunctionValues.length} required frame functions assigned
+            {:else}
+              {outputModel.assignedOutputCount}/{outputModel.outputs.length} physical outputs assigned
+            {/if}
+          </p>
+          <HelperText class="mt-1" size="xs">Read-only status. Mapping edits and staged connector changes live in Outputs.</HelperText>
+        </div>
+        <InternalLink
+          class="shrink-0"
+          variant="button"
+          href="/setup/outputs?mode=assign#motor-assignments"
+          onclick={handleOutputsLinkClick}
+        >
+          Open Outputs
+        </InternalLink>
       </div>
     </SetupSectionCard>
 

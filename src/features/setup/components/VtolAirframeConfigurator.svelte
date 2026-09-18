@@ -3,7 +3,7 @@ import { Box, GitBranch, MousePointer2 } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext } from "../../../app/shell/runtime-context";
-import { Badge, HelperText, NativeSelect } from "../../../components/ui";
+import { Badge, HelperText, InternalLink, NativeSelect } from "../../../components/ui";
 import { buildParameterItemIndex } from "../../../lib/params/parameter-item-model";
 import {
   architectureParameterValues,
@@ -17,7 +17,6 @@ import {
 import SetupNotice from "../shared/SetupNotice.svelte";
 import SetupSectionCard from "../shared/SetupSectionCard.svelte";
 import { stageSetupParameterEdit } from "../shared/parameter-editing";
-import VtolOutputMapping from "./VtolOutputMapping.svelte";
 import VtolTopologyDiagram from "./VtolTopologyDiagram.svelte";
 
 let {
@@ -76,15 +75,11 @@ let maskParamAvailable = $derived(
       ? itemIndex.has("Q_TAILSIT_MOTMX")
       : true,
 );
-let mappingDisabledReason = $derived.by(() => {
-  if (actionsBlocked) {
-    return "Output mapping is locked by the active reboot/reconnect checkpoint.";
-  }
-  if (topology.requiresRefreshBeforeMapping) {
-    return `Apply ${topology.pendingTopologyParams.join(", ")}, reboot, and refresh parameters before mapping outputs. ArduPilot may create new default assignments on boot.`;
-  }
-  return null;
-});
+let requiredOutputItems = $derived([
+  ...proposed.propulsors,
+  ...proposed.actuators.filter((actuator) => actuator.required),
+]);
+let assignedRequiredCount = $derived(requiredOutputItems.filter((item) => item.outputOwners.length > 0).length);
 
 function classAllowed(frameClass: number, architecture: VtolArchitecture): boolean {
   if (architecture === "bicopter" || architecture === "tailsitter_single_dual") return frameClass === 10;
@@ -308,9 +303,25 @@ function currentLayoutValue(): string {
 </SetupSectionCard>
 
 {#if proposed.enabled}
-  <VtolOutputMapping
-    topology={proposed}
-    disabled={actionsBlocked || topology.requiresRefreshBeforeMapping}
-    disabledReason={mappingDisabledReason}
-  />
+  <SetupSectionCard
+    icon={GitBranch}
+    title="Physical output assignments"
+    description="VTOL defines the required logical motors and mechanisms. Their physical SERVO connectors are assigned in the shared Outputs editor."
+    surface="elevated"
+    testId="vtol-output-assignment-status"
+  >
+    <div class="flex flex-col gap-3 rounded-lg border border-border bg-bg-secondary/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+      <div>
+        <p class="text-sm font-semibold text-text-primary">{assignedRequiredCount}/{requiredOutputItems.length} required VTOL functions assigned</p>
+        <HelperText class="mt-1" size="xs">
+          {topology.requiresRefreshBeforeMapping
+            ? `Apply ${topology.pendingTopologyParams.join(", ")}, reboot, and refresh before assigning topology-dependent rows.`
+            : "This status is read-only here; staged output changes are shown in Outputs."}
+        </HelperText>
+      </div>
+      <InternalLink class="shrink-0" variant="button" href="/setup/outputs?mode=assign#motor-assignments">
+        Open Outputs
+      </InternalLink>
+    </div>
+  </SetupSectionCard>
 {/if}

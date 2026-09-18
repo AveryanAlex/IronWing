@@ -123,7 +123,7 @@ export const SETUP_SECTIONS = {
   },
   vtol: {
     title: "VTOL / QuadPlane",
-    description: "VTOL architecture, motor and tilt topology, physical output mapping, transitions, and fixed-wing assistance.",
+    description: "VTOL architecture, motor and tilt topology, output-assignment status, transitions, and fixed-wing assistance.",
     kind: "guided",
     path: "/setup/vtol",
     iconKey: "vtol",
@@ -174,18 +174,18 @@ export const SETUP_SECTIONS = {
     implemented: true,
     groupId: "hardware",
     navGroupId: "hardware",
-    navOrder: 2,
+    navOrder: 3,
   },
-  servo_outputs: {
-    title: "Servo Outputs",
-    description: "Function-aware output inspection, reversal staging, and live readback.",
+  outputs: {
+    title: "Outputs",
+    description: "Unified motor, servo, and auxiliary function assignment with guarded output testing.",
     kind: "guided",
-    path: "/setup/servo-outputs",
+    path: "/setup/outputs",
     iconKey: "servos",
     implemented: true,
     groupId: "hardware",
     navGroupId: "hardware",
-    navOrder: 3,
+    navOrder: 2,
   },
   serial_ports: {
     title: "Serial Ports",

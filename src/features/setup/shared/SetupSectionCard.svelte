@@ -16,6 +16,7 @@ type SetupDocLink = {
 };
 
 type Props = {
+  id?: string;
   icon?: IconComponent;
   title: string;
   description?: string;
@@ -34,6 +35,7 @@ type Props = {
 };
 
 let {
+  id,
   icon: Icon,
   title,
   description,
@@ -63,7 +65,7 @@ let allDocs = $derived.by(() => {
 let resolvedSurface = $derived(surface === "elevated" || surface === "primary" ? "default" : surface);
 </script>
 
-<SetupCard surface={resolvedSurface} {tone} class={className} {testId}>
+<SetupCard {id} surface={resolvedSurface} {tone} class={className} {testId}>
   <Card.Header class={`flex items-start justify-between gap-3 ${compact ? "mb-2" : "mb-4"}`}>
     <div class="min-w-0">
       <div class="flex flex-wrap items-center gap-2">

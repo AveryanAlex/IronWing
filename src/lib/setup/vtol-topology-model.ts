@@ -559,12 +559,16 @@ function buildIssues(
         title: `${item.label} has no physical output`,
         detail: `Assign its logical function ${item.functionValue} to a SERVO output after the topology refreshes.`,
       });
-    } else if (item.outputOwners.length > 1) {
+    }
+  }
+
+  for (const propulsor of propulsors) {
+    if (propulsor.outputOwners.length > 1) {
       issues.push({
-        id: `duplicate-output-${item.id}`,
-        severity: "danger",
-        title: `${item.label} is assigned more than once`,
-        detail: `Function ${item.functionValue} owns ${item.outputOwners.map((owner) => `SERVO${owner.outputIndex}`).join(", ")}. Keep exactly one assignment.`,
+        id: `mirrored-output-${propulsor.id}`,
+        severity: "warning",
+        title: `${propulsor.label} has a mirrored motor command`,
+        detail: `Function ${propulsor.functionValue} drives ${propulsor.outputOwners.map((owner) => `SERVO${owner.outputIndex}`).join(", ")}. This is supported, but unusual; verify the wiring and output protocol.`,
       });
     }
   }

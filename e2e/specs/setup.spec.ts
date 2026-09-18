@@ -14,6 +14,10 @@ test("setup workspace opens every section and persists a safe parameter edit", a
     await app.setup.expectSectionsOpen(setupSections);
   });
 
+  await test.step("Assign one function to multiple outputs and confirm an occupied-output replacement", async () => {
+    await app.setup.expectUnifiedOutputsWorkflow();
+  });
+
   await test.step("Preview a staged Tri without changing the applied motor-test map", async () => {
     await app.setup.expectStagedTriPreviewUsesAppliedMotorMap();
   });
