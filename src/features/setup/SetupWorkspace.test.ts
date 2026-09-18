@@ -18,15 +18,23 @@ import { setupWorkspaceTestIds } from "./setup-workspace-test-ids";
 const analyticsMocks = vi.hoisted(() => ({
   trackAnalytics: vi.fn(),
 }));
+const calibrationMocks = vi.hoisted(() => ({
+  rebootVehicle: vi.fn(async () => undefined),
+}));
 const notificationMocks = vi.hoisted(() => ({
   notifySuccess: vi.fn(),
+  notifyUnknownError: vi.fn(),
 }));
 
 vi.mock("../../lib/analytics/client", () => ({
   trackAnalytics: analyticsMocks.trackAnalytics,
 }));
+vi.mock("../../calibration", () => ({
+  rebootVehicle: calibrationMocks.rebootVehicle,
+}));
 vi.mock("../../lib/notifications", () => ({
   notifySuccess: notificationMocks.notifySuccess,
+  notifyUnknownError: notificationMocks.notifyUnknownError,
 }));
 
 function createSessionService(): SessionService {
@@ -186,6 +194,85 @@ describe("SetupWorkspace", () => {
       expect(get(setupWorkspaceStore).checkpoint.phase).toBe("idle");
       expect(screen.queryByTestId(setupWorkspaceTestIds.checkpointAffordance)).toBeNull();
     });
+  });
+
+  it("offers reboot or cancel while keeping the checkpoint locked", async () => {
+    const { setupWorkspaceStore } = renderSetupWorkspace();
+
+    setupWorkspaceStore.setCheckpointPlaceholder({
+      phase: "resume_pending",
+      reason: "Reboot and reconnect this vehicle before continuing.",
+    });
+
+    expect(await screen.findByTestId(setupWorkspaceTestIds.checkpointReboot)).toBeTruthy();
+    expect(screen.getByTestId(setupWorkspaceTestIds.checkpointCancelReboot)).toBeTruthy();
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.checkpointCancelReboot));
+    await waitFor(() => {
+      expect(screen.queryByTestId(setupWorkspaceTestIds.checkpoint)).toBeNull();
+    });
+    expect(get(setupWorkspaceStore).checkpoint.blocksActions).toBe(true);
+
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.checkpointAffordance));
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.checkpointReboot));
+
+    await waitFor(() => {
+      expect(calibrationMocks.rebootVehicle).toHaveBeenCalledTimes(1);
+      expect(screen.queryByTestId(setupWorkspaceTestIds.checkpoint)).toBeNull();
+    });
+    expect(get(setupWorkspaceStore).checkpoint.blocksActions).toBe(true);
+  });
+
+  it("keeps the reboot request single-flight until the command settles", async () => {
+    let resolveReboot: (() => void) | undefined;
+    calibrationMocks.rebootVehicle.mockImplementationOnce(
+      () => new Promise<void>((resolve) => {
+        resolveReboot = resolve;
+      }),
+    );
+    const { setupWorkspaceStore } = renderSetupWorkspace();
+
+    setupWorkspaceStore.setCheckpointPlaceholder({
+      phase: "resume_pending",
+      reason: "Reboot and reconnect this vehicle before continuing.",
+    });
+
+    const reboot = await screen.findByTestId(setupWorkspaceTestIds.checkpointReboot);
+    await fireEvent.click(reboot);
+
+    await waitFor(() => {
+      expect((reboot as HTMLButtonElement).disabled).toBe(true);
+      expect(reboot.textContent).toContain("Rebooting");
+    });
+    await fireEvent.click(reboot);
+    await fireEvent.click(screen.getByTestId(setupWorkspaceTestIds.checkpointClose));
+    expect(calibrationMocks.rebootVehicle).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId(setupWorkspaceTestIds.checkpoint)).toBeTruthy();
+
+    resolveReboot?.();
+    await waitFor(() => {
+      expect(screen.queryByTestId(setupWorkspaceTestIds.checkpoint)).toBeNull();
+    });
+  });
+
+  it("keeps the checkpoint dialog open when reboot fails", async () => {
+    calibrationMocks.rebootVehicle.mockRejectedValueOnce(new Error("vehicle unavailable"));
+    const { setupWorkspaceStore } = renderSetupWorkspace();
+
+    setupWorkspaceStore.setCheckpointPlaceholder({
+      phase: "resume_pending",
+      reason: "Reboot and reconnect this vehicle before continuing.",
+    });
+
+    await fireEvent.click(await screen.findByTestId(setupWorkspaceTestIds.checkpointReboot));
+
+    await waitFor(() => {
+      expect(notificationMocks.notifyUnknownError).toHaveBeenCalledWith("Vehicle reboot failed", expect.any(Error), {
+        id: "setup-checkpoint-reboot-failed",
+      });
+    });
+    expect(screen.getByTestId(setupWorkspaceTestIds.checkpoint)).toBeTruthy();
+    expect(get(setupWorkspaceStore).checkpoint.blocksActions).toBe(true);
   });
 
   it("announces a completed checkpoint once and clears it", async () => {

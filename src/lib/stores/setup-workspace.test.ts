@@ -729,6 +729,44 @@ describe("setup workspace store", () => {
     expect(resumedState.checkpoint.detailText).toContain("Resumed");
   });
 
+  it("does not create a second reboot checkpoint for the self-rebooting factory reset", () => {
+    const sessionStore = writable(createSessionState());
+    const paramsStore = writable(createParamsState());
+    const store = createSetupWorkspaceStore(sessionStore, paramsStore);
+
+    paramsStore.set(createParamsState({
+      stagedEdits: {
+        FORMAT_VERSION: {
+          name: "FORMAT_VERSION",
+          label: "Format version",
+          rawName: "FORMAT_VERSION",
+          description: "Factory reset marker",
+          currentValue: 13,
+          currentValueText: "13",
+          nextValue: 0,
+          nextValueText: "0",
+          units: null,
+          rebootRequired: true,
+          order: 0,
+        },
+      },
+      applyPhase: "applying",
+      applyProgress: {
+        completed: 0,
+        total: 1,
+        activeName: "FORMAT_VERSION",
+      },
+    }));
+
+    paramsStore.set(createParamsState({
+      stagedEdits: {},
+      applyPhase: "idle",
+      applyProgress: null,
+    }));
+
+    expect(get(store).checkpoint.phase).toBe("idle");
+  });
+
   it("flags scope changes while a checkpoint is pending and clears the resume target", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState());

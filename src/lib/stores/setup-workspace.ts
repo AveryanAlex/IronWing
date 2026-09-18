@@ -4,7 +4,7 @@ import type { CalibrationLifecycle } from "../../calibration";
 import type { SessionEnvelope, SourceKind } from "../../session";
 import type { CompactStatusNotice } from "../../statustext";
 import { selectCompactStatusNotices } from "../../statustext";
-import { selectTelemetryView } from "../telemetry-selectors";
+import { FACTORY_RESET_PARAMETER_NAME } from "../params/factory-reset";
 import {
   SETUP_SECTION_CATALOG,
   getSetupSectionDefinition,
@@ -13,9 +13,10 @@ import {
   isSetupSectionId,
   type SetupSectionId,
 } from "../setup-sections";
+import { selectTelemetryView } from "../telemetry-selectors";
+import { createUiStateStore, type UiStateStore } from "../ui-state/ui-state";
 import type { ParamsMetadataState, ParamsStoreState } from "./params";
 import type { SessionStorePhase, SessionStoreState } from "./session";
-import { createUiStateStore, type UiStateStore } from "../ui-state/ui-state";
 
 type SetupCheckpointSeed = {
   resumeSectionId: SetupSectionId;
@@ -882,7 +883,9 @@ export function createSetupWorkspaceStore(
     const readiness = resolveSetupReadiness(sessionState, paramsState);
     const liveSessionConnected = sessionState.sessionDomain.value?.connection.kind === "connected";
 
-    const hasRebootRequiredEdits = Object.values(paramsState.stagedEdits).some((edit) => edit.rebootRequired);
+    const hasRebootRequiredEdits = Object.values(paramsState.stagedEdits).some(
+      (edit) => edit.rebootRequired && edit.name !== FACTORY_RESET_PARAMETER_NAME,
+    );
     if (paramsState.applyPhase === "applying" && hasRebootRequiredEdits && pendingCheckpointSeed === null) {
       pendingCheckpointSeed = {
         resumeSectionId: selectedSectionId,

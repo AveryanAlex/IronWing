@@ -1,8 +1,9 @@
 <script lang="ts">
-import { LockKeyhole, RotateCcw, X } from "lucide-svelte";
+import { LockKeyhole, RotateCcw, RotateCw, X } from "lucide-svelte";
 
+import { rebootVehicle } from "../../../calibration";
 import { Button, Dialog, Eyebrow } from "../../../components/ui";
-import { notifySuccess } from "../../../lib/notifications";
+import { notifySuccess, notifyUnknownError } from "../../../lib/notifications";
 import type { SetupWorkspaceCheckpointState } from "../../../lib/stores/setup-workspace";
 import { setupWorkspaceTestIds } from "../setup-workspace-test-ids";
 
@@ -16,6 +17,7 @@ let {
 
 let open = $state(false);
 let resetConfirmationOpen = $state(false);
+let rebootPhase = $state<"idle" | "requesting">("idle");
 let lastHandledCheckpointKey: string | null = null;
 
 let blocksActions = $derived(checkpoint.blocksActions);
@@ -24,6 +26,7 @@ let dialogDetail = $derived(
   checkpoint.detailText
     ?? "Dependent setup actions remain locked until the checkpoint is resolved.",
 );
+let rebooting = $derived(rebootPhase === "requesting");
 
 $effect(() => {
   const checkpointKey = [
@@ -39,6 +42,7 @@ $effect(() => {
 
   lastHandledCheckpointKey = checkpointKey;
   resetConfirmationOpen = false;
+  rebootPhase = "idle";
 
   if (checkpoint.phase === "resume_pending" || checkpoint.phase === "scope_changed") {
     open = true;
@@ -56,9 +60,36 @@ $effect(() => {
 });
 
 function handleOpenChange(nextOpen: boolean) {
+  if (rebooting) {
+    return;
+  }
+
   open = nextOpen;
   if (!nextOpen) {
     resetConfirmationOpen = false;
+    rebootPhase = "idle";
+  }
+}
+
+async function requestReboot() {
+  if (checkpoint.phase !== "resume_pending" || rebooting) {
+    return;
+  }
+
+  rebootPhase = "requesting";
+  try {
+    await rebootVehicle();
+    rebootPhase = "idle";
+    open = false;
+    notifySuccess("Vehicle reboot requested", {
+      description: "Reconnect the same vehicle to unlock dependent setup actions.",
+      id: "setup-checkpoint-reboot-requested",
+    });
+  } catch (error) {
+    notifyUnknownError("Vehicle reboot failed", error, {
+      id: "setup-checkpoint-reboot-failed",
+    });
+    rebootPhase = "idle";
   }
 }
 
@@ -105,6 +136,7 @@ function confirmReset() {
         ariaLabel="Close checkpoint details"
         class="absolute right-3 top-3 w-8 px-0"
         data-testid={setupWorkspaceTestIds.checkpointClose}
+        disabled={rebooting}
       >
         <X aria-hidden="true" size={16} />
       </Dialog.Close>
@@ -142,6 +174,37 @@ function confirmReset() {
           variant="solid"
         >
           Reset and unlock
+        </Button>
+      </Dialog.Footer>
+    {:else if checkpoint.phase === "resume_pending"}
+      <Dialog.Footer>
+        <Button
+          disabled={rebooting}
+          onclick={() => handleOpenChange(false)}
+          testId={setupWorkspaceTestIds.checkpointCancelReboot}
+          variant="outline"
+        >
+          Cancel
+        </Button>
+        <Button
+          disabled={rebooting}
+          onclick={() => (resetConfirmationOpen = true)}
+          testId={setupWorkspaceTestIds.checkpointReset}
+          tone="danger"
+          variant="soft"
+        >
+          <RotateCcw aria-hidden="true" size={14} />
+          Reset checkpoint
+        </Button>
+        <Button
+          disabled={rebooting}
+          onclick={() => void requestReboot()}
+          testId={setupWorkspaceTestIds.checkpointReboot}
+          tone="success"
+          variant="solid"
+        >
+          <RotateCw aria-hidden="true" class={rebooting ? "animate-spin" : undefined} size={14} />
+          {rebooting ? "Rebooting…" : "Reboot"}
         </Button>
       </Dialog.Footer>
     {:else}

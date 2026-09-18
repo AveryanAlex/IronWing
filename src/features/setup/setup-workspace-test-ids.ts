@@ -5,6 +5,8 @@ export const setupWorkspaceTestIds = {
   checkpointDetail: "setup-workspace-checkpoint-detail",
   checkpointAffordance: "setup-workspace-checkpoint-affordance",
   checkpointClose: "setup-workspace-checkpoint-close",
+  checkpointCancelReboot: "setup-workspace-checkpoint-cancel-reboot",
+  checkpointReboot: "setup-workspace-checkpoint-reboot",
   checkpointReset: "setup-workspace-checkpoint-reset",
   checkpointCancelReset: "setup-workspace-checkpoint-cancel-reset",
   checkpointConfirmReset: "setup-workspace-checkpoint-confirm-reset",
