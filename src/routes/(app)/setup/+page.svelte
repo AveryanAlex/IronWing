@@ -13,9 +13,10 @@ import {
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext, getSessionStoreContext } from "../../../app/shell/runtime-context";
-import { requestPrearmChecks } from "../../../calibration";
+import { rebootVehicle, requestPrearmChecks } from "../../../calibration";
 import { ActionRow, Badge, Button, Eyebrow, HelperText } from "../../../components/ui";
 import { setupWorkspaceTestIds } from "../../../features/setup/setup-workspace-test-ids";
+import FactoryResetParametersDialog from "../../../features/setup/components/FactoryResetParametersDialog.svelte";
 import { getSetupWorkspaceRouteContext } from "../../../features/setup/components/setup-workspace-route-context";
 import SetupContentPanel from "../../../features/setup/shared/SetupContentPanel.svelte";
 import SetupFieldStack from "../../../features/setup/shared/SetupFieldStack.svelte";
@@ -24,6 +25,7 @@ import SetupNotice from "../../../features/setup/shared/SetupNotice.svelte";
 import SetupSectionCard from "../../../features/setup/shared/SetupSectionCard.svelte";
 import { trackAnalytics } from "../../../lib/analytics/client";
 import { notifyInfo, notifySuccess, notifyUnknownError } from "../../../lib/notifications";
+import { factoryResetParameters } from "../../../lib/params/factory-reset";
 import { createParameterFileIo } from "../../../lib/params/parameter-file-io";
 import { buildSetupOverviewModel, type SetupOverviewSafetyFinding } from "../../../lib/setup/overview-model";
 import { derivePrearmModel, type PrearmSnapshot } from "../../../lib/setup/prearm-model";
@@ -41,7 +43,7 @@ const fileIo = createParameterFileIo();
 let view = $derived(viewStore.current);
 let params = $derived(paramsState.current);
 let session = $derived(sessionState.current);
-let fileActionBusy = $state<"refresh" | "save" | "load" | null>(null);
+let fileActionBusy = $state<"refresh" | "save" | "load" | "factory-reset" | null>(null);
 let prearmSnapshot = $state<PrearmSnapshot | null>(null);
 let requestPhase = $state<"idle" | "running">("idle");
 let actionPhase = $state<"idle" | "arming" | "disarming">("idle");
@@ -52,6 +54,12 @@ let refreshDisabled = $derived(fileActionBusy !== null || !params.liveSessionCon
 let fileDisabled = $derived(fileActionBusy !== null || !paramsReady);
 let actionsBlocked = $derived(view.checkpoint.blocksActions);
 let armed = $derived(session.sessionDomain.value?.vehicle_state?.armed === true);
+let factoryResetAvailable = $derived(
+  params.liveSessionConnected && typeof params.paramStore?.params.FORMAT_VERSION?.value === "number",
+);
+let factoryResetDisabled = $derived(
+  fileActionBusy !== null || actionsBlocked || armed || params.applyPhase === "applying" || !factoryResetAvailable,
+);
 let vehicleType = $derived(params.vehicleType ?? session.sessionDomain.value?.vehicle_state?.vehicle_type ?? null);
 let overviewModel = $derived(
   buildSetupOverviewModel({
@@ -160,6 +168,29 @@ async function handleLoad() {
     notifyUnknownError("Could not load parameter file", error, {
       id: "setup-parameter-file-load-failed",
     });
+  } finally {
+    fileActionBusy = null;
+  }
+}
+
+async function handleFactoryReset() {
+  if (factoryResetDisabled) {
+    throw new Error("Factory reset is unavailable for the current vehicle state.");
+  }
+
+  fileActionBusy = "factory-reset";
+  try {
+    await factoryResetParameters(paramsStore, rebootVehicle);
+    notifySuccess("Factory reset requested", {
+      description:
+        "The flight controller is rebooting into ArduPilot defaults. Reconnect and complete setup before flight.",
+      id: "setup-parameter-factory-reset",
+    });
+  } catch (error) {
+    notifyUnknownError("Factory reset failed", error, {
+      id: "setup-parameter-factory-reset-failed",
+    });
+    throw error;
   } finally {
     fileActionBusy = null;
   }
@@ -319,6 +350,11 @@ function handleSetupLinkClick(sectionId: SetupSectionId, event: MouseEvent) {
             <FolderDown aria-hidden="true" size={16} />
             {fileActionBusy === "load" ? "Loading..." : "Load from file"}
           </Button>
+          <FactoryResetParametersDialog
+            busy={fileActionBusy === "factory-reset"}
+            disabled={factoryResetDisabled}
+            onConfirm={handleFactoryReset}
+          />
         </div>
         <HelperText size="xs" tone="muted">File imports never write immediately; changed values are staged for review.</HelperText>
       </SetupSectionCard>
