@@ -14,7 +14,7 @@ use rmcp::{
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
-use std::{collections::HashSet, sync::Arc, time::Duration};
+use std::{collections::HashSet, future::Future, sync::Arc, time::Duration};
 use tauri::Manager;
 use tokio_util::sync::CancellationToken;
 
@@ -34,11 +34,32 @@ struct Empty {}
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 struct Devices {
+    #[serde(default)]
+    include_ble: bool,
     #[serde(default = "scan_timeout")]
     scan_timeout_ms: u64,
 }
 fn scan_timeout() -> u64 {
     3000
+}
+
+async fn maybe_scan_ble<T, F, Fut>(request: &Devices, scan: F) -> Result<Value, String>
+where
+    T: Serialize,
+    F: FnOnce(u64) -> Fut,
+    Fut: Future<Output = Result<Vec<T>, String>>,
+{
+    if !request.include_ble {
+        return Ok(json!({"scanned":false,"devices":[]}));
+    }
+    if !(100..=30000).contains(&request.scan_timeout_ms) {
+        return Err("scan_timeout_ms must be 100..30000 when include_ble is true".into());
+    }
+
+    Ok(match scan(request.scan_timeout_ms).await {
+        Ok(devices) => json!({"scanned":true,"devices":devices}),
+        Err(error) => json!({"scanned":true,"devices":[],"error":error}),
+    })
 }
 #[derive(Deserialize, JsonSchema)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
@@ -214,7 +235,7 @@ pub fn definitions() -> Vec<Tool> {
         ),
         definition::<Devices>(
             "devices_list",
-            "List native transports, serial/USB devices, Nordic UART BLE scan and demo presets. TCP/UDP use explicit addresses; no network scan.",
+            "List native transports, serial/USB devices and demo presets. Set include_ble=true to explicitly scan Nordic UART BLE devices; this may request OS Bluetooth permission. TCP/UDP use explicit addresses; no network scan.",
             true,
         ),
         definition::<Connect>(
@@ -282,7 +303,7 @@ pub fn definitions() -> Vec<Tool> {
 impl ServerHandler for IronWingMcp {
     fn get_info(&self) -> ServerConfig {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build()).with_instructions(concat!(
-            "This is the MCP server of IronWing, an application for configuring and diagnosing ArduPilot vehicles. It shares the application's live vehicle connection with the UI. Start with connection_status; connect only if needed (devices_list for discovery), then vehicle_status for basic information. Request telemetry only as needed. ",
+            "This is the MCP server of IronWing, an application for configuring and diagnosing ArduPilot vehicles. It shares the application's live vehicle connection with the UI. Start with connection_status; connect only if needed (devices_list for discovery), then vehicle_status for basic information. devices_list does not scan Bluetooth unless include_ble=true; request that scan only when BLE discovery is needed because it may trigger an OS permission prompt. Request telemetry only as needed. ",
             "Before parameter work, check whether the vehicle is flying, then parameters_refresh once. Full downloads can saturate the link: explicit user consent is required if airborne; if ground status is uncertain, establish it or obtain consent. This also applies to automatic empty-cache downloads. ",
             "Parameters are cached in the app. Use focused search regex/limits; all values may be read, but reuse the moderately expensive snapshot. Before working with any parameter, MUST read its documentation via parameters_read mode=details; fetch details only for relevant IDs. ",
             "parameters_write writes immediately, waits for vehicle PARAM_VALUE echoes and updates the cache. Successful results already contain echoed values; no confirmation reread is needed, and no independent post-write read is performed. Inspect per-item failures. ",
@@ -495,13 +516,13 @@ impl IronWingMcp {
             }
             "devices_list" => {
                 let request: Devices = parse(args)?;
-                if !(100..=30000).contains(&request.scan_timeout_ms) {
-                    return Err("scan_timeout_ms must be 100..30000".into());
-                }
                 let serial = crate::serial_ports::list_serial_port_inventory();
-                let ble = crate::bluetooth::bt_scan_ble(Some(request.scan_timeout_ms), None).await;
+                let ble = maybe_scan_ble(&request, |timeout_ms| {
+                    crate::bluetooth::scan_ble(&self.app, state.inner(), Some(timeout_ms), None)
+                })
+                .await?;
                 Ok(
-                    json!({"transports":crate::commands::available_transports(),"serial":serial,"ble":match ble {Ok(devices)=>json!({"devices":devices}),Err(error)=>json!({"devices":[],"error":error})},"demo_presets":["quadcopter","airplane","quadplane"],"connect_schema":schemars::schema_for!(Connect)}),
+                    json!({"transports":crate::commands::available_transports(),"serial":serial,"ble":ble,"demo_presets":["quadcopter","airplane","quadplane"],"connect_schema":schemars::schema_for!(Connect)}),
                 )
             }
             "vehicle_connect" => {
@@ -747,6 +768,52 @@ impl IronWingMcp {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
+    #[tokio::test]
+    async fn devices_default_skips_ble_scan() {
+        let request: Devices = parse(json!({"scan_timeout_ms":0})).unwrap();
+        let called = AtomicBool::new(false);
+        let ble = maybe_scan_ble(&request, |_| {
+            called.store(true, Ordering::Relaxed);
+            async { Ok::<Vec<Value>, String>(Vec::new()) }
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            (called.load(Ordering::Relaxed), ble),
+            (false, json!({"scanned":false,"devices":[]}))
+        );
+    }
+
+    #[tokio::test]
+    async fn devices_include_ble_runs_scan_with_requested_timeout() {
+        let request: Devices = parse(json!({"include_ble":true,"scan_timeout_ms":750})).unwrap();
+        let timeout = AtomicU64::new(0);
+        let ble = maybe_scan_ble(&request, |timeout_ms| {
+            timeout.store(timeout_ms, Ordering::Relaxed);
+            async { Ok::<Vec<Value>, String>(vec![json!({"address":"device-1"})]) }
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(
+            (timeout.load(Ordering::Relaxed), ble),
+            (
+                750,
+                json!({"scanned":true,"devices":[{"address":"device-1"}]})
+            )
+        );
+    }
+
+    #[test]
+    fn devices_schema_defaults_include_ble_to_false() {
+        let schema = serde_json::to_value(schemars::schema_for!(Devices)).unwrap();
+
+        assert_eq!(schema["properties"]["include_ble"]["default"], false);
+    }
+
     #[test]
     fn compact_tools_never_send_duplicate_structured_content() {
         for name in [

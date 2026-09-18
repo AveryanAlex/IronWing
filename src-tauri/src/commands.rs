@@ -868,6 +868,11 @@ mod tests {
         AppState {
             connection_gate: tokio::sync::Mutex::new(()),
             #[cfg(not(target_os = "android"))]
+            ble_init_gate: tokio::sync::Mutex::new(()),
+            #[cfg(not(target_os = "android"))]
+            ble_plugin_registered: std::sync::atomic::AtomicBool::new(false),
+            ble_scan_gate: tokio::sync::Mutex::new(()),
+            #[cfg(not(target_os = "android"))]
             mcp: crate::mcp::McpRuntime::default(),
             live_runtime: ironwing_core::live_runtime::SharedLiveRuntime::new(
                 ironwing_core::live_runtime::LiveVehicleRuntime::new(

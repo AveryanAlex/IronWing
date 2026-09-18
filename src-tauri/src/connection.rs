@@ -320,6 +320,7 @@ pub(crate) async fn connect_vehicle(
             }
         }
         ConnectTransport::BluetoothBle { address, profile } => {
+            crate::bluetooth::ensure_ble_plugin(app, state).await?;
             let profile = profile.unwrap_or(BluetoothProfile::NordicUart);
             let vehicle =
                 connect_with_abort(state, async move { connect_ble(&address, profile).await })

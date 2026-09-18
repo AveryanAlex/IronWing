@@ -118,6 +118,13 @@ function createTransportDescriptors(): TransportDescriptor[] {
       default_baud: 57600,
     },
     {
+      kind: "bluetooth_ble",
+      label: "BLE (Nordic UART)",
+      available: true,
+      validation: { address_required: true },
+      profile: "nordic_uart",
+    },
+    {
       kind: "web_serial",
       label: "Web Serial",
       available: true,
@@ -280,6 +287,27 @@ describe("ConnectionPanel", () => {
     expect(service.persistConnectionForm).toHaveBeenCalledWith(
       expect.objectContaining({ mode: "tcp", tcpAddress: "127.0.0.1:5770" }),
     );
+  });
+
+  it("starts BLE discovery only after the explicit scan action", async () => {
+    const { service } = createMockService();
+    const store = createSessionStore(service);
+
+    await store.initialize();
+    render(withSessionContext(store, ConnectionPanel));
+
+    const transportSelect = screen.getByTestId("connection-transport-select") as HTMLSelectElement;
+    await fireEvent.change(transportSelect, { target: { value: "bluetooth_ble" } });
+
+    expect(service.btRequestPermissions).not.toHaveBeenCalled();
+    expect(service.btScanBle).not.toHaveBeenCalled();
+
+    await fireEvent.click(screen.getByTestId("connection-ble-scan-btn"));
+
+    await waitFor(() => {
+      expect(service.btRequestPermissions).toHaveBeenCalledTimes(1);
+      expect(service.btScanBle).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("renders an actionable demo transport form and submits a demo connect request", async () => {

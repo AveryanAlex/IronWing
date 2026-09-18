@@ -67,6 +67,11 @@ pub(crate) enum FirmwareAbortHandle {
 pub(crate) struct AppState {
     pub(crate) connection_gate: tokio::sync::Mutex<()>,
     #[cfg(not(target_os = "android"))]
+    pub(crate) ble_init_gate: tokio::sync::Mutex<()>,
+    #[cfg(not(target_os = "android"))]
+    pub(crate) ble_plugin_registered: std::sync::atomic::AtomicBool,
+    pub(crate) ble_scan_gate: tokio::sync::Mutex<()>,
+    #[cfg(not(target_os = "android"))]
     pub(crate) mcp: mcp::McpRuntime,
     pub(crate) live_runtime: SharedLiveRuntime<TauriEventSink>,
     pub(crate) active_link_target: tokio::sync::Mutex<Option<ActiveLinkTarget>>,
@@ -88,7 +93,7 @@ pub(crate) struct AppState {
     pub(crate) remote_ui_events: tokio::sync::broadcast::Sender<RemoteUiEvent>,
 }
 
-fn ble_plugin_enabled() -> bool {
+pub(crate) fn ble_plugin_enabled() -> bool {
     !matches!(
         std::env::var("IRONWING_DISABLE_BLE_PLUGIN"),
         Ok(value) if matches!(value.trim(), "1" | "true" | "TRUE" | "yes" | "YES")
@@ -100,6 +105,11 @@ pub fn run() {
     let tauri_event_sink = TauriEventSink::default();
     let state = AppState {
         connection_gate: tokio::sync::Mutex::new(()),
+        #[cfg(not(target_os = "android"))]
+        ble_init_gate: tokio::sync::Mutex::new(()),
+        #[cfg(not(target_os = "android"))]
+        ble_plugin_registered: std::sync::atomic::AtomicBool::new(false),
+        ble_scan_gate: tokio::sync::Mutex::new(()),
         #[cfg(not(target_os = "android"))]
         mcp: mcp::McpRuntime::default(),
         live_runtime: SharedLiveRuntime::new(LiveVehicleRuntime::new(tauri_event_sink.clone())),
@@ -134,6 +144,7 @@ pub fn run() {
                 .build(),
         );
     }
+    #[cfg(target_os = "android")]
     if ble_plugin_enabled() {
         builder = builder.plugin(tauri_plugin_blec::init());
     }

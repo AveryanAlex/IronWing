@@ -427,7 +427,9 @@ async fn dispatch_invoke(
             bt_request_permissions(app).await?;
             ok(())
         }
-        "bt_scan_ble" => ok(bluetooth::bt_scan_ble(
+        "bt_scan_ble" => ok(bluetooth::scan_ble(
+            app,
+            state.inner(),
             optional_arg(&args, "timeoutMs")?,
             optional_arg(&args, "profile")?,
         )
