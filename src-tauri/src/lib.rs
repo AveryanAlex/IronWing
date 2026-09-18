@@ -49,11 +49,13 @@ mod helpers;
 mod ipc;
 mod log_library;
 mod logs;
+mod mcp;
 mod recording;
 mod remote_ui;
 mod serial_ports;
 mod session_runtime;
 mod tauri_event_sink;
+mod vehicle_ops;
 
 pub(crate) type MissionCancelToken = tokio_util::sync::CancellationToken;
 
@@ -63,6 +65,9 @@ pub(crate) enum FirmwareAbortHandle {
 }
 
 pub(crate) struct AppState {
+    pub(crate) connection_gate: tokio::sync::Mutex<()>,
+    #[cfg(not(target_os = "android"))]
+    pub(crate) mcp: mcp::McpRuntime,
     pub(crate) live_runtime: SharedLiveRuntime<TauriEventSink>,
     pub(crate) active_link_target: tokio::sync::Mutex<Option<ActiveLinkTarget>>,
     pub(crate) demo_vehicle: tokio::sync::Mutex<Option<mavkit::sim::DemoVehicleHandle>>,
@@ -94,6 +99,9 @@ fn ble_plugin_enabled() -> bool {
 pub fn run() {
     let tauri_event_sink = TauriEventSink::default();
     let state = AppState {
+        connection_gate: tokio::sync::Mutex::new(()),
+        #[cfg(not(target_os = "android"))]
+        mcp: mcp::McpRuntime::default(),
         live_runtime: SharedLiveRuntime::new(LiveVehicleRuntime::new(tauri_event_sink.clone())),
         active_link_target: tokio::sync::Mutex::new(None),
         demo_vehicle: tokio::sync::Mutex::new(None),
@@ -152,6 +160,9 @@ pub fn run() {
             .plugin(tauri_plugin_geolocation::init());
     }
     builder = builder.invoke_handler(tauri::generate_handler![
+        mcp::mcp_settings_read,
+        mcp::mcp_settings_write,
+        mcp::mcp_token_generate,
         connect_link,
         disconnect_link,
         analytics_status,
@@ -258,6 +269,8 @@ pub fn run() {
                     let _ = w.set_background_color(Some(bg));
                 }
             }
+            #[cfg(not(target_os = "android"))]
+            mcp::start_saved(_app.handle().clone());
             if remote_ui::remote_ui_enabled() {
                 remote_ui::spawn_remote_ui_server(_app.handle().clone());
             }

@@ -263,6 +263,11 @@ async fn dispatch_invoke(
 
     match request.cmd.as_str() {
         "available_transports" => ok(commands::available_transports()),
+        "mcp_settings_read" => ok(crate::mcp::mcp_settings_read(app.clone()).await?),
+        "mcp_settings_write" => {
+            ok(crate::mcp::mcp_settings_write(app.clone(), arg(&args, "settings")?).await?)
+        }
+        "mcp_token_generate" => ok(crate::mcp::mcp_token_generate()?),
         "list_serial_port_inventory" => ok(crate::serial_ports::list_serial_port_inventory()),
         "connect_link" => {
             connection::connect_link(state, app.clone(), arg(&args, "request")?).await?;

@@ -36,6 +36,7 @@ pub struct RuntimeCapabilities {
     pub recording_filesystem: Capability,
     pub mission_transfer: Capability,
     pub parameter_transfer: Capability,
+    pub mcp_server: Capability,
 }
 
 impl RuntimeCapabilities {
@@ -54,6 +55,7 @@ impl RuntimeCapabilities {
             mission_transfer: Capability::maybe(
                 "mission transfer depends on the active MAVLink browser transport",
             ),
+            mcp_server: Capability::unsupported("MCP server requires the desktop application"),
             parameter_transfer: Capability::maybe(
                 "parameter transfer depends on the active MAVLink browser transport",
             ),
@@ -68,6 +70,11 @@ impl RuntimeCapabilities {
             recording_filesystem: Capability::supported(),
             mission_transfer: Capability::supported(),
             parameter_transfer: Capability::supported(),
+            mcp_server: if cfg!(target_os = "android") {
+                Capability::unsupported("MCP server requires desktop")
+            } else {
+                Capability::supported()
+            },
         }
     }
 }

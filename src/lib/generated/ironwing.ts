@@ -725,6 +725,25 @@ export type MagCalReport = {
 /**  Status of a magnetometer calibration. */
 export type MagCalStatus = "not_started" | "waiting_to_start" | "running_step_one" | "running_step_two" | "success" | "failed" | "bad_orientation" | "bad_radius";
 
+export type McpSettings = {
+	enabled: boolean,
+	host: string,
+	port: number,
+	token: string | null,
+};
+
+export type McpSettingsResult = {
+	settings: McpSettings,
+	status: McpStatus,
+};
+
+export type McpStatus = {
+	supported: boolean,
+	running: boolean,
+	endpoint: string | null,
+	last_error: string | null,
+};
+
 export type MessageIntervalRequest = {
 	message_id: number,
 	interval_usec: number,
@@ -1119,6 +1138,7 @@ export type RuntimeCapabilities_Deserialize = {
 	recording_filesystem: Capability,
 	mission_transfer: Capability,
 	parameter_transfer: Capability,
+	mcp_server: Capability,
 };
 
 export type RuntimeCapabilities_Serialize = {
@@ -1128,6 +1148,7 @@ export type RuntimeCapabilities_Serialize = {
 	recording_filesystem: Capability,
 	mission_transfer: Capability,
 	parameter_transfer: Capability,
+	mcp_server: Capability,
 };
 
 /**  Health state of one sensor family derived from MAVLink bitmasks. */

@@ -591,11 +591,7 @@ pub(crate) async fn param_download_all(
         }
     }
 
-    let handle = with_vehicle(&state)
-        .await?
-        .params()
-        .download_all()
-        .map_err(|e| e.to_string())?;
+    let handle = crate::vehicle_ops::begin_download(&with_vehicle(&state).await?)?;
 
     // Spawn progress bridge: relay ParamOperationProgress to the shared progress event.
     let mut progress_sub = handle.subscribe();
@@ -658,11 +654,7 @@ pub(crate) async fn param_write_batch(
     params: Vec<(String, f32)>,
 ) -> Result<Vec<ParamWriteResult>, String> {
     ensure_live_write_allowed(state.inner(), OperationId::ParamWriteBatch).await?;
-    let handle = with_vehicle(&state)
-        .await?
-        .params()
-        .write_batch(params)
-        .map_err(|e| e.to_string())?;
+    let handle = crate::vehicle_ops::begin_write(&with_vehicle(&state).await?, params)?;
 
     // Spawn progress bridge: relay ParamOperationProgress to the shared progress event.
     let mut progress_sub = handle.subscribe();
@@ -874,6 +866,9 @@ mod tests {
 
     fn app_state_for_tests() -> AppState {
         AppState {
+            connection_gate: tokio::sync::Mutex::new(()),
+            #[cfg(not(target_os = "android"))]
+            mcp: crate::mcp::McpRuntime::default(),
             live_runtime: ironwing_core::live_runtime::SharedLiveRuntime::new(
                 ironwing_core::live_runtime::LiveVehicleRuntime::new(
                     crate::tauri_event_sink::TauriEventSink::default(),

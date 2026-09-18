@@ -41,6 +41,7 @@ export async function webRuntimeCapabilities(): Promise<RuntimeCapabilities> {
     log_library_filesystem: unsupportedCapability("Native log-library filesystem access is not available in pure web mode."),
     recording_filesystem: maybe("Browser recording uses File System Access when available, browser downloads for manual saves, and IndexedDB for completed recordings."),
     mission_transfer: maybe("Mission transfer depends on the connected MAVLink browser transport."),
+    mcp_server: unsupportedCapability("MCP server requires the desktop application."),
     parameter_transfer: maybe("Parameter transfer depends on the connected MAVLink browser transport."),
   };
 }

@@ -153,6 +153,9 @@ pub const COMMAND_NAMES: &[&str] = &[
     "log_open",
     "log_query",
     "log_raw_messages_query",
+    "mcp_settings_read",
+    "mcp_settings_write",
+    "mcp_token_generate",
     "mission_cancel",
     "mission_clear",
     "mission_download",
@@ -435,6 +438,19 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         "RawMessagePage",
         ALL_PLATFORMS,
     ),
+    command(
+        "mcp_settings_read",
+        "NoArgs",
+        "McpSettingsResult",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "mcp_settings_write",
+        "{ settings: McpSettings }",
+        "McpSettingsResult",
+        ALL_PLATFORMS,
+    ),
+    command("mcp_token_generate", "NoArgs", "string", NATIVE_REMOTE_MOCK),
     command("mission_cancel", "NoArgs", "void", ALL_PLATFORMS),
     command("mission_clear", "NoArgs", "void", ALL_PLATFORMS),
     command(
@@ -726,7 +742,7 @@ fn command_map_ts() -> Result<String, Box<dyn Error>> {
 }
 
 fn imports_ts() -> &'static str {
-    r#"import type { SourceKind } from "./ironwing";
+    r#"import type { SourceKind, McpSettings, McpSettingsResult } from "./ironwing";
 import type { RcOverrideChannel } from "../../calibration";
 import type {
   BootloaderInstallationResult,

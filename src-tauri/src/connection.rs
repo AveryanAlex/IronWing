@@ -79,7 +79,7 @@ async fn connect_via_address(
     });
     *state.connect_abort.lock().await = Some(task.abort_handle());
 
-    let vehicle = task
+    let vehicle = tokio_util::task::AbortOnDropHandle::new(task)
         .await
         .map_err(|e| {
             if e.is_cancelled() {
@@ -106,13 +106,15 @@ where
     let task = tokio::spawn(future);
     *state.connect_abort.lock().await = Some(task.abort_handle());
 
-    let result = task.await.map_err(|e| {
-        if e.is_cancelled() {
-            "connection cancelled".to_string()
-        } else {
-            e.to_string()
-        }
-    })?;
+    let result = tokio_util::task::AbortOnDropHandle::new(task)
+        .await
+        .map_err(|e| {
+            if e.is_cancelled() {
+                "connection cancelled".to_string()
+            } else {
+                e.to_string()
+            }
+        })?;
 
     *state.connect_abort.lock().await = None;
     result
@@ -193,6 +195,8 @@ async fn store_connected_vehicle(
         demo_handle,
     } = connected_vehicle;
     tasks.extend(crate::bridges::spawn_event_bridges(app, &vehicle).await);
+    #[cfg(not(target_os = "android"))]
+    tasks.push(crate::mcp::connected(state, &vehicle));
     *state.background_tasks.lock().await = tasks;
     *state.background_listeners.lock().await = listeners;
     *state.demo_vehicle.lock().await = demo_handle;
@@ -223,6 +227,32 @@ pub(crate) async fn connect_link(
     app: tauri::AppHandle,
     request: ConnectRequest,
 ) -> Result<(), String> {
+    connect_vehicle(state.inner(), &app, request, true).await
+}
+
+pub(crate) async fn connect_vehicle(
+    state: &AppState,
+    app: &tauri::AppHandle,
+    request: ConnectRequest,
+    replace: bool,
+) -> Result<(), String> {
+    let _guard = state
+        .connection_gate
+        .try_lock()
+        .map_err(|_| "connection operation already in progress")?;
+    if !replace && state.live_runtime.with_runtime(|r| r.is_connected()) {
+        return Err("Already connected; explicitly set replace=true to switch vehicles".into());
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        crate::mcp::reset_session(state);
+        state
+            .mcp
+            .session
+            .write()
+            .unwrap_or_else(|e| e.into_inner())
+            .transport = Some(request.transport.clone());
+    }
     let auto_record_request = auto_record_start_request(request.auto_record_on_connect);
 
     // Abort any in-flight connect attempt so its socket is released
@@ -236,14 +266,14 @@ pub(crate) async fn connect_link(
     if let Some(token) = state.mission_op_cancel.lock().await.take() {
         token.cancel();
     }
-    abort_background_tasks(&state).await;
-    clear_background_listeners(&state, &app).await;
+    abort_background_tasks(state).await;
+    clear_background_listeners(state, app).await;
 
     // Disconnect any existing vehicle
     {
         let _ = emit_guided_reset(
-            &state,
-            &app,
+            state,
+            app,
             crate::ipc::DomainProvenance::Stream,
             crate::ipc::guided::GuidedTerminationReason::SourceSwitch,
             "live source switched",
@@ -258,30 +288,29 @@ pub(crate) async fn connect_link(
         if let Some(v) = prev {
             let _ = v.disconnect().await;
         }
-        shutdown_demo_vehicle(&state).await;
+        shutdown_demo_vehicle(state).await;
         teardown_transport_target(previous_target.as_ref()).await;
     }
 
     match request.transport {
         ConnectTransport::Udp { bind_addr } => {
-            let vehicle = connect_via_address(&state, format!("udpin:{bind_addr}")).await?;
-            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await?;
+            let vehicle = connect_via_address(state, format!("udpin:{bind_addr}")).await?;
+            store_connected_vehicle(state, app, vehicle, ActiveLinkTarget::Other).await?;
         }
         ConnectTransport::Tcp { address } => {
             let mut connected_vehicle =
-                connect_via_address(&state, format!("tcpout:{address}")).await?;
+                connect_via_address(state, format!("tcpout:{address}")).await?;
             let vehicle = connected_vehicle.vehicle.clone();
             connected_vehicle
                 .tasks
                 .push(tokio::spawn(request_tcp_telemetry_streams(vehicle)));
-            store_connected_vehicle(&state, &app, connected_vehicle, ActiveLinkTarget::Other)
-                .await?;
+            store_connected_vehicle(state, app, connected_vehicle, ActiveLinkTarget::Other).await?;
         }
         ConnectTransport::Serial { port, baud } => {
             #[cfg(not(target_os = "android"))]
             {
-                let vehicle = connect_via_address(&state, format!("serial:{port}:{baud}")).await?;
-                store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Serial { port })
+                let vehicle = connect_via_address(state, format!("serial:{port}:{baud}")).await?;
+                store_connected_vehicle(state, app, vehicle, ActiveLinkTarget::Serial { port })
                     .await?;
             }
             #[cfg(target_os = "android")]
@@ -293,15 +322,15 @@ pub(crate) async fn connect_link(
         ConnectTransport::BluetoothBle { address, profile } => {
             let profile = profile.unwrap_or(BluetoothProfile::NordicUart);
             let vehicle =
-                connect_with_abort(&state, async move { connect_ble(&address, profile).await })
+                connect_with_abort(state, async move { connect_ble(&address, profile).await })
                     .await?;
-            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::BluetoothBle).await?;
+            store_connected_vehicle(state, app, vehicle, ActiveLinkTarget::BluetoothBle).await?;
         }
         ConnectTransport::Demo { vehicle_preset } => {
             let vehicle =
-                connect_with_abort(&state, async move { connect_demo(vehicle_preset).await })
+                connect_with_abort(state, async move { connect_demo(vehicle_preset).await })
                     .await?;
-            store_connected_vehicle(&state, &app, vehicle, ActiveLinkTarget::Other).await?;
+            store_connected_vehicle(state, app, vehicle, ActiveLinkTarget::Other).await?;
         }
         ConnectTransport::BluetoothSpp { address } => {
             #[cfg(target_os = "android")]
@@ -330,7 +359,7 @@ pub(crate) async fn connect_link(
         }
     }
 
-    maybe_start_auto_recording(&state, &app, auto_record_request).await;
+    maybe_start_auto_recording(state, app, auto_record_request).await;
     Ok(())
 }
 
@@ -547,6 +576,39 @@ pub(crate) async fn force_disconnect(
     state: &AppState,
     app: &tauri::AppHandle,
 ) -> Result<(), String> {
+    disconnect_vehicle(state, app, None).await
+}
+
+pub(crate) async fn disconnect_vehicle(
+    state: &AppState,
+    app: &tauri::AppHandle,
+    expected_connection: Option<&str>,
+) -> Result<(), String> {
+    let _gate = if expected_connection.is_some() {
+        state
+            .connection_gate
+            .try_lock()
+            .map_err(|_| "connection operation in progress")?
+    } else {
+        if let Some(handle) = state.connect_abort.lock().await.take() {
+            handle.abort();
+        }
+        state.connection_gate.lock().await
+    };
+    #[cfg(not(target_os = "android"))]
+    if expected_connection.is_some_and(|id| {
+        id != state
+            .mcp
+            .session
+            .read()
+            .unwrap_or_else(|e| e.into_inner())
+            .id
+    }) {
+        return Err("session_id mismatch".into());
+    }
+
+    #[cfg(not(target_os = "android"))]
+    crate::mcp::reset_session(state);
     if let Some(stopped_recording) = state.recorder.stop() {
         crate::recording::queue_stopped_recording_finalization(
             &state.recorder,

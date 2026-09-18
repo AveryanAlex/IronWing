@@ -484,6 +484,7 @@ function mockRuntimeCapabilities() {
     recording_filesystem: { kind: "supported" },
     mission_transfer: { kind: "supported" },
     parameter_transfer: { kind: "supported" },
+    mcp_server: { kind: "unsupported", reason: "MCP server requires desktop" },
   };
 }
 
@@ -648,6 +649,9 @@ const mockLogCommandHandlers = definePlatformCommandHandlers({
 
 const mockRecordingCommandHandlers = definePlatformCommandHandlers({
   recording_status: () => getRecordingStatus(),
+  mcp_settings_read: () => ({ settings: { enabled: false, host: "127.0.0.1", port: 14243, token: null }, status: { supported: false, running: false, endpoint: null, last_error: null } }),
+  mcp_settings_write: () => { throw new Error("MCP server requires desktop"); },
+  mcp_token_generate: () => { throw new Error("MCP server requires desktop"); },
   recording_settings_read: () => getRecordingSettings(),
   recording_settings_write: (args) => writeMockRecordingSettings(args?.settings as RecordingSettings),
   recording_start: (args) => startRecording(args as CommandArgs),

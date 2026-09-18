@@ -183,6 +183,10 @@ fn generated_mavkit() -> Result<String, Box<dyn Error>> {
 
 fn generated_ironwing() -> Result<String, Box<dyn Error>> {
     let mut types = Types::default();
+    types
+        .register_mut::<ipc::mcp::McpSettings>()
+        .register_mut::<ipc::mcp::McpStatus>()
+        .register_mut::<ipc::mcp::McpSettingsResult>();
 
     types
         .register_mut::<transport::TransportDescriptor>()

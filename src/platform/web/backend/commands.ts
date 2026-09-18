@@ -1,3 +1,4 @@
+import { mcpCommandHandlers } from "./mcp";
 import { firmwareCommandHandlers, webFirmwareCommandHandlers } from "./firmware";
 import { guidedCommandHandlers } from "./guided";
 import { logCommandHandlers } from "./logs";
@@ -19,6 +20,7 @@ import {
 
 const commandHandlers: PlatformCommandHandlers = Object.assign(
   {},
+  mcpCommandHandlers,
   sessionCommandHandlers,
   serialPortCommandHandlers,
   vehicleControlCommandHandlers,

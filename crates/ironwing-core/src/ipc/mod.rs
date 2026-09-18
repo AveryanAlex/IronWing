@@ -7,6 +7,7 @@ pub mod firmware;
 pub mod guided;
 #[allow(dead_code)]
 pub mod logs;
+pub mod mcp;
 pub mod mission;
 pub mod playback;
 pub mod sensor_health;

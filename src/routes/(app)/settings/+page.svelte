@@ -1,4 +1,5 @@
 <script lang="ts">
+import McpSettingsPanel from "../../../components/settings/McpSettingsPanel.svelte";
 import { fromStore } from "svelte/store";
 
 import { getLiveSettingsStoreContext } from "../../../app/shell/runtime-context";
@@ -100,4 +101,5 @@ function handleSvsToggle(checked: boolean) {
     </FieldRow>
     <HelperText size="xs" tone="muted" class="mt-3">Display preferences are local to this browser or Tauri profile.</HelperText>
   </Panel>
+  <McpSettingsPanel />
 </WorkspaceShell>

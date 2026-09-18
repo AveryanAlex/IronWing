@@ -44,7 +44,7 @@ process.once("exit", cleanupTauriDriverSync);
 export const config = {
   host: WEBDRIVER_HOST,
   port: WEBDRIVER_PORT,
-  specs: [fileURLToPath(new URL("./smoke.spec.mjs", import.meta.url))],
+  specs: [[fileURLToPath(new URL("./smoke.spec.mjs", import.meta.url)), fileURLToPath(new URL("./mcp.spec.mjs", import.meta.url))]],
   maxInstances: 1,
   reporters: ["spec"],
   logLevel: WDIO_LOG_LEVEL,

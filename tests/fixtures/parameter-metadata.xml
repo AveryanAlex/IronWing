@@ -1,0 +1,13 @@
+<paramfile>
+  <vehicles><parameters name="ArduPlane">
+    <param name="ArduPlane:BARO_TEST" humanName="Barometer offset" documentation="Pressure offset for calibration" user="Advanced">
+      <field name="Range">-100 100</field><field name="Increment">0.1</field>
+      <field name="Units">Pa</field><field name="UnitText">pascals</field>
+      <field name="RebootRequired">True</field><field name="ReadOnly">False</field>
+      <values><value code="0">Disabled</value><value code="1">Enabled</value></values>
+      <bitmask><bit code="0">Primary</bit><bit code="2">Secondary</bit></bitmask>
+    </param>
+    <param name="TEXT_TEST"><field name="humanName">Text options</field><field name="Values">0:Off,1:On</field><field name="Bitmask">0:First,3:Fourth</field><field name="Increment">invalid</field></param>
+  </parameters></vehicles>
+  <libraries><parameters name="Baro"><param name="BARO_TEST" humanName="Duplicate must lose"/></parameters></libraries>
+</paramfile>
