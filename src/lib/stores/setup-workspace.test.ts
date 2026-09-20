@@ -676,7 +676,7 @@ describe("setup workspace store", () => {
     expect(staleState.rcReceiver.detailText).toContain("Last good sample");
   });
 
-  it("creates a reboot checkpoint after successful reboot-required apply and resumes the same section on reconnect", () => {
+  it("creates a reboot checkpoint after successful reboot-required apply and keeps it until explicitly cleared", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState());
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
@@ -709,7 +709,7 @@ describe("setup workspace store", () => {
     }));
 
     const pendingState = get(store);
-    expect(pendingState.checkpoint.phase).toBe("resume_pending");
+    expect(pendingState.checkpoint.phase).toBe("reboot_required");
     expect(pendingState.checkpoint.blocksActions).toBe(true);
     expect(pendingState.checkpoint.resumeSectionId).toBe("rc_receiver");
 
@@ -722,11 +722,13 @@ describe("setup workspace store", () => {
       },
     }));
 
-    const resumedState = get(store);
-    expect(resumedState.checkpoint.phase).toBe("resume_complete");
-    expect(resumedState.checkpoint.blocksActions).toBe(false);
-    expect(resumedState.selectedSectionId).toBe("rc_receiver");
-    expect(resumedState.checkpoint.detailText).toContain("Resumed");
+    const changedRevisionState = get(store);
+    expect(changedRevisionState.checkpoint.phase).toBe("reboot_required");
+    expect(changedRevisionState.checkpoint.blocksActions).toBe(true);
+    expect(changedRevisionState.selectedSectionId).toBe("rc_receiver");
+
+    store.clearCheckpointPlaceholder();
+    expect(get(store).checkpoint.phase).toBe("idle");
   });
 
   it("does not create a second reboot checkpoint for the self-rebooting factory reset", () => {
@@ -767,7 +769,7 @@ describe("setup workspace store", () => {
     expect(get(store).checkpoint.phase).toBe("idle");
   });
 
-  it("flags scope changes while a checkpoint is pending and clears the resume target", () => {
+  it("does not infer checkpoint completion from a session scope change", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState());
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
@@ -792,7 +794,7 @@ describe("setup workspace store", () => {
       applyProgress: null,
     }));
 
-    expect(get(store).checkpoint.phase).toBe("resume_pending");
+    expect(get(store).checkpoint.phase).toBe("reboot_required");
 
     sessionStore.set(createSessionState({
       activeEnvelope: {
@@ -804,10 +806,9 @@ describe("setup workspace store", () => {
     }));
 
     const nextScopeState = get(store);
-    expect(nextScopeState.checkpoint.phase).toBe("scope_changed");
-    expect(nextScopeState.checkpoint.resumeSectionId).toBeNull();
-    expect(nextScopeState.selectedSectionId).toBe("overview");
-    expect(nextScopeState.checkpoint.detailText).toContain("review current values");
+    expect(nextScopeState.checkpoint.phase).toBe("reboot_required");
+    expect(nextScopeState.checkpoint.resumeSectionId).toBe("calibration");
+    expect(nextScopeState.checkpoint.blocksActions).toBe(true);
   });
 
 });

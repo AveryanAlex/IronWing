@@ -39,7 +39,7 @@ let {
   <Bits.Overlay class={cn("fixed inset-0 z-50 bg-black/70", overlayClass)} />
   <Bits.Content
     class={cn(
-      "fixed left-1/2 top-1/2 z-[60] grid max-h-[85dvh] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-auto rounded-xl border border-border bg-bg-secondary p-5 text-text-primary shadow-2xl shadow-black/40 focus-visible:outline-none sm:w-full",
+      "fixed left-1/2 top-1/2 z-[60] grid max-h-[85dvh] w-[calc(100vw-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-x-hidden overflow-y-auto rounded-xl border border-border bg-bg-secondary p-5 text-text-primary shadow-2xl shadow-black/40 focus-visible:outline-none sm:w-full",
       sizeClasses[size],
       className,
     )}

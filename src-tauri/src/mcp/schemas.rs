@@ -15,6 +15,7 @@ pub fn output(name: &str) -> Map<String, Value> {
     let integer = json!({"type":"integer","minimum":0});
     let number = json!({"type":"number"});
     let nullable_string = json!({"type":["string","null"]});
+    let nullable_boolean = json!({"type":["boolean","null"]});
     let snapshot =
         json!({"type":"object","description":"Shared vehicle-domain snapshot from mavkit."});
     let optional_snapshot = json!({"type":["object","null"]});
@@ -35,7 +36,7 @@ pub fn output(name: &str) -> Map<String, Value> {
             json!({"session_id":string,"source":string,"state":snapshot,"firmware":optional_snapshot,"hardware":optional_snapshot,"unique_ids":optional_snapshot,"serial_device":optional_snapshot,"display_id":nullable_string,"sensor_health":optional_snapshot,"link":{"type":["string","object","null"]}})
         }
         "parameters_write" => {
-            json!({"session_id":string,"atomic":{"const":false},"results":array(object(json!({"id":string,"requested_value":number,"confirmed_value":number,"success":boolean,"error":nullable_string})))})
+            json!({"session_id":string,"atomic":{"const":false},"reboot_required":boolean,"reboot_required_ids":array(string.clone()),"results":array(object(json!({"id":string,"requested_value":number,"confirmed_value":number,"success":boolean,"error":nullable_string,"reboot_required":nullable_boolean})))})
         }
         "parameters_refresh" => {
             json!({"session_id":string,"count":integer,"sync":nullable_string})

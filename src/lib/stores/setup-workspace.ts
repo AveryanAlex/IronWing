@@ -21,8 +21,6 @@ import type { SessionStorePhase, SessionStoreState } from "./session";
 type SetupCheckpointSeed = {
   resumeSectionId: SetupSectionId;
   scopeKey: string | null;
-  scopeFamilyKey: string | null;
-  resumeRevision: number | null;
 };
 
 type CalibrationCardId = "accel" | "gyro" | "compass" | "radio";
@@ -32,14 +30,12 @@ type RcSignalState = "disconnected" | "waiting" | "live" | "stale" | "degraded";
 type CalibrationActionAvailability = "available" | "blocked" | "unsupported";
 
 export type SetupWorkspaceReadiness = "bootstrapping" | "unavailable" | "ready" | "degraded";
-export type SetupWorkspaceCheckpointPhase = "idle" | "resume_pending" | "resume_complete" | "scope_changed";
+export type SetupWorkspaceCheckpointPhase = "idle" | "reboot_required";
 
 export type SetupWorkspaceCheckpointState = {
   phase: SetupWorkspaceCheckpointPhase;
   resumeSectionId: SetupSectionId | null;
   scopeKey: string | null;
-  scopeFamilyKey: string | null;
-  resumeRevision: number | null;
   reason: string | null;
   title: string | null;
   detailText: string | null;
@@ -132,8 +128,6 @@ function createIdleCheckpoint(): SetupWorkspaceCheckpointState {
     phase: "idle",
     resumeSectionId: null,
     scopeKey: null,
-    scopeFamilyKey: null,
-    resumeRevision: null,
     reason: null,
     title: null,
     detailText: null,
@@ -797,7 +791,7 @@ function normalizeCheckpointInput(input: SetupWorkspaceCheckpointInput): SetupWo
   const resumeSectionId = input.resumeSectionId && isSetupSectionId(input.resumeSectionId)
     ? input.resumeSectionId
     : null;
-  const phase = input.phase ?? (resumeSectionId ? "resume_pending" : "idle");
+  const phase = input.phase ?? (resumeSectionId ? "reboot_required" : "idle");
 
   if (phase === "idle") {
     return createIdleCheckpoint();
@@ -807,17 +801,10 @@ function normalizeCheckpointInput(input: SetupWorkspaceCheckpointInput): SetupWo
     phase,
     resumeSectionId,
     scopeKey: typeof input.scopeKey === "string" && input.scopeKey.trim().length > 0 ? input.scopeKey : null,
-    scopeFamilyKey: null,
-    resumeRevision: null,
     reason: typeof input.reason === "string" && input.reason.trim().length > 0 ? input.reason : null,
-    title:
-      phase === "resume_complete"
-        ? "Setup resumed"
-        : phase === "scope_changed"
-          ? "Setup scope changed"
-          : "Reconnect required",
+    title: "Reboot required",
     detailText: input.reason ?? null,
-    blocksActions: phase !== "resume_complete",
+    blocksActions: true,
   };
 }
 
@@ -877,7 +864,6 @@ export function createSetupWorkspaceStore(
 
     const activeScopeKey = scopeKey(sessionState.activeEnvelope);
     const activeFamily = scopeFamilyKey(sessionState.activeEnvelope);
-    const activeRevision = sessionState.activeEnvelope?.reset_revision ?? null;
     const sameScope = activeScopeKey !== null && activeScopeKey === previousScopeKey;
     currentActiveScopeKey = activeScopeKey;
     const readiness = resolveSetupReadiness(sessionState, paramsState);
@@ -890,8 +876,6 @@ export function createSetupWorkspaceStore(
       pendingCheckpointSeed = {
         resumeSectionId: selectedSectionId,
         scopeKey: activeScopeKey,
-        scopeFamilyKey: activeFamily,
-        resumeRevision: activeRevision,
       };
     }
 
@@ -899,60 +883,17 @@ export function createSetupWorkspaceStore(
       if (pendingCheckpointSeed && paramsState.applyPhase === "idle") {
         const resumeLabel = getSetupSectionDefinition(pendingCheckpointSeed.resumeSectionId).title;
         checkpointState = {
-          phase: "resume_pending",
+          phase: "reboot_required",
           resumeSectionId: pendingCheckpointSeed.resumeSectionId,
           scopeKey: pendingCheckpointSeed.scopeKey,
-          scopeFamilyKey: pendingCheckpointSeed.scopeFamilyKey,
-          resumeRevision: pendingCheckpointSeed.resumeRevision,
-          reason: `Reboot and reconnect to resume ${resumeLabel}.`,
-          title: "Reconnect required",
-          detailText: `Reboot-required setup changes were applied. Dependent actions stay locked until the same setup scope reconnects or you reset this checkpoint.`,
+          reason: `Reboot to finish applying changes before returning to ${resumeLabel}.`,
+          title: "Reboot required",
+          detailText: "Reboot-required setup changes were applied. Reboot the vehicle before continuing setup.",
           blocksActions: true,
         };
       }
 
       pendingCheckpointSeed = null;
-    }
-
-    if (checkpointState.phase === "resume_pending") {
-      if (checkpointState.scopeFamilyKey && activeFamily && checkpointState.scopeFamilyKey !== activeFamily) {
-        checkpointState = {
-          phase: "scope_changed",
-          resumeSectionId: null,
-          scopeKey: null,
-          scopeFamilyKey: null,
-          resumeRevision: null,
-          reason: "Setup scope changed before reconnect completed.",
-          title: "Setup scope changed",
-          detailText: "The active session scope changed while the reboot checkpoint was pending; review current values before restaging any dependent setup changes.",
-          blocksActions: true,
-        };
-        selectedSectionId = "overview";
-      } else if (
-        checkpointState.scopeFamilyKey
-        && activeFamily
-        && checkpointState.scopeFamilyKey === activeFamily
-        && checkpointState.resumeRevision !== null
-        && activeRevision !== null
-        && checkpointState.resumeRevision !== activeRevision
-        && liveSessionConnected
-      ) {
-        const resumeSection = checkpointState.resumeSectionId && isSetupSectionId(checkpointState.resumeSectionId)
-          ? checkpointState.resumeSectionId
-          : "overview";
-        selectedSectionId = resumeSection;
-        checkpointState = {
-          phase: "resume_complete",
-          resumeSectionId: resumeSection,
-          scopeKey: activeScopeKey,
-          scopeFamilyKey: activeFamily,
-          resumeRevision: activeRevision,
-          reason: `Resumed ${getSetupSectionDefinition(resumeSection).title}.`,
-          title: "Setup resumed",
-          detailText: `Reconnected to the same setup scope. Resumed ${getSetupSectionDefinition(resumeSection).title} so you can continue from the last guided section.`,
-          blocksActions: false,
-        };
-      }
     }
 
     const sections = CATALOG_SECTIONS;

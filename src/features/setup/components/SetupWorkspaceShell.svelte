@@ -5,10 +5,12 @@ import type { Snippet } from "svelte";
 import { fromStore } from "svelte/store";
 
 import {
+  getSessionStoreContext,
   getSetupWorkspaceStoreContext,
   getSetupWorkspaceViewStoreContext,
   getShellChromeStoreContext,
 } from "../../../app/shell/runtime-context";
+import { rebootVehicle } from "../../../calibration";
 import { trackAnalytics } from "../../../lib/analytics/client";
 import { isSetupSectionId, type SetupSectionId } from "../../../lib/setup-sections";
 import { IconButton, WorkspaceShell } from "../../../components/ui";
@@ -28,6 +30,7 @@ type Props = {
 let { requestedSectionId, navigateToSetupSection, children }: Props = $props();
 
 const store = getSetupWorkspaceStoreContext();
+const sessionStore = getSessionStoreContext();
 const setupWorkspaceViewStore = getSetupWorkspaceViewStoreContext();
 const viewStore = fromStore(setupWorkspaceViewStore);
 const chromeStore = fromStore(getShellChromeStoreContext());
@@ -190,6 +193,11 @@ function handleSectionDrawerLinkClick(sectionId: string, event: MouseEvent) {
 function resetCheckpoint() {
   store.clearCheckpointPlaceholder();
 }
+
+async function rebootAndDisconnect() {
+  await rebootVehicle();
+  await sessionStore.disconnect();
+}
 </script>
 
 <svelte:window onkeydown={handleSectionDrawerKeydown} />
@@ -245,7 +253,11 @@ function resetCheckpoint() {
     data-selected-section={view.selectedSectionId}
     data-setup-readiness={view.readiness}
   >
-    <SetupCheckpointDialog checkpoint={view.checkpoint} onReset={resetCheckpoint} />
+    <SetupCheckpointDialog
+      checkpoint={view.checkpoint}
+      onReboot={rebootAndDisconnect}
+      onReset={resetCheckpoint}
+    />
 
     {#if useSectionDrawer}
       <div
