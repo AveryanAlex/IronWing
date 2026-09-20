@@ -6,6 +6,14 @@ import { getParamsStoreContext } from "../../../app/shell/runtime-context";
 import { Badge, HelperText, InternalLink, NativeSelect } from "../../../components/ui";
 import { buildParameterItemIndex } from "../../../lib/params/parameter-item-model";
 import {
+  combineSetupControlAvailability,
+  SETUP_CONTROL_AVAILABLE,
+  setupCheckpointAvailability,
+  setupControlLocked,
+  setupUnsupportedAvailability,
+  type SetupControlAvailability,
+} from "../../../lib/setup/control-availability";
+import {
   architectureParameterValues,
   getVtolFrameClassOptions,
   getVtolFrameLayoutOptions,
@@ -15,6 +23,8 @@ import {
   type VtolValidationIssue,
 } from "../../../lib/setup/vtol-topology-model";
 import SetupNotice from "../shared/SetupNotice.svelte";
+import SetupControlGuard from "../shared/SetupControlGuard.svelte";
+import SetupLockNotice from "../shared/SetupLockNotice.svelte";
 import SetupSectionCard from "../shared/SetupSectionCard.svelte";
 import { stageSetupParameterEdit } from "../shared/parameter-editing";
 import VtolTopologyDiagram from "./VtolTopologyDiagram.svelte";
@@ -80,6 +90,75 @@ let requiredOutputItems = $derived([
   ...proposed.actuators.filter((actuator) => actuator.required),
 ]);
 let assignedRequiredCount = $derived(requiredOutputItems.filter((item) => item.outputOwners.length > 0).length);
+let checkpointAvailability = $derived(
+  actionsBlocked ? setupCheckpointAvailability() : SETUP_CONTROL_AVAILABLE,
+);
+let airframeAvailability = $derived(combineSetupControlAvailability(
+  checkpointAvailability,
+  airframeParamsReady
+    ? SETUP_CONTROL_AVAILABLE
+    : missingParameterAvailability("the VTOL airframe parameters", params.stagedEdits.Q_ENABLE ? ["Q_ENABLE"] : []),
+));
+let frameClassAvailability = $derived(combineSetupControlAvailability(
+  checkpointAvailability,
+  !itemIndex.has("Q_FRAME_CLASS")
+    ? missingParameterAvailability("Q_FRAME_CLASS", topology.pendingTopologyParams)
+    : proposed.architecture === "bicopter" || proposed.architecture === "tailsitter_single_dual"
+      ? setupControlLocked(
+          "fixed_by_configuration",
+          "Frame class is fixed",
+          `${proposed.architectureLabel} requires the Single / Dual hover frame class.`,
+        )
+      : SETUP_CONTROL_AVAILABLE,
+));
+let frameTypeAvailability = $derived(combineSetupControlAvailability(
+  checkpointAvailability,
+  itemIndex.has("Q_FRAME_TYPE")
+    ? SETUP_CONTROL_AVAILABLE
+    : missingParameterAvailability("Q_FRAME_TYPE", topology.pendingTopologyParams),
+));
+let mechanismAvailability = $derived(combineSetupControlAvailability(
+  checkpointAvailability,
+  itemIndex.has("Q_TILT_TYPE")
+    ? SETUP_CONTROL_AVAILABLE
+    : missingParameterAvailability("Q_TILT_TYPE", topology.pendingTopologyParams),
+));
+let maskAvailability = $derived(combineSetupControlAvailability(
+  checkpointAvailability,
+  maskParamAvailable
+    ? SETUP_CONTROL_AVAILABLE
+    : missingParameterAvailability(
+        selectableMask === "tilt" ? "Q_TILT_MASK" : "Q_TAILSIT_MOTMX",
+        topology.pendingTopologyParams,
+      ),
+));
+
+function missingParameterAvailability(parameterName: string, stagedPrerequisites: readonly string[]): SetupControlAvailability {
+  if (params.applyPhase === "applying") {
+    return setupControlLocked(
+      "temporarily_unavailable",
+      "Applying parameter changes",
+      `${parameterName} stays locked while the staged changes are being written.`,
+    );
+  }
+  if (params.phase === "bootstrapping" || params.phase === "subscribing") {
+    return setupControlLocked(
+      "refresh_required",
+      "Waiting for parameters",
+      `${parameterName} will be checked again when the active parameter list finishes refreshing.`,
+      { nextAction: "refresh_parameters", nextActionLabel: "Wait for parameter refresh to complete." },
+    );
+  }
+  if (stagedPrerequisites.length > 0) {
+    return setupControlLocked(
+      "apply_required",
+      "Apply the staged configuration first",
+      `${parameterName} is not available in the active parameter set yet. Apply ${stagedPrerequisites.join(", ")}, then reboot and reconnect.`,
+      { nextAction: "review_staged_changes", nextActionLabel: "Review and apply the staged changes." },
+    );
+  }
+  return setupUnsupportedAvailability(parameterName);
+}
 
 function classAllowed(frameClass: number, architecture: VtolArchitecture): boolean {
   if (architecture === "bicopter" || architecture === "tailsitter_single_dual") return frameClass === 10;
@@ -165,45 +244,51 @@ function currentLayoutValue(): string {
   testId="vtol-airframe-configurator"
 >
   {#if !airframeParamsReady}
-    <SetupNotice tone="warning">Apply Q_ENABLE, reboot, and refresh parameters before selecting the VTOL architecture or hover geometry.</SetupNotice>
+    <SetupLockNotice availability={airframeAvailability} />
   {/if}
 
   <div class="grid gap-4 lg:grid-cols-3">
     <label class="space-y-2">
       <span class="text-sm font-semibold text-text-primary">Architecture</span>
-      <NativeSelect
-        value={proposed.architecture}
-        options={architectureOptions}
-        disabled={actionsBlocked || !airframeParamsReady}
-        onchange={(event) => stageArchitecture(event.currentTarget.value as VtolArchitecture)}
-        testId="vtol-architecture-select"
-      />
+      <SetupControlGuard availability={airframeAvailability} label="Architecture">
+        <NativeSelect
+          value={proposed.architecture}
+          options={architectureOptions}
+          disabled={airframeAvailability.state === "locked"}
+          onchange={(event) => stageArchitecture(event.currentTarget.value as VtolArchitecture)}
+          testId="vtol-architecture-select"
+        />
+      </SetupControlGuard>
       <HelperText size="xs">Sets the ArduPilot backend; it does not apply tuning or failsafe defaults.</HelperText>
     </label>
 
     <label class="space-y-2">
       <span class="text-sm font-semibold text-text-primary">Hover frame class</span>
-      <NativeSelect
-        value={proposed.frameClass === null ? "" : String(proposed.frameClass)}
-        options={classOptions}
-        placeholder="Select motor class"
-        disabled={actionsBlocked || !itemIndex.has("Q_FRAME_CLASS") || proposed.architecture === "bicopter" || proposed.architecture === "tailsitter_single_dual"}
-        onchange={(event) => stageFrameClass(event.currentTarget.value)}
-        testId="vtol-frame-class-select"
-      />
+      <SetupControlGuard availability={frameClassAvailability} label="Hover frame class">
+        <NativeSelect
+          value={proposed.frameClass === null ? "" : String(proposed.frameClass)}
+          options={classOptions}
+          placeholder="Select motor class"
+          disabled={frameClassAvailability.state === "locked"}
+          onchange={(event) => stageFrameClass(event.currentTarget.value)}
+          testId="vtol-frame-class-select"
+        />
+      </SetupControlGuard>
       <HelperText size="xs">Controls motor count and mixer in hover; it does not describe the fixed-wing planform.</HelperText>
     </label>
 
     <label class="space-y-2">
       <span class="text-sm font-semibold text-text-primary">Hover motor layout</span>
       {#if layoutOptions.length > 0}
-        <NativeSelect
-          value={currentLayoutValue()}
-          options={layoutOptions}
-          disabled={actionsBlocked || !itemIndex.has("Q_FRAME_TYPE")}
-          onchange={(event) => stageFrameType(event.currentTarget.value)}
-          testId="vtol-frame-type-select"
-        />
+        <SetupControlGuard availability={frameTypeAvailability} label="Hover motor layout">
+          <NativeSelect
+            value={currentLayoutValue()}
+            options={layoutOptions}
+            disabled={frameTypeAvailability.state === "locked"}
+            onchange={(event) => stageFrameType(event.currentTarget.value)}
+            testId="vtol-frame-type-select"
+          />
+        </SetupControlGuard>
       {:else}
         <div class="flex h-9 items-center rounded-md border border-border bg-bg-secondary px-3 text-sm text-text-muted">
           {proposed.frameClass === 10 ? "Not applicable for Single / Dual" : "Defined by script"}
@@ -228,17 +313,19 @@ function currentLayoutValue(): string {
           <span class="block text-sm font-semibold text-text-primary">Tilt mechanism</span>
           <span class="mt-1 block text-xs leading-5 text-text-muted">This determines collective versus independent left/right actuator functions.</span>
         </span>
-        <NativeSelect
-          value={proposed.mechanism === "binary" ? "1" : proposed.mechanism === "vectored_yaw" ? "2" : "0"}
-          options={[
-            { value: "0", label: "Continuous collective tilt" },
-            { value: "1", label: "Binary / retract mechanism" },
-            { value: "2", label: "Independent vectored yaw" },
-          ]}
-          disabled={actionsBlocked || !itemIndex.has("Q_TILT_TYPE")}
-          onchange={(event) => stageMechanism(event.currentTarget.value)}
-          testId="vtol-tilt-mechanism-select"
-        />
+        <SetupControlGuard availability={mechanismAvailability} label="Tilt mechanism">
+          <NativeSelect
+            value={proposed.mechanism === "binary" ? "1" : proposed.mechanism === "vectored_yaw" ? "2" : "0"}
+            options={[
+              { value: "0", label: "Continuous collective tilt" },
+              { value: "1", label: "Binary / retract mechanism" },
+              { value: "2", label: "Independent vectored yaw" },
+            ]}
+            disabled={mechanismAvailability.state === "locked"}
+            onchange={(event) => stageMechanism(event.currentTarget.value)}
+            testId="vtol-tilt-mechanism-select"
+          />
+        </SetupControlGuard>
       </label>
     </div>
   {:else if proposed.architecture === "bicopter"}
@@ -275,19 +362,21 @@ function currentLayoutValue(): string {
     <div class="flex items-start gap-2 rounded-md border border-accent/25 bg-accent/5 p-3 text-sm text-text-secondary">
       <MousePointer2 class="mt-0.5 shrink-0 text-accent" size={16} aria-hidden="true" />
       <span>
-        Click motors in the diagram to choose {selectableMask === "tilt" ? "which propellers physically tilt" : "which copter motors remain active in forward flight"}.
+        {maskAvailability.state === "available"
+          ? `Click motors in the diagram to choose ${selectableMask === "tilt" ? "which propellers physically tilt" : "which copter motors remain active in forward flight"}.`
+          : "Motor selection is locked. Open the diagram explanation for the next required step."}
         Current mask: <span class="font-mono font-semibold text-text-primary">{selectableMask === "tilt" ? proposed.tiltMask : proposed.tailsitterMotorMask}</span>.
       </span>
     </div>
     {#if !maskParamAvailable}
-      <SetupNotice tone="warning">The selected architecture is staged, but its mask parameter is not available yet. Apply, reboot, and refresh before choosing motors.</SetupNotice>
+      <SetupLockNotice availability={maskAvailability} />
     {/if}
   {/if}
 
   <VtolTopologyDiagram
     topology={proposed}
     {selectableMask}
-    disabled={actionsBlocked || !maskParamAvailable}
+    availability={maskAvailability}
     onMotorToggle={toggleDiagramMotor}
   />
 

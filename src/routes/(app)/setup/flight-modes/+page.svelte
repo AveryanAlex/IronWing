@@ -9,6 +9,12 @@ import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/s
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import {
+  combineSetupControlAvailability,
+  SETUP_CONTROL_AVAILABLE,
+  setupCheckpointAvailability,
+  setupControlLocked,
+} from "../../../../lib/setup/control-availability";
+import {
   FLIGHT_MODE_CHANNEL_PARAM,
   FLIGHT_MODE_PARAM_NAMES,
   FLIGHT_MODE_PWM_DISPLAY_MAX,
@@ -120,6 +126,18 @@ let model = $derived(
     sameScope: previousModes.length > 0,
     telemetrySettled: session.telemetryDomain.complete !== false,
   }),
+);
+let presetAvailability = $derived(
+  combineSetupControlAvailability(
+    actionsBlocked ? setupCheckpointAvailability(view.checkpoint.detailText) : SETUP_CONTROL_AVAILABLE,
+    model.canStagePreset
+      ? SETUP_CONTROL_AVAILABLE
+      : setupControlLocked(
+          "dependency",
+          "Live flight-mode validation required",
+          "Preset staging stays locked until the active vehicle provides its available-mode list.",
+        ),
+  ),
 );
 let presetTitle = $derived(
   model.preset ? `${model.preset.charAt(0).toUpperCase()}${model.preset.slice(1)} defaults` : "Recommended defaults",
@@ -657,6 +675,7 @@ function handleFallbackDragEnd() {
               onCancel={() => (presetPreviewOpen = false)}
               onStage={stagePreset}
               rows={presetRows}
+              stageAvailability={presetAvailability}
               stageLabel={model.canStagePreset ? "Stage these modes" : "Live mode list required"}
             />
             {#if !model.canStagePreset}

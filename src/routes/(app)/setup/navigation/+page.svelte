@@ -14,6 +14,12 @@ import { fromStore } from "svelte/store";
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
+import {
+  combineSetupControlAvailability,
+  SETUP_CONTROL_AVAILABLE,
+  setupCheckpointAvailability,
+  setupReadOnlyAvailability,
+} from "../../../../lib/setup/control-availability";
 import { buildSerialPortModel } from "../../../../lib/setup/serial-port-model";
 import { selectTelemetryView } from "../../../../lib/telemetry-selectors";
 import type { ParamMeta } from "../../../../param-metadata";
@@ -116,10 +122,19 @@ let serialModel = $derived(
 );
 let docsUrl = $derived(resolveDocsUrl("positioning_gps_compass"));
 let actionsBlocked = $derived(view.checkpoint.blocksActions);
+let checkpointAvailability = $derived(
+  actionsBlocked ? setupCheckpointAvailability(view.checkpoint.detailText) : SETUP_CONTROL_AVAILABLE,
+);
 let liveConnected = $derived(session.sessionDomain.value?.connection.kind === "connected");
 let primaryTypeParamName = $derived(resolvePrimaryReceiverTypeParam(params.paramStore, params.stagedEdits));
 let primaryTypeItem = $derived(primaryTypeParamName ? (itemIndex.get(primaryTypeParamName) ?? null) : null);
 let gnssModeItem = $derived(itemIndex.get("GPS_GNSS_MODE") ?? null);
+let gnssMaskAvailability = $derived(
+  combineSetupControlAvailability(
+    checkpointAvailability,
+    gnssModeItem?.readOnly ? setupReadOnlyAvailability("GPS_GNSS_MODE") : SETUP_CONTROL_AVAILABLE,
+  ),
+);
 let gnssCurrentValue = $derived(resolveCurrentGnssMask(gnssModeItem, params.stagedEdits));
 let gnssItems = $derived(buildGnssItems(params.metadata?.get("GPS_GNSS_MODE"), gnssCurrentValue));
 let liveObservation = $derived(resolveLiveObservation(telemetry, view.activeScopeKey));
@@ -441,7 +456,7 @@ function formatHdop(value: number | null): string {
       <SetupBitmaskTable
         clearAllLabel="Use receiver default"
         description="Select the satellite constellations to request from the receiver. Clearing all bits leaves the receiver's default constellation settings in place."
-        disabled={actionsBlocked || gnssModeItem?.readOnly === true}
+        availability={gnssMaskAvailability}
         embedded
         items={gnssItems.map((item) => ({
           key: item.key,

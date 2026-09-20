@@ -5,6 +5,13 @@ import { fromStore } from "svelte/store";
 import { getParamsStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
+import {
+  combineSetupControlAvailability,
+  SETUP_CONTROL_AVAILABLE,
+  setupCheckpointAvailability,
+  setupControlLocked,
+  type SetupControlAvailability,
+} from "../../../../lib/setup/control-availability";
 import { buildSerialPortModel, type SerialPortRow } from "../../../../lib/setup/serial-port-model";
 import type { SetupWorkspaceSection, SetupWorkspaceStoreState } from "../../../../lib/stores/setup-workspace";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
@@ -43,8 +50,31 @@ let model = $derived(
 );
 let docsUrl = $derived(resolveDocsUrl("serial_ports"));
 let actionsBlocked = $derived(view.checkpoint.blocksActions);
+let checkpointAvailability = $derived(
+  actionsBlocked ? setupCheckpointAvailability(view.checkpoint.detailText) : SETUP_CONTROL_AVAILABLE,
+);
 function item(name: string): ParameterItemModel | null {
   return itemIndex.get(name) ?? null;
+}
+
+function metadataAvailability(parameterName: string, ready: boolean): SetupControlAvailability {
+  return combineSetupControlAvailability(
+    checkpointAvailability,
+    ready
+      ? SETUP_CONTROL_AVAILABLE
+      : params.metadataState === "loading"
+        ? setupControlLocked(
+            "refresh_required",
+            "Waiting for parameter options",
+            `${parameterName} stays read-only until its option metadata finishes loading.`,
+            { nextAction: "refresh_parameters", nextActionLabel: "Wait for parameter metadata to refresh." },
+          )
+        : setupControlLocked(
+            "unsupported",
+            "Option metadata unavailable",
+            `${parameterName} has no option labels in the active metadata, so this guided selector cannot edit it safely.`,
+          ),
+  );
 }
 
 function draftValue(name: string, fallback: number | null): string {
@@ -171,7 +201,7 @@ function rebootTone(): string {
                 value={draftValue(row.protocolParamName, row.protocolValue)}
                 options={row.protocolOptions}
                 compact
-                disabled={actionsBlocked || !row.protocolMetadataReady}
+                availability={metadataAvailability(row.protocolParamName, row.protocolMetadataReady)}
                 testId={`${setupWorkspaceTestIds.serialPortsInputPrefix}-${row.protocolParamName}`}
                 stagedName={params.stagedEdits[row.protocolParamName] ? row.protocolParamName : undefined}
                 stagedTestId={`${setupWorkspaceTestIds.serialPortsStagedPrefix}-${row.protocolParamName}`}
@@ -187,7 +217,7 @@ function rebootTone(): string {
                 value={draftValue(row.baudParamName, row.baudValue)}
                 options={row.baudOptions}
                 compact
-                disabled={actionsBlocked || !row.baudMetadataReady}
+                availability={metadataAvailability(row.baudParamName, row.baudMetadataReady)}
                 testId={`${setupWorkspaceTestIds.serialPortsInputPrefix}-${row.baudParamName}`}
                 stagedName={params.stagedEdits[row.baudParamName] ? row.baudParamName : undefined}
                 stagedTestId={`${setupWorkspaceTestIds.serialPortsStagedPrefix}-${row.baudParamName}`}

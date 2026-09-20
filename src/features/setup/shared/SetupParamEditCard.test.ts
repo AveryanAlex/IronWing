@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/sv
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ParameterItemModel } from "../../../lib/params/parameter-item-model";
+import { setupControlLocked } from "../../../lib/setup/control-availability";
 import SetupParamEditCard from "./SetupParamEditCard.svelte";
 import SetupRcCaptureParamEditCard from "./SetupRcCaptureParamEditCard.svelte";
 
@@ -175,6 +176,40 @@ describe("SetupParamEditCard", () => {
     await fireEvent.click(screen.getByText("Bit 31 · High rate telemetry"));
 
     expect(onValueChange).toHaveBeenLastCalledWith(2147483653);
+  });
+
+  it("explains read-only parameters instead of only dimming the input", async () => {
+    render(SetupParamEditCard, {
+      props: {
+        item: item("LOCKED_PARAM", { readOnly: true }),
+      },
+    });
+
+    expect((screen.getByRole("spinbutton") as HTMLInputElement).disabled).toBe(true);
+    const lock = screen.getByLabelText(/LOCKED_PARAM.*Read-only parameter/i);
+    lock.focus();
+    await fireEvent.keyDown(lock, { key: "Enter" });
+    await waitFor(() => expect(screen.getByText(/reported as read-only/i)).toBeTruthy());
+  });
+
+  it("presents a dependency-specific reason for locked parameters", async () => {
+    const onValueChange = vi.fn();
+    render(SetupParamEditCard, {
+      props: {
+        item: item("Q_ASSIST_ALT"),
+        availability: setupControlLocked(
+          "dependency",
+          "Enable QAssist first",
+          "Set Q_ASSIST_SPEED to a positive value before editing this trigger.",
+        ),
+        onValueChange,
+      },
+    });
+
+    expect((screen.getByRole("spinbutton") as HTMLInputElement).disabled).toBe(true);
+    await fireEvent.click(screen.getByLabelText(/Enable QAssist first/i));
+    await waitFor(() => expect(screen.getByText(/Set Q_ASSIST_SPEED/i)).toBeTruthy());
+    expect(onValueChange).not.toHaveBeenCalled();
   });
 });
 

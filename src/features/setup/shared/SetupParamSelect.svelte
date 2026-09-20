@@ -8,6 +8,11 @@ import {
   RebootRequiredBadge,
   StagedBadge as SetupStagedBadge,
 } from "../../../components/ui";
+import {
+  resolveSetupControlAvailability,
+  type SetupControlAvailability,
+} from "../../../lib/setup/control-availability";
+import SetupControlGuard from "./SetupControlGuard.svelte";
 
 type Option = {
   code: number;
@@ -19,6 +24,8 @@ type Props = {
   value: string;
   options: Option[];
   disabled?: boolean;
+  availability?: SetupControlAvailability;
+  disabledDescription?: string;
   compact?: boolean;
   label?: string;
   description?: string;
@@ -36,6 +43,8 @@ let {
   value,
   options,
   disabled = false,
+  availability,
+  disabledDescription,
   compact = false,
   label,
   description,
@@ -50,6 +59,8 @@ let {
 
 let booleanOptions = $derived(detectBooleanEnumOptions(options));
 let nativeOptions = $derived(options.map((option) => ({ value: String(option.code), label: option.label })));
+let resolvedAvailability = $derived(resolveSetupControlAvailability({ availability, disabled, disabledDescription }));
+let controlDisabled = $derived(resolvedAvailability.state === "locked");
 </script>
 
 {#snippet badges()}
@@ -65,7 +76,7 @@ let nativeOptions = $derived(options.map((option) => ({ value: String(option.cod
   <NativeSelect
     {id}
     class={className}
-    {disabled}
+    disabled={controlDisabled}
     options={nativeOptions}
     onchange={(event) => onChange((event.currentTarget as HTMLSelectElement).value)}
     size={compact ? "sm" : "default"}
@@ -78,7 +89,7 @@ let nativeOptions = $derived(options.map((option) => ({ value: String(option.cod
   {#if booleanOptions}
     <ParameterBooleanSwitch
       checked={Number(value) === booleanOptions.on.code}
-      {disabled}
+      disabled={controlDisabled}
       {id}
       offLabel={booleanOptions.off.label}
       onLabel={booleanOptions.on.label}
@@ -101,12 +112,16 @@ let nativeOptions = $derived(options.map((option) => ({ value: String(option.cod
   {#if compact && !label}
     <div class="flex min-w-0 items-center gap-2">
       <div class="min-w-0 flex-1">
-        {@render paramControl()}
+        <SetupControlGuard availability={resolvedAvailability} label="Parameter" testId={testId ? `${testId}-lock` : undefined}>
+          {@render paramControl()}
+        </SetupControlGuard>
       </div>
       {@render badges()}
     </div>
   {:else}
-    {@render paramControl()}
+    <SetupControlGuard availability={resolvedAvailability} label={label ?? "Parameter"} testId={testId ? `${testId}-lock` : undefined}>
+      {@render paramControl()}
+    </SetupControlGuard>
   {/if}
 
   {#if !compact && !label && ((stagedName && onUnstage) || rebootRequired)}

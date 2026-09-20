@@ -4,6 +4,10 @@ import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext } from "../../../app/shell/runtime-context";
 import { buildParameterItemIndex } from "../../../lib/params/parameter-item-model";
+import {
+  resolveSetupControlAvailability,
+  type SetupControlAvailability,
+} from "../../../lib/setup/control-availability";
 import { stageSetupParameterEdit } from "./parameter-editing";
 import { resolveSetupParamRef, type SetupParamRef } from "./setup-param-refs";
 import SetupParamEditCard from "./SetupParamEditCard.svelte";
@@ -25,6 +29,8 @@ type Props = {
   description?: string;
   docsUrl?: string | null;
   disabled?: boolean;
+  availability?: SetupControlAvailability;
+  disabledDescription?: string;
   compact?: boolean;
   surface?: "default" | "elevated";
   testIdPrefix?: string;
@@ -39,6 +45,8 @@ let {
   description,
   docsUrl,
   disabled = false,
+  availability,
+  disabledDescription,
   compact = false,
   surface = "default",
   testIdPrefix,
@@ -51,6 +59,7 @@ let state = $derived(paramsState.current);
 let itemIndex = $derived(buildParameterItemIndex(state.paramStore, state.metadata));
 let item = $derived(resolveSetupParamRef(param, itemIndex));
 let value = $derived(item ? (state.stagedEdits[item.name]?.nextValue ?? item.value) : 0);
+let resolvedAvailability = $derived(resolveSetupControlAvailability({ availability, disabled, disabledDescription }));
 
 function testId(kind: "card" | "input" | "staged", suffix: string): string | undefined {
   return testIdPrefix ? `${testIdPrefix}-${kind}-${suffix}` : undefined;
@@ -77,7 +86,7 @@ function testId(kind: "card" | "input" | "staged", suffix: string): string | und
       stagedTestId={testId("staged", item.name)}
       onUnstage={paramsStore.discardStagedEdit}
       inputTestId={testId("input", item.name)}
-      {disabled}
+      availability={resolvedAvailability}
       onValueChange={(nextValue) => typeof nextValue === "number" && stageSetupParameterEdit(paramsStore, item, nextValue, { actionsBlocked: disabled })}
     />
   </SetupSectionCard>

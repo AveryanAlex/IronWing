@@ -1,9 +1,13 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
+import { fromStore } from "svelte/store";
 import { Banner } from "../../../components/ui";
 import type { SetupSectionId } from "../../../lib/setup-sections";
+import { SETUP_CONTROL_AVAILABLE, setupCheckpointAvailability } from "../../../lib/setup/control-availability";
 import SetupContentPanel from "../shared/SetupContentPanel.svelte";
 import SetupIntroCard from "../shared/SetupIntroCard.svelte";
+import SetupLockNotice from "../shared/SetupLockNotice.svelte";
+import { getSetupWorkspaceRouteContext } from "./setup-workspace-route-context";
 
 type Severity = "info" | "warning" | "danger" | "blocking" | "success";
 
@@ -33,7 +37,15 @@ type Props = {
 
 let { eyebrow, title, sectionId, description, status, testId, body, actions, docs = [] }: Props = $props();
 
+const route = getSetupWorkspaceRouteContext();
+const workspaceView = fromStore(route.viewStore);
+
 let introTitle = $derived(eyebrow ?? title);
+let checkpointAvailability = $derived(
+  workspaceView.current.checkpoint.blocksActions
+    ? setupCheckpointAvailability(workspaceView.current.checkpoint.detailText)
+    : SETUP_CONTROL_AVAILABLE,
+);
 </script>
 
 <section class="flex flex-col gap-3 md:gap-4" data-testid={testId}>
@@ -41,5 +53,6 @@ let introTitle = $derived(eyebrow ?? title);
   {#if status}
     <Banner severity={status.severity} title={status.title} message={status.message} />
   {/if}
+  <SetupLockNotice availability={checkpointAvailability} testId={testId ? `${testId}-lock` : undefined} />
   <SetupContentPanel>{@render body()}</SetupContentPanel>
 </section>

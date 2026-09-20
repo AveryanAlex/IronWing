@@ -2,6 +2,11 @@
 import { CheckSquare, Square } from "lucide-svelte";
 
 import { Badge, Button, Card, Checkbox, Eyebrow, HelperText } from "../../../components/ui";
+import {
+  resolveSetupControlAvailability,
+  type SetupControlAvailability,
+} from "../../../lib/setup/control-availability";
+import SetupControlGuard from "./SetupControlGuard.svelte";
 
 export type SetupBitmaskTableItem = {
   key: string;
@@ -17,6 +22,8 @@ type Props = {
   description?: string;
   items: SetupBitmaskTableItem[];
   disabled?: boolean;
+  availability?: SetupControlAvailability;
+  disabledDescription?: string;
   embedded?: boolean;
   selectAllLabel?: string;
   clearAllLabel?: string;
@@ -29,6 +36,8 @@ let {
   description,
   items,
   disabled = false,
+  availability,
+  disabledDescription,
   embedded = false,
   selectAllLabel = "Select all",
   clearAllLabel = "Clear all",
@@ -37,9 +46,11 @@ let {
 }: Props = $props();
 
 let supportedItems = $derived(items.filter((item) => item.supported !== false));
+let resolvedAvailability = $derived(resolveSetupControlAvailability({ availability, disabled, disabledDescription }));
+let controlDisabled = $derived(resolvedAvailability.state === "locked");
 let hasSupportedItems = $derived(supportedItems.length > 0);
-let canEdit = $derived(Boolean(onToggle) && !disabled);
-let canBulkEdit = $derived(Boolean(onSetAll) && !disabled && hasSupportedItems);
+let canEdit = $derived(Boolean(onToggle) && !controlDisabled);
+let canBulkEdit = $derived(Boolean(onSetAll) && !controlDisabled && hasSupportedItems);
 let selectedCount = $derived(supportedItems.filter((item) => item.checked).length);
 let allSelected = $derived(hasSupportedItems && selectedCount === supportedItems.length);
 let noneSelected = $derived(selectedCount === 0);
@@ -103,6 +114,8 @@ function badgeVariant(item: SetupBitmaskTableItem): "accent" | "muted" | "warnin
             {/if}
             {#if item.hint}
               <p class={`mt-1 text-xs leading-5 ${item.supported === false ? "text-warning" : "text-text-muted"}`}>{item.hint}</p>
+            {:else if item.supported === false}
+              <p class="mt-1 text-xs leading-5 text-warning">This setting is not supported by the active firmware or parameter scope.</p>
             {/if}
           </div>
 
@@ -123,12 +136,14 @@ function badgeVariant(item: SetupBitmaskTableItem): "accent" | "muted" | "warnin
   </div>
 {/snippet}
 
-{#if embedded}
-  <div class="flex flex-col gap-3">
-    {@render content()}
-  </div>
-{:else}
-  <Card.Root surface="elevated" density="compact" gap="compact">
-    {@render content()}
-  </Card.Root>
-{/if}
+<SetupControlGuard availability={resolvedAvailability} label={title ?? "Bitmask settings"}>
+  {#if embedded}
+    <div class="flex flex-col gap-3">
+      {@render content()}
+    </div>
+  {:else}
+    <Card.Root surface="elevated" density="compact" gap="compact">
+      {@render content()}
+    </Card.Root>
+  {/if}
+</SetupControlGuard>

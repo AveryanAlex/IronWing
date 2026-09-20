@@ -1,10 +1,16 @@
 <script lang="ts">
 import type { VtolPropulsor, VtolTopologySnapshot } from "../../../lib/setup/vtol-topology-model";
+import {
+  resolveSetupControlAvailability,
+  type SetupControlAvailability,
+} from "../../../lib/setup/control-availability";
+import SetupControlGuard from "../shared/SetupControlGuard.svelte";
 
 type Props = {
   topology: VtolTopologySnapshot;
   selectableMask?: "tilt" | "forward" | null;
   disabled?: boolean;
+  availability?: SetupControlAvailability;
   onMotorToggle?: (motorNumber: number) => void;
 };
 
@@ -12,8 +18,16 @@ let {
   topology,
   selectableMask = null,
   disabled = false,
+  availability,
   onMotorToggle,
 }: Props = $props();
+
+let selectionAvailability = $derived(resolveSetupControlAvailability({
+  availability,
+  disabled,
+  disabledDescription: "Motor selection is locked until the VTOL topology requirements are met.",
+}));
+let selectionDisabled = $derived(selectionAvailability.state === "locked");
 
 const WIDTH = 260;
 const HEIGHT = 230;
@@ -51,7 +65,7 @@ function selected(propulsor: VtolPropulsor): boolean {
 }
 
 function canSelect(propulsor: VtolPropulsor): boolean {
-  return !disabled && selectableMask !== null && propulsor.motorNumber !== null && Boolean(onMotorToggle);
+  return !selectionDisabled && selectableMask !== null && propulsor.motorNumber !== null && Boolean(onMotorToggle);
 }
 
 function toggle(propulsor: VtolPropulsor) {
@@ -104,8 +118,13 @@ let diagramPropulsors = $derived(positionedPropulsors(topology.propulsors));
   </div>
 {:else}
   <div class="grid gap-4 lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
-    <div class="flex min-h-64 items-center justify-center rounded-lg border border-border bg-bg-primary/70 p-3">
-      <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} class="h-auto w-full max-w-80 select-none" aria-label={`${topology.architectureLabel}, ${topology.frameClassLabel} ${topology.frameTypeLabel} diagram`}>
+    <SetupControlGuard
+      availability={selectableMask ? selectionAvailability : { state: "available" }}
+      label="Motor selection diagram"
+      testId="vtol-motor-diagram-lock"
+    >
+      <div class="flex min-h-64 items-center justify-center rounded-lg border border-border bg-bg-primary/70 p-3">
+        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} class="h-auto w-full max-w-80 select-none" aria-label={`${topology.architectureLabel}, ${topology.frameClassLabel} ${topology.frameTypeLabel} diagram`}>
         <path d="M 130 12 L 121 28 L 139 28 Z" class="fill-accent/70" />
         <text x={CENTER_X} y={10} text-anchor="middle" class="fill-text-muted" font-size={9}>FRONT</text>
 
@@ -133,8 +152,9 @@ let diagramPropulsors = $derived(positionedPropulsors(topology.propulsors));
             <g aria-label={propulsor.label}>{@render motorGlyph(propulsor, point)}</g>
           {/if}
         {/each}
-      </svg>
-    </div>
+        </svg>
+      </div>
+    </SetupControlGuard>
 
     <div class="space-y-3">
       <div>

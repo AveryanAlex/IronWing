@@ -12,7 +12,13 @@ import {
   Tooltip,
 } from "../../../components/ui";
 import { formatParamValue, type ParameterItemModel } from "../../../lib/params/parameter-item-model";
+import {
+  resolveSetupControlAvailability,
+  SETUP_CONTROL_AVAILABLE,
+  type SetupControlAvailability,
+} from "../../../lib/setup/control-availability";
 import SetupBitmaskChecklist from "./SetupBitmaskChecklist.svelte";
+import SetupControlGuard from "./SetupControlGuard.svelte";
 import SetupParamEnumControl from "./SetupParamEnumControl.svelte";
 
 type ControlType = "number" | "enum" | "boolean" | "bitmask" | "custom";
@@ -43,6 +49,9 @@ type Props = {
   unitText?: string | null;
   invalid?: boolean;
   disabled?: boolean;
+  availability?: SetupControlAvailability;
+  disabledDescription?: string;
+  showLockExplanation?: boolean;
   offLabel?: string;
   onLabel?: string;
   metadata?: string;
@@ -75,6 +84,9 @@ let {
   unitText,
   invalid = false,
   disabled = false,
+  availability,
+  disabledDescription,
+  showLockExplanation = true,
   offLabel = "Disabled",
   onLabel = "Enabled",
   metadata,
@@ -91,7 +103,15 @@ let {
   footer,
 }: Props = $props();
 
-let controlDisabled = $derived(disabled || item.readOnly);
+let resolvedAvailability = $derived(resolveSetupControlAvailability({
+  availability,
+  disabled,
+  disabledDescription,
+  readOnly: item.readOnly,
+  parameterName: item.name,
+}));
+let controlDisabled = $derived(resolvedAvailability.state === "locked");
+let guardAvailability = $derived(showLockExplanation ? resolvedAvailability : SETUP_CONTROL_AVAILABLE);
 let resolvedMetadata = $derived(metadata ?? formatMetadata());
 let enumValue = $derived(String(value));
 let numberValue = $derived(typeof value === "number" ? value : Number.isFinite(Number(value)) ? Number(value) : undefined);
@@ -266,14 +286,20 @@ function toggleBit(bit: number) {
     </div>
   </div>
 
-  {#if trailingAction}
-    <div class="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+  <SetupControlGuard
+    availability={guardAvailability}
+    label={label}
+    testId={testId ? `${testId}-lock` : undefined}
+  >
+    {#if trailingAction}
+      <div class="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+        {@render control()}
+        {@render trailingAction()}
+      </div>
+    {:else}
       {@render control()}
-      {@render trailingAction()}
-    </div>
-  {:else}
-    {@render control()}
-  {/if}
+    {/if}
+  </SetupControlGuard>
 
   {@render footer?.()}
 </div>

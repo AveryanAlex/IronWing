@@ -4,8 +4,13 @@ import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext } from "../../../app/shell/runtime-context";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../lib/params/parameter-item-model";
+import {
+  resolveSetupControlAvailability,
+  type SetupControlAvailability,
+} from "../../../lib/setup/control-availability";
 import SetupParamEditCard from "./SetupParamEditCard.svelte";
 import SetupParamEditGrid from "./SetupParamEditGrid.svelte";
+import SetupControlGuard from "./SetupControlGuard.svelte";
 import SetupSectionCard from "./SetupSectionCard.svelte";
 import { resolveSetupEnumOptions, stageSetupParameterEdit } from "./parameter-editing";
 import { resolveSetupParamRefs, type SetupParamRef } from "./setup-param-refs";
@@ -20,6 +25,8 @@ type Props = {
   docsUrl?: string | null;
   params: readonly SetupParamRef[];
   disabled?: boolean;
+  availability?: SetupControlAvailability;
+  disabledDescription?: string;
   compact?: boolean;
   surface?: "default" | "elevated";
   testIdPrefix?: string;
@@ -33,6 +40,8 @@ let {
   docsUrl,
   params,
   disabled = false,
+  availability,
+  disabledDescription,
   compact = false,
   surface = "default",
   testIdPrefix,
@@ -44,6 +53,7 @@ const paramsState = fromStore(paramsStore);
 let state = $derived(paramsState.current);
 let itemIndex = $derived(buildParameterItemIndex(state.paramStore, state.metadata));
 let items = $derived(resolveSetupParamRefs(params, itemIndex));
+let resolvedAvailability = $derived(resolveSetupControlAvailability({ availability, disabled, disabledDescription }));
 
 function enumOptions(item: ParameterItemModel) {
   return resolveSetupEnumOptions(state.metadata?.get(item.name)?.values);
@@ -64,23 +74,26 @@ function testId(kind: "card" | "input" | "staged", suffix: string): string | und
     {surface}
     testId={testId("card", id)}
   >
-    <SetupParamEditGrid>
-      {#each items as item (item.name)}
-        {@const options = enumOptions(item)}
-        <SetupParamEditCard
-          {item}
-          inputId={`setup-${id}-${item.name}`}
-          type={options.length > 0 ? "enum" : "number"}
-          value={state.stagedEdits[item.name]?.nextValue ?? item.value}
-          {options}
-          stagedName={state.stagedEdits[item.name] ? item.name : undefined}
-          stagedTestId={testId("staged", item.name)}
-          onUnstage={paramsStore.discardStagedEdit}
-          onValueChange={(value) => typeof value !== "boolean" && stageSetupParameterEdit(paramsStore, item, value, { actionsBlocked: disabled })}
-          inputTestId={testId("input", item.name)}
-          {disabled}
-        />
-      {/each}
-    </SetupParamEditGrid>
+    <SetupControlGuard availability={resolvedAvailability} label={title}>
+      <SetupParamEditGrid>
+        {#each items as item (item.name)}
+          {@const options = enumOptions(item)}
+          <SetupParamEditCard
+            {item}
+            inputId={`setup-${id}-${item.name}`}
+            type={options.length > 0 ? "enum" : "number"}
+            value={state.stagedEdits[item.name]?.nextValue ?? item.value}
+            {options}
+            stagedName={state.stagedEdits[item.name] ? item.name : undefined}
+            stagedTestId={testId("staged", item.name)}
+            onUnstage={paramsStore.discardStagedEdit}
+            onValueChange={(value) => typeof value !== "boolean" && stageSetupParameterEdit(paramsStore, item, value, { actionsBlocked: resolvedAvailability.state === "locked" })}
+            inputTestId={testId("input", item.name)}
+            disabled={resolvedAvailability.state === "locked"}
+            showLockExplanation={resolvedAvailability.state === "available"}
+          />
+        {/each}
+      </SetupParamEditGrid>
+    </SetupControlGuard>
   </SetupSectionCard>
 {/if}

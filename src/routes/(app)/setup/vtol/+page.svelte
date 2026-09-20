@@ -25,6 +25,12 @@ import {
 import { stageSetupParameterEdit } from "../../../../features/setup/shared/parameter-editing";
 import type { SetupParamRef } from "../../../../features/setup/shared/setup-param-refs";
 import { buildParameterItemIndex } from "../../../../lib/params/parameter-item-model";
+import {
+  combineSetupControlAvailability,
+  SETUP_CONTROL_AVAILABLE,
+  setupCheckpointAvailability,
+  setupControlLocked,
+} from "../../../../lib/setup/control-availability";
 import { setupSectionPath } from "../../../../lib/setup-sections";
 import {
   buildVtolSetupModel,
@@ -127,6 +133,22 @@ let forwardThrustParams = $derived(
   itemIndex.has("Q_FWD_THR_USE") ? modernForwardThrustParams : legacyForwardThrustParams,
 );
 let actionsBlocked = $derived(view.checkpoint.blocksActions);
+let checkpointAvailability = $derived(
+  actionsBlocked ? setupCheckpointAvailability(view.checkpoint.detailText) : SETUP_CONTROL_AVAILABLE,
+);
+let assistTriggerAvailability = $derived(
+  combineSetupControlAvailability(
+    checkpointAvailability,
+    model.assist.state === "active"
+      ? SETUP_CONTROL_AVAILABLE
+      : setupControlLocked(
+          "dependency",
+          "Enable the primary QAssist trigger first",
+          "Set Q_ASSIST_SPEED to a positive value before editing the additional attitude, altitude, and delay triggers.",
+          { nextAction: "open_prerequisite", nextActionLabel: "Configure Fixed-wing assistance above." },
+        ),
+  ),
+);
 let topology = $derived(buildVtolTopologyModel({ paramStore: params.paramStore, stagedEdits: params.stagedEdits }));
 let docsUrl = $derived(resolveDocsUrl("quadplane_setup", "plane"));
 let assistDocsUrl = $derived(resolveDocsUrl("quadplane_assist", "plane"));
@@ -300,7 +322,7 @@ function handleSetupLinkClick(sectionId: VtolSetupHandoff["sectionId"], event: M
           description="Attitude, altitude, and delay triggers depend on a positive Q_ASSIST_SPEED threshold. Zero disables each optional trigger."
           docsUrl={assistDocsUrl}
           params={assistTriggerParams}
-          disabled={actionsBlocked || model.assist.state !== "active"}
+          availability={assistTriggerAvailability}
           surface="elevated"
           testIdPrefix={setupWorkspaceTestIds.vtolParamPrefix}
         />

@@ -21,6 +21,8 @@ type Props = Omit<TooltipRootProps, "children" | "delayDuration" | "onOpenChange
   triggerClass?: string;
   testId?: string;
   contentTestId?: string;
+  triggerTabIndex?: number;
+  triggerAriaLabel?: string;
   withArrow?: boolean;
   children: Snippet;
   content?: Snippet;
@@ -43,6 +45,8 @@ let {
   triggerClass,
   testId,
   contentTestId,
+  triggerTabIndex,
+  triggerAriaLabel,
   withArrow = true,
   children,
   content,
@@ -82,6 +86,15 @@ function handleTriggerClick(event: MouseEvent, bitsClick: unknown) {
   event.preventDefault();
   setOpen(!open);
 }
+
+function handleTriggerKeydown(event: KeyboardEvent, bitsKeydown: unknown) {
+  if (typeof bitsKeydown === "function") {
+    (bitsKeydown as (event: KeyboardEvent) => void)(event);
+  }
+  if (!clickToToggle || (event.key !== "Enter" && event.key !== " ")) return;
+  event.preventDefault();
+  if (!open) setOpen(true);
+}
 </script>
 
 <Bits.Provider delayDuration={delayMs} skipDelayDuration={skipDelayMs}>
@@ -94,13 +107,28 @@ function handleTriggerClick(event: MouseEvent, bitsClick: unknown) {
   >
     <Bits.Trigger>
       {#snippet child({ props })}
-        <span
-          class={cn("inline-flex", triggerClass)}
-          {...props}
-          onclick={(event) => handleTriggerClick(event, props.onclick)}
-        >
-          {@render children()}
-        </span>
+        {#if triggerTabIndex === undefined}
+          <span
+            class={cn("inline-flex", triggerClass)}
+            {...props}
+            aria-label={triggerAriaLabel}
+            onclick={(event) => handleTriggerClick(event, props.onclick)}
+          >
+            {@render children()}
+          </span>
+        {:else}
+          <span
+            class={cn("inline-flex", triggerClass)}
+            {...props}
+            tabindex={triggerTabIndex}
+            role="button"
+            aria-label={triggerAriaLabel}
+            onclick={(event) => handleTriggerClick(event, props.onclick)}
+            onkeydown={(event) => handleTriggerKeydown(event, props.onkeydown)}
+          >
+            {@render children()}
+          </span>
+        {/if}
       {/snippet}
     </Bits.Trigger>
     <Bits.Portal>

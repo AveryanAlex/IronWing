@@ -1,6 +1,8 @@
 <script lang="ts">
 import type { Snippet } from "svelte";
 import { Button, Card, Eyebrow, MonoValue, SelectableCard } from "../../../components/ui";
+import { SETUP_CONTROL_AVAILABLE, type SetupControlAvailability } from "../../../lib/setup/control-availability";
+import SetupControlGuard from "./SetupControlGuard.svelte";
 
 export type SetupPreviewStageRow = {
   key: string;
@@ -19,6 +21,7 @@ let {
   onRowClick,
   footer,
   stageDisabled = false,
+  stageAvailability = SETUP_CONTROL_AVAILABLE,
 }: {
   rows: SetupPreviewStageRow[];
   headerLabel?: string;
@@ -28,12 +31,13 @@ let {
   onRowClick?: (row: SetupPreviewStageRow) => void;
   footer?: Snippet;
   stageDisabled?: boolean;
+  stageAvailability?: SetupControlAvailability;
 } = $props();
 
 let changeCount = $derived(rows.filter((row) => row.willChange).length);
 let resolvedHeader = $derived(headerLabel ?? `Preview: ${changeCount} of ${rows.length} will change`);
 let resolvedStageLabel = $derived(stageLabel ?? `Stage ${changeCount} Change${changeCount === 1 ? "" : "s"}`);
-let resolvedStageDisabled = $derived(stageDisabled || changeCount === 0);
+let resolvedStageDisabled = $derived(stageDisabled || changeCount === 0 || stageAvailability.state === "locked");
 </script>
 
 <Card.Root surface="default" density="compact" tone="info" appearance="solid">
@@ -76,15 +80,17 @@ let resolvedStageDisabled = $derived(stageDisabled || changeCount === 0);
   {/if}
 
   <div class="mt-4 flex items-center gap-2">
-    <Button
-      size="sm"
-      tone="accent"
-      variant="soft"
-      disabled={resolvedStageDisabled}
-      onclick={onStage}
-    >
-      {resolvedStageLabel}
-    </Button>
+    <SetupControlGuard availability={stageAvailability} label={resolvedStageLabel}>
+      <Button
+        size="sm"
+        tone="accent"
+        variant="soft"
+        disabled={resolvedStageDisabled}
+        onclick={onStage}
+      >
+        {resolvedStageLabel}
+      </Button>
+    </SetupControlGuard>
     <Button
       variant="ghost"
       size="sm"

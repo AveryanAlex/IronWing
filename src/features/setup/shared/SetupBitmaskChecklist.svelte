@@ -1,5 +1,10 @@
 <script lang="ts">
 import { Badge, Card, Eyebrow, HelperText, SelectableCard } from "../../../components/ui";
+import {
+  resolveSetupControlAvailability,
+  type SetupControlAvailability,
+} from "../../../lib/setup/control-availability";
+import SetupControlGuard from "./SetupControlGuard.svelte";
 
 export type SetupBitmaskChecklistItem = {
   key: string;
@@ -15,6 +20,8 @@ let {
   items,
   onToggle,
   disabled = false,
+  availability,
+  disabledDescription,
   embedded = false,
   ariaLabel,
 }: {
@@ -22,9 +29,14 @@ let {
   items: SetupBitmaskChecklistItem[];
   onToggle?: (item: SetupBitmaskChecklistItem) => void;
   disabled?: boolean;
+  availability?: SetupControlAvailability;
+  disabledDescription?: string;
   embedded?: boolean;
   ariaLabel?: string;
 } = $props();
+
+let resolvedAvailability = $derived(resolveSetupControlAvailability({ availability, disabled, disabledDescription }));
+let controlDisabled = $derived(resolvedAvailability.state === "locked");
 
 function itemTone(item: SetupBitmaskChecklistItem): string {
   if (item.supported === false) {
@@ -60,8 +72,8 @@ function itemBadgeVariant(item: SetupBitmaskChecklistItem): "accent" | "muted" |
       <SelectableCard
         density="compact"
         selected={item.checked}
-        class={`min-w-0 overflow-hidden ${itemTone(item)} ${onToggle && !disabled && item.supported !== false ? "hover:border-accent hover:text-text-primary" : "cursor-default"}`}
-        disabled={!onToggle || disabled || item.supported === false}
+        class={`min-w-0 overflow-hidden ${itemTone(item)} ${onToggle && !controlDisabled && item.supported !== false ? "hover:border-accent hover:text-text-primary" : "cursor-default"}`}
+        disabled={!onToggle || controlDisabled || item.supported === false}
         onSelect={() => onToggle?.(item)}
       >
         <div class="flex min-w-0 items-start justify-between gap-3">
@@ -82,9 +94,9 @@ function itemBadgeVariant(item: SetupBitmaskChecklistItem): "accent" | "muted" |
           </Badge>
         </div>
 
-        {#if item.hint}
+        {#if item.hint || item.supported === false}
           <p class={`mt-3 text-xs leading-5 ${item.supported === false ? "text-warning" : "text-text-muted"}`}>
-            {item.hint}
+            {item.hint ?? "This option is not supported by the active firmware or parameter scope."}
           </p>
         {/if}
       </SelectableCard>
@@ -92,15 +104,17 @@ function itemBadgeVariant(item: SetupBitmaskChecklistItem): "accent" | "muted" |
   </div>
 {/snippet}
 
-{#if embedded}
-  <div class="grid gap-3">
-    {@render content()}
-  </div>
-{:else}
-  <Card.Root surface="elevated" density="compact" gap="compact">
-    {@render content()}
-  </Card.Root>
-{/if}
+<SetupControlGuard availability={resolvedAvailability} label={title ?? ariaLabel ?? "Bitmask options"}>
+  {#if embedded}
+    <div class="grid gap-3">
+      {@render content()}
+    </div>
+  {:else}
+    <Card.Root surface="elevated" density="compact" gap="compact">
+      {@render content()}
+    </Card.Root>
+  {/if}
+</SetupControlGuard>
 
 <style>
   .setup-bitmask-checklist-grid {

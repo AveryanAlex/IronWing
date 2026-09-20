@@ -16,6 +16,12 @@ import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
 import SetupParamSection from "../../../../features/setup/shared/SetupParamSection.svelte";
 import SetupSectionCard from "../../../../features/setup/shared/SetupSectionCard.svelte";
 import { buildParameterItemIndex } from "../../../../lib/params/parameter-item-model";
+import {
+  combineSetupControlAvailability,
+  SETUP_CONTROL_AVAILABLE,
+  setupCheckpointAvailability,
+  setupReadOnlyAvailability,
+} from "../../../../lib/setup/control-availability";
 import { getVehicleSlug } from "../../../../lib/setup/vehicle-profile";
 
 const route = getSetupWorkspaceRouteContext();
@@ -29,10 +35,19 @@ let section = $derived(setupRouteSection(view, "arming"));
 let params = $derived(paramsState.current);
 let itemIndex = $derived(buildParameterItemIndex(params.paramStore, params.metadata));
 let actionsBlocked = $derived(view.checkpoint.blocksActions);
+let checkpointAvailability = $derived(
+  actionsBlocked ? setupCheckpointAvailability(view.checkpoint.detailText) : SETUP_CONTROL_AVAILABLE,
+);
 let vehicleSlug = $derived(getVehicleSlug(params.vehicleType));
 let armingDocsUrl = $derived(resolveDocsUrl("arming", vehicleSlug));
 let prearmDocsUrl = $derived(resolveDocsUrl("prearm_safety_checks", vehicleSlug ?? undefined));
 let armingCheckItem = $derived(itemIndex.get("ARMING_CHECK") ?? null);
+let armingCheckAvailability = $derived(
+  combineSetupControlAvailability(
+    checkpointAvailability,
+    armingCheckItem?.readOnly ? setupReadOnlyAvailability("ARMING_CHECK") : SETUP_CONTROL_AVAILABLE,
+  ),
+);
 let armingRequireItem = $derived(itemIndex.get("ARMING_REQUIRE") ?? null);
 let armingCheckEntries = $derived.by(() => {
   const bitmask = params.metadata?.get("ARMING_CHECK")?.bitmask;
@@ -134,7 +149,7 @@ function setArmingChecks(checked: boolean) {
           <SetupBitmaskTable
             clearAllLabel="Disable all"
             description="Disable individual checks only for a documented bench procedure."
-            disabled={actionsBlocked || armingCheckItem?.readOnly === true}
+            availability={armingCheckAvailability}
             embedded
             items={armingCheckEntries}
             onSetAll={setArmingChecks}
@@ -152,7 +167,7 @@ function setArmingChecks(checked: boolean) {
         title={armingRequireItem?.label ?? "Arming method"}
         description="Choose how the vehicle can be armed. Keep physical arming safeguards enabled unless the operating procedure requires otherwise."
         params={armingRequireParams}
-        disabled={actionsBlocked}
+        availability={checkpointAvailability}
         surface="elevated"
         testIdPrefix="setup-workspace-arming"
       />

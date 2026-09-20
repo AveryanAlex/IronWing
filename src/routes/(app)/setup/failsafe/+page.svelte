@@ -5,6 +5,7 @@ import { fromStore } from "svelte/store";
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
+import { SETUP_CONTROL_AVAILABLE, setupCheckpointAvailability } from "../../../../lib/setup/control-availability";
 import { buildFailsafeSectionModel, type SafetyVehicleFamily } from "../../../../lib/setup/failsafe-model";
 import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.svelte";
 import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
@@ -43,6 +44,9 @@ let params = $derived(paramsState.current);
 let session = $derived(sessionState.current);
 let itemIndex = $derived(buildParameterItemIndex(params.paramStore, params.metadata));
 let actionsBlocked = $derived(view.checkpoint.blocksActions);
+let checkpointAvailability = $derived(
+  actionsBlocked ? setupCheckpointAvailability(view.checkpoint.detailText) : SETUP_CONTROL_AVAILABLE,
+);
 let vehicleType = $derived(session.sessionDomain.value?.vehicle_state?.vehicle_type ?? null);
 let model = $derived(
   buildFailsafeSectionModel({
@@ -263,6 +267,7 @@ function stageDefaults() {
         onCancel={() => (defaultsPreviewOpen = false)}
         onStage={stageDefaults}
         rows={previewRows}
+        stageAvailability={checkpointAvailability}
         stageLabel="Stage recommended defaults"
       />
     {/if}

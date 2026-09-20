@@ -20,6 +20,7 @@ import {
   Input,
   NativeSelect,
 } from "../../../../components/ui";
+import { SETUP_CONTROL_AVAILABLE, setupCheckpointAvailability } from "../../../../lib/setup/control-availability";
 import { SetupFieldStack, SetupGuideCard, SetupNotice, SetupSectionCard } from "../../../../features/setup/shared";
 import SetupPreviewStagePanel from "../../../../features/setup/shared/SetupPreviewStagePanel.svelte";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
@@ -55,6 +56,9 @@ let lastValidInputs = $state(
 let params = $derived(paramsState.current);
 let session = $derived(sessionState.current);
 let actionsBlocked = $derived(view.checkpoint.blocksActions);
+let checkpointAvailability = $derived(
+  actionsBlocked ? setupCheckpointAvailability(view.checkpoint.detailText) : SETUP_CONTROL_AVAILABLE,
+);
 let docsUrl = $derived(resolveDocsUrl("tuning"));
 let vehicleType = $derived(session.sessionDomain.value?.vehicle_state?.vehicle_type ?? null);
 let model = $derived(
@@ -303,6 +307,7 @@ function resolvedInputText(): string {
               onStage={() => stageBatch(batch)}
               rows={batch.rows}
               stageDisabled={actionsBlocked || !batch.stageAllowed}
+              stageAvailability={checkpointAvailability}
               stageLabel={batch.stageAllowed ? "Stage for review" : "Preview only"}
             />
           </div>

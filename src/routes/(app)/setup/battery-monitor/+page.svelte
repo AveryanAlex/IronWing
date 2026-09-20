@@ -13,6 +13,7 @@ import {
   calcBattLowVolt,
 } from "../../../../data/battery-presets";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
+import { SETUP_CONTROL_AVAILABLE, setupCheckpointAvailability } from "../../../../lib/setup/control-availability";
 import { selectTelemetryView } from "../../../../lib/telemetry-selectors";
 import { Eyebrow, HelperText, Input, NativeSelect } from "../../../../components/ui";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
@@ -72,6 +73,9 @@ let telemetry = $derived(selectTelemetryView(session.telemetryDomain));
 let itemIndex = $derived(buildParameterItemIndex(params.paramStore, params.metadata));
 let docsUrl = $derived(resolveDocsUrl("power_module_config"));
 let actionsBlocked = $derived(view.checkpoint.blocksActions);
+let checkpointAvailability = $derived(
+  actionsBlocked ? setupCheckpointAvailability(view.checkpoint.detailText) : SETUP_CONTROL_AVAILABLE,
+);
 let liveConnected = $derived(session.sessionDomain.value?.connection.kind === "connected");
 let batteryParamNames = $derived.by(() => [
   ...Object.keys(params.paramStore?.params ?? {}),
@@ -503,6 +507,7 @@ function round3(value: number): number {
                 }}
                 onStage={() => stagePreview(boardPreviewEntries)}
                 rows={boardRows}
+                stageAvailability={checkpointAvailability}
               />
             </div>
           {/if}
@@ -524,6 +529,7 @@ function round3(value: number): number {
                 }}
                 onStage={() => stagePreview(sensorPreviewEntries)}
                 rows={sensorRows}
+                stageAvailability={checkpointAvailability}
               />
             </div>
           {/if}
@@ -548,6 +554,7 @@ function round3(value: number): number {
                 }}
                 onStage={() => stagePreview(chemistryPreviewEntries)}
                 rows={chemistryRows}
+                stageAvailability={checkpointAvailability}
               />
             </div>
           {/if}

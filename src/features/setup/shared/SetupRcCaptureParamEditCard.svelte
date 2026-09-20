@@ -1,6 +1,7 @@
 <script lang="ts">
 import { Button } from "../../../components/ui";
 import type { ParameterItemModel } from "../../../lib/params/parameter-item-model";
+import type { SetupControlAvailability } from "../../../lib/setup/control-availability";
 import SetupParamEditCard from "./SetupParamEditCard.svelte";
 
 type Props = {
@@ -15,6 +16,8 @@ type Props = {
   unit?: string | null;
   invalid?: boolean;
   disabled?: boolean;
+  availability?: SetupControlAvailability;
+  disabledDescription?: string;
   captureDisabled?: boolean;
   stagedName?: string;
   testId?: string;
@@ -36,6 +39,8 @@ let {
   unit = "µs",
   invalid = false,
   disabled = false,
+  availability,
+  disabledDescription,
   captureDisabled = false,
   stagedName,
   testId,
@@ -44,6 +49,8 @@ let {
   onValueChange,
   onCaptureLive,
 }: Props = $props();
+
+let controlDisabled = $derived(disabled || availability?.state === "locked" || item.readOnly);
 </script>
 
 {#snippet captureAction()}
@@ -51,7 +58,7 @@ let {
     size="default"
     tone="neutral"
     variant="outline"
-    disabled={disabled || item.readOnly || captureDisabled}
+    disabled={controlDisabled || captureDisabled}
     onclick={onCaptureLive}
     testId={captureTestId}
   >
@@ -72,6 +79,8 @@ let {
   {unit}
   {invalid}
   {disabled}
+  {availability}
+  {disabledDescription}
   {stagedName}
   {testId}
   {inputTestId}
