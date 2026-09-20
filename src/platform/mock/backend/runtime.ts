@@ -45,6 +45,7 @@ export const mockState: MockBackendState = {
   liveTelemetryDomain: null,
   liveParamStore: null,
   liveParamProgress: null,
+  liveParamStaging: { revision: 0, edits: [], apply_phase: "idle", pending_reboot_ids: [] },
   liveAvailableModes: null,
   liveStatusText: null,
   liveSupportDomain: null,
@@ -76,6 +77,7 @@ export function resetMockState() {
   mockState.liveTelemetryDomain = null;
   mockState.liveParamStore = null;
   mockState.liveParamProgress = null;
+  mockState.liveParamStaging = { revision: 0, edits: [], apply_phase: "idle", pending_reboot_ids: [] };
   mockState.liveAvailableModes = null;
   mockState.liveStatusText = null;
   mockState.liveSupportDomain = null;

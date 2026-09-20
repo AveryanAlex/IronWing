@@ -955,7 +955,7 @@ export type OperationFailure = {
 	reason: Reason,
 };
 
-export type OperationId = "open_session_snapshot" | "ack_session_snapshot" | "arm_vehicle" | "disarm_vehicle" | "set_flight_mode" | "vehicle_takeoff" | "start_guided_session" | "update_guided_session" | "stop_guided_session" | "set_message_rate" | "mission_upload" | "mission_download" | "mission_clear" | "mission_cancel" | "fence_upload" | "fence_download" | "fence_clear" | "rally_upload" | "rally_download" | "rally_clear" | "mission_set_current" | "calibrate_accel" | "calibrate_gyro" | "param_download_all" | "param_write" | "param_write_batch" | "param_cancel" | "reboot_vehicle" | "motor_test" | "set_servo" | "rc_override" | "calibrate_compass_start" | "calibrate_compass_accept" | "calibrate_compass_cancel" | "request_prearm_checks" | "log_open" | "log_library_list" | "log_library_register" | "log_library_relink" | "log_library_remove" | "log_library_reindex" | "log_library_cancel" | "log_raw_messages_query" | "log_chart_series_query" | "log_export" | "replay_open" | "replay_play" | "replay_pause" | "replay_seek" | "replay_set_speed" | "replay_stop" | "recording_start" | "recording_stop" | "recording_status" | "recording_settings_read" | "recording_settings_write" | "firmware_install_update" | "firmware_bootloader_installation";
+export type OperationId = "open_session_snapshot" | "ack_session_snapshot" | "arm_vehicle" | "disarm_vehicle" | "set_flight_mode" | "vehicle_takeoff" | "start_guided_session" | "update_guided_session" | "stop_guided_session" | "set_message_rate" | "mission_upload" | "mission_download" | "mission_clear" | "mission_cancel" | "fence_upload" | "fence_download" | "fence_clear" | "rally_upload" | "rally_download" | "rally_clear" | "mission_set_current" | "calibrate_accel" | "calibrate_gyro" | "param_download_all" | "param_write" | "param_write_batch" | "param_stage" | "param_discard_staged" | "param_apply_staged" | "param_cancel" | "reboot_vehicle" | "motor_test" | "set_servo" | "rc_override" | "calibrate_compass_start" | "calibrate_compass_accept" | "calibrate_compass_cancel" | "request_prearm_checks" | "log_open" | "log_library_list" | "log_library_register" | "log_library_relink" | "log_library_remove" | "log_library_reindex" | "log_library_cancel" | "log_raw_messages_query" | "log_chart_series_query" | "log_export" | "replay_open" | "replay_play" | "replay_pause" | "replay_seek" | "replay_set_speed" | "replay_stop" | "recording_start" | "recording_stop" | "recording_status" | "recording_settings_read" | "recording_settings_write" | "firmware_install_update" | "firmware_bootloader_installation";
 
 /**  Typed mission command API item used by plan serialization and validation. */
 export type ParachuteAction = "disable" | "enable" | "release";
@@ -968,6 +968,17 @@ export type Param = {
 	index: number,
 };
 
+export type ParamApplyOutcome = {
+	state: ParamStagingState,
+	results: ParamWriteResult[],
+	reboot_required: boolean,
+	reboot_required_ids: string[],
+};
+
+export type ParamApplyPhase = "idle" | "applying" | "partial_failure" | "failed";
+
+export type ParamEditOrigin = "ui" | "agent";
+
 /**  Lifecycle phases for one parameter operation handle. */
 export type ParamOperationProgress = ({ downloading: {
 	received: number,
@@ -978,6 +989,19 @@ export type ParamOperationProgress = ({ downloading: {
 	name: string,
 } }) & { downloading?: never } | "completed" | "failed" | "cancelled";
 
+export type ParamStageChange = {
+	name: string,
+	value: number | null,
+	reboot_required: boolean | null,
+};
+
+export type ParamStagingState = {
+	revision: number,
+	edits: StagedParamEdit[],
+	apply_phase: ParamApplyPhase,
+	pending_reboot_ids: string[],
+};
+
 /**  In-memory store of all downloaded vehicle parameters. */
 export type ParamStore = {
 	params: { [key in string]: Param },
@@ -986,6 +1010,14 @@ export type ParamStore = {
 
 /**  MAVLink parameter value type. */
 export type ParamType = "uint8" | "int8" | "uint16" | "int16" | "uint32" | "int32" | "real32";
+
+/**  Result of a single parameter write, with requested and confirmed values. */
+export type ParamWriteResult = {
+	name: string,
+	requested_value: number | null,
+	confirmed_value: number | null,
+	success: boolean,
+};
 
 export type PlaybackSeekResult = {
 	envelope: SessionEnvelope,
@@ -1262,6 +1294,15 @@ export type SourceKind = "live" | "playback";
 /**  Typed mission command API item used by plan serialization and validation. */
 export type SpeedType = "airspeed" | "groundspeed";
 
+export type StagedParamEdit = {
+	name: string,
+	base_value: number | null,
+	staged_value: number | null,
+	reboot_required: boolean | null,
+	origin: ParamEditOrigin,
+	failure: string | null,
+};
+
 export type StartGuidedSessionRequest = {
 	session: GuidedSession,
 };
@@ -1436,6 +1477,9 @@ export const OPERATION_IDS = [
   "param_download_all",
   "param_write",
   "param_write_batch",
+  "param_stage",
+  "param_discard_staged",
+  "param_apply_staged",
   "param_cancel",
   "reboot_vehicle",
   "motor_test",

@@ -4,7 +4,13 @@ import { get } from "svelte/store";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ParamMetadataMap } from "../../param-metadata";
-import type { ParamProgress, ParamStore, ParamWriteResult } from "../../params";
+import type {
+  ParamProgress,
+  ParamStageChange,
+  ParamStagingState,
+  ParamStore,
+  ParamWriteResult,
+} from "../../params";
 import type { SessionEnvelope, OpenSessionSnapshot } from "../../session";
 import type { TransportDescriptor } from "../../transport";
 import type {
@@ -221,9 +227,18 @@ function createSessionService(
 
 function createParamsService(
   metadata: ParamMetadataMap | null,
-  overrides: Partial<ParamsService> = {},
+  overrides: Partial<ParamsService> & {
+    writeBatch?: (params: [string, number][]) => Promise<ParamWriteResult[]>;
+  } = {},
 ) {
   let handlers: ParamsServiceEventHandlers | null = null;
+  let stagingState: ParamStagingState = {
+    revision: 0,
+    edits: [],
+    apply_phase: "idle",
+    pending_reboot_ids: [],
+  };
+  const { writeBatch, ...serviceOverrides } = overrides;
 
   const service = {
     subscribeAll: vi.fn(async (nextHandlers: ParamsServiceEventHandlers) => {
@@ -235,16 +250,85 @@ function createParamsService(
     fetchMetadata: vi.fn(async () => metadata),
     downloadAll: vi.fn(async () => undefined),
     cancelDownload: vi.fn(async () => undefined),
-    writeBatch: vi.fn(async (params: [string, number][]) => params.map(([name, value]) => ({
-      name,
-      requested_value: value,
-      confirmed_value: value,
-      success: true,
-    }))),
+    stagingSnapshot: vi.fn(async () => structuredClone(stagingState)),
+    stage: vi.fn(async (changes: ParamStageChange[]) => {
+      const edits = new Map(stagingState.edits.map((edit) => [edit.name, edit]));
+      for (const change of changes) {
+        const existing = edits.get(change.name);
+        const baseValue = existing?.base_value ?? 1;
+        if (change.value === baseValue) {
+          edits.delete(change.name);
+        } else {
+          edits.set(change.name, {
+            name: change.name,
+            base_value: baseValue,
+            staged_value: change.value,
+            reboot_required: change.reboot_required,
+            origin: "ui",
+            failure: null,
+          });
+        }
+      }
+      stagingState = { ...stagingState, revision: stagingState.revision + 1, edits: [...edits.values()] };
+      return structuredClone(stagingState);
+    }),
+    discard: vi.fn(async (names: string[]) => {
+      const discarded = new Set(names);
+      stagingState = {
+        ...stagingState,
+        revision: stagingState.revision + 1,
+        edits: stagingState.edits.filter((edit) => !discarded.has(edit.name)),
+      };
+      return structuredClone(stagingState);
+    }),
+    clear: vi.fn(async () => {
+      stagingState = { ...stagingState, revision: stagingState.revision + 1, edits: [] };
+      return structuredClone(stagingState);
+    }),
+    apply: vi.fn(async (names: string[] | null) => {
+      const selected = new Set(names ?? stagingState.edits.map((edit) => edit.name));
+      const requested = stagingState.edits.filter((edit) => selected.has(edit.name));
+      const results = writeBatch
+        ? await writeBatch(requested.map((edit) => [edit.name, edit.staged_value as number]))
+        : requested.map((edit) => ({
+          name: edit.name,
+          requested_value: edit.staged_value,
+          confirmed_value: edit.staged_value,
+          success: true,
+        }));
+      const successful = new Set(results.filter((result) => result.success).map((result) => result.name));
+      const returned = new Set(results.map((result) => result.name));
+      const pendingReboot = requested
+        .filter((edit) => successful.has(edit.name) && edit.reboot_required === true && edit.name !== "FORMAT_VERSION")
+        .map((edit) => edit.name);
+      const edits = stagingState.edits
+        .filter((edit) => !successful.has(edit.name))
+        .map((edit) => selected.has(edit.name)
+          ? { ...edit, failure: returned.has(edit.name) ? "vehicle_did_not_confirm_requested_value" : "vehicle_did_not_return_a_result" }
+          : edit);
+      const successfulRequestedCount = requested.filter((edit) => successful.has(edit.name)).length;
+      const failures = requested.length - successfulRequestedCount;
+      stagingState = {
+        revision: stagingState.revision + 2,
+        edits,
+        apply_phase: failures === 0 ? "idle" : failures === requested.length ? "failed" : "partial_failure",
+        pending_reboot_ids: [...new Set([...stagingState.pending_reboot_ids, ...pendingReboot])],
+      };
+      return {
+        state: structuredClone(stagingState),
+        results,
+        reboot_required: pendingReboot.length > 0,
+        reboot_required_ids: pendingReboot,
+      };
+    }),
+    resetRebootCheckpoint: vi.fn(async () => {
+      stagingState = { ...stagingState, revision: stagingState.revision + 1, pending_reboot_ids: [] };
+      return structuredClone(stagingState);
+    }),
     parseFile: vi.fn(async () => ({})),
     formatFile: vi.fn(async () => ""),
     formatError: vi.fn((error: unknown) => (error instanceof Error ? error.message : String(error))),
-    ...overrides,
+    ...serviceOverrides,
   } satisfies ParamsService;
 
   return {
@@ -262,6 +346,13 @@ function createParamsService(
       }
 
       handlers.onProgress({ envelope, value });
+    },
+    emitStaging(envelope: SessionEnvelope, value: ParamStagingState) {
+      if (!handlers) {
+        throw new Error("param handlers are not registered");
+      }
+      stagingState = structuredClone(value);
+      handlers.onStaging({ envelope, value });
     },
   };
 }
@@ -446,6 +537,35 @@ describe("createParamsStore", () => {
       label: "ARMING_CHECK",
     });
     expect(view.metadataText).toContain("Parameter info unavailable");
+  });
+
+  it("projects agent-staged backend events into the shared review state immediately", async () => {
+    const snapshot = createSnapshot();
+    const { service: sessionService } = createSessionService([snapshot]);
+    const paramsHarness = createParamsService(null);
+    const sessionStore = createSessionStore(sessionService);
+    const paramStore = createParamsStore(sessionStore, paramsHarness.service);
+
+    await sessionStore.initialize();
+    await paramStore.initialize();
+
+    paramsHarness.emitStaging(snapshot.envelope, {
+      revision: 4,
+      edits: [{
+        name: "ARMING_CHECK",
+        base_value: 1,
+        staged_value: 3,
+        reboot_required: false,
+        origin: "agent",
+        failure: null,
+      }],
+      apply_phase: "idle",
+      pending_reboot_ids: [],
+    });
+
+    const state = get(paramStore);
+    expect(state.stagingRevision).toBe(4);
+    expect(state.stagedEdits.ARMING_CHECK?.nextValue).toBe(3);
   });
 
   it("loads metadata when a vehicle type arrives later on the same session envelope", async () => {
@@ -791,7 +911,7 @@ describe("createParamsStore", () => {
     expect(state.metadataError).toBeNull();
   });
 
-  it("prunes staged edits only when the live backend value matches the staged value", async () => {
+  it("keeps backend staged edits until the shared staging state resolves them", async () => {
     const snapshot = createSnapshot();
     const { service: sessionService } = createSessionService([snapshot]);
     const paramsHarness = createParamsService(null);
@@ -823,6 +943,14 @@ describe("createParamsStore", () => {
       },
       expected_count: 1,
     }));
+    expect(get(paramStore).stagedEdits.ARMING_CHECK?.nextValue).toBe(7);
+
+    paramsHarness.emitStaging(snapshot.envelope, {
+      revision: 2,
+      edits: [],
+      apply_phase: "idle",
+      pending_reboot_ids: [],
+    });
     expect(get(paramStore).stagedEdits.ARMING_CHECK).toBeUndefined();
   });
 
@@ -855,7 +983,7 @@ describe("createParamsStore", () => {
     expect(state.paramStore?.params.ARMING_CHECK?.value).toBe(3);
     expect(state.paramStore?.params.FS_THR_ENABLE?.value).toBe(2);
     expect(state.applyPhase).toBe("partial-failure");
-    expect(state.applyProgress).toEqual({ completed: 1, total: 2, activeName: null });
+    expect(state.applyProgress).toBeNull();
   });
 
   it("treats missing or unexpected batch rows as retained failures without discarding valid successes", async () => {

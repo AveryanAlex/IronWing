@@ -127,6 +127,9 @@ function discardAllQueuedEdits() {
           <MonoValue as="span" class="shrink-0" tone="muted">{edit.currentDisplayText}</MonoValue>
           <HelperText as="span" class="shrink-0" size="xs" tone="muted">→</HelperText>
           <MonoValue as="span" tone="warning" class="shrink-0 font-semibold">{edit.nextDisplayText}</MonoValue>
+          {#if edit.origin === "agent"}
+            <Badge variant="accent" size="sm" case="normal" shape="rounded">agent</Badge>
+          {/if}
           {#if edit.rebootRequired}
             <RotateCw aria-label="reboot required" class="shrink-0 text-warning" size={8} />
             <span class="sr-only">reboot required</span>

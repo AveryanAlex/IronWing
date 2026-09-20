@@ -34,7 +34,7 @@ import type {
 } from "../../logs";
 import type { MissionDownload, MissionIssue } from "../../mission";
 import type { FencePlan, RallyPlan, WireMissionPlan } from "../mavkit-types";
-import type { Param, ParamStore, ParamWriteResult } from "../../params";
+import type { Param, ParamApplyOutcome, ParamStageChange, ParamStagingState, ParamStore, ParamWriteResult } from "../../params";
 import type { FlightPathPoint, PlaybackSeekResult, PlaybackStateSnapshot, TelemetrySnapshot } from "../../playback";
 import type { RecordingSettings, RecordingSettingsResult, RecordingStartRequest, RecordingStatus } from "../../recording";
 import type { SerialPortInfo, SerialPortInventoryResult } from "../../serial-ports";
@@ -105,9 +105,15 @@ export const INVOKE_COMMAND_NAMES = [
   "motor_test",
   "open_session_snapshot",
   "param_cancel",
+  "param_apply_staged",
+  "param_clear_staged",
+  "param_discard_staged",
   "param_download_all",
   "param_format_file",
   "param_parse_file",
+  "param_reset_reboot_checkpoint",
+  "param_stage",
+  "param_staging_snapshot",
   "param_write",
   "param_write_batch",
   "playback_pause",
@@ -222,9 +228,15 @@ export type InvokeCommandMap = {
   motor_test: CommandSpec<{ motorInstance: number; throttlePct: number; durationS: number }, void>;
   open_session_snapshot: CommandSpec<{ sourceKind: SourceKind }, OpenSessionSnapshot>;
   param_cancel: CommandSpec<NoArgs, void>;
+  param_apply_staged: CommandSpec<{ names: string[] | null; expectedRevision: number | null }, ParamApplyOutcome>;
+  param_clear_staged: CommandSpec<{ expectedRevision: number | null }, ParamStagingState>;
+  param_discard_staged: CommandSpec<{ names: string[]; expectedRevision: number | null }, ParamStagingState>;
   param_download_all: CommandSpec<NoArgs, void>;
   param_format_file: CommandSpec<{ store: ParamStore }, string>;
   param_parse_file: CommandSpec<{ contents: string }, Record<string, number>>;
+  param_reset_reboot_checkpoint: CommandSpec<NoArgs, ParamStagingState>;
+  param_stage: CommandSpec<{ changes: ParamStageChange[]; expectedRevision: number | null }, ParamStagingState>;
+  param_staging_snapshot: CommandSpec<NoArgs, ParamStagingState>;
   param_write: CommandSpec<{ name: string; value: number }, ParamWriteResult>;
   param_write_batch: CommandSpec<{ params: [string, number][] }, ParamWriteResult[]>;
   playback_pause: CommandSpec<NoArgs, PlaybackStateSnapshot>;
@@ -329,9 +341,15 @@ export const COMMAND_PLATFORM_SUPPORT = {
   motor_test: ["native","web","remote","mock"] as const,
   open_session_snapshot: ["native","web","remote","mock"] as const,
   param_cancel: ["native","web","remote","mock"] as const,
+  param_apply_staged: ["native","web","remote","mock"] as const,
+  param_clear_staged: ["native","web","remote","mock"] as const,
+  param_discard_staged: ["native","web","remote","mock"] as const,
   param_download_all: ["native","web","remote","mock"] as const,
   param_format_file: ["native","web","remote","mock"] as const,
   param_parse_file: ["native","web","remote","mock"] as const,
+  param_reset_reboot_checkpoint: ["native","web","remote","mock"] as const,
+  param_stage: ["native","web","remote","mock"] as const,
+  param_staging_snapshot: ["native","web","remote","mock"] as const,
   param_write: ["native","web","remote","mock"] as const,
   param_write_batch: ["native","web","remote","mock"] as const,
   playback_pause: ["native","web","remote","mock"] as const,

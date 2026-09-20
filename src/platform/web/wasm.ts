@@ -6,7 +6,13 @@ import type { StartGuidedSessionRequest, UpdateGuidedSessionRequest, GuidedComma
 import type { ChartSeriesPage, ChartSeriesRequest, FlightSummary, LogDataPoint, LogExportRequest, LogExportResult, LogFormat, LogSummary, RawMessagePage, RawMessageQuery } from "../../logs";
 import type { FencePlan, MissionDownload, MissionIssue, RallyPlan } from "../../mission";
 import type { WireMissionPlan } from "../../lib/mavkit-types";
-import type { ParamStore, ParamWriteResult } from "../../params";
+import type {
+  ParamApplyOutcome,
+  ParamStageChange,
+  ParamStagingState,
+  ParamStore,
+  ParamWriteResult,
+} from "../../params";
 import type { FlightPathPoint, TelemetrySnapshot } from "../../playback";
 import type { MessageRateInfo } from "../../telemetry";
 import type { TransportDescriptor } from "../../transport";
@@ -210,6 +216,45 @@ export async function wasmParamWrite(name: string, value: number): Promise<Param
 export async function wasmParamWriteBatch(params: [string, number][]): Promise<ParamWriteResult[]> {
   const runtime = await ensureWasmRuntime();
   return wasmFacade.wasmParamWriteBatch(runtime, { params });
+}
+
+export async function wasmParamStagingSnapshot(): Promise<ParamStagingState> {
+  const runtime = await ensureWasmRuntime();
+  return wasmFacade.wasmParamStagingSnapshot(runtime);
+}
+
+export async function wasmParamStage(
+  changes: ParamStageChange[],
+  expectedRevision: number | null,
+): Promise<ParamStagingState> {
+  const runtime = await ensureWasmRuntime();
+  return wasmFacade.wasmParamStage(runtime, { changes, expectedRevision });
+}
+
+export async function wasmParamDiscardStaged(
+  names: string[],
+  expectedRevision: number | null,
+): Promise<ParamStagingState> {
+  const runtime = await ensureWasmRuntime();
+  return wasmFacade.wasmParamDiscardStaged(runtime, { names, expectedRevision });
+}
+
+export async function wasmParamClearStaged(expectedRevision: number | null): Promise<ParamStagingState> {
+  const runtime = await ensureWasmRuntime();
+  return wasmFacade.wasmParamClearStaged(runtime, { expectedRevision });
+}
+
+export async function wasmParamApplyStaged(
+  names: string[] | null,
+  expectedRevision: number | null,
+): Promise<ParamApplyOutcome> {
+  const runtime = await ensureWasmRuntime();
+  return wasmFacade.wasmParamApplyStaged(runtime, { names, expectedRevision });
+}
+
+export async function wasmParamResetRebootCheckpoint(): Promise<ParamStagingState> {
+  const runtime = await ensureWasmRuntime();
+  return wasmFacade.wasmParamResetRebootCheckpoint(runtime);
 }
 
 export async function wasmParamCancel(): Promise<void> {

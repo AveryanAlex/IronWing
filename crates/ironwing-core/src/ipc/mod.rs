@@ -9,6 +9,7 @@ pub mod guided;
 pub mod logs;
 pub mod mcp;
 pub mod mission;
+pub mod parameter_staging;
 pub mod playback;
 pub mod sensor_health;
 pub mod session;
@@ -35,6 +36,10 @@ pub use logs::{
     RecordingSettingsResult, RecordingStartRequest, RecordingStatus, ReplayStatus,
 };
 pub use mission::{MissionDownload, RcOverrideChannelValueWire, RcOverrideChannelWire};
+pub use parameter_staging::{
+    ParamApplyOutcome, ParamApplyPhase, ParamEditOrigin, ParamStageChange, ParamStagingError,
+    ParamStagingState, StagedParamEdit,
+};
 pub use playback::PlaybackSnapshot;
 pub use sensor_health::sensor_health_snapshot_from_summary;
 pub use session::{

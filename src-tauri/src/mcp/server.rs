@@ -447,7 +447,7 @@ mod tests {
         let transport = StreamableHttpClientTransport::from_uri(format!("http://{address}/mcp"));
         let client = ().serve(transport).await.unwrap();
         let tools = client.list_all_tools().await.unwrap();
-        assert_eq!(tools.len(), 14);
+        assert_eq!(tools.len(), 17);
         assert!(tools.iter().all(|t| t.output_schema.is_some()
             == (!matches!(
                 t.name.as_ref(),

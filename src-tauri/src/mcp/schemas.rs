@@ -35,8 +35,40 @@ pub fn output(name: &str) -> Map<String, Value> {
         "vehicle_status" => {
             json!({"session_id":string,"source":string,"state":snapshot,"firmware":optional_snapshot,"hardware":optional_snapshot,"unique_ids":optional_snapshot,"serial_device":optional_snapshot,"display_id":nullable_string,"sensor_health":optional_snapshot,"link":{"type":["string","object","null"]}})
         }
-        "parameters_write" => {
-            json!({"session_id":string,"atomic":{"const":false},"reboot_required":boolean,"reboot_required_ids":array(string.clone()),"results":array(object(json!({"id":string,"requested_value":number,"confirmed_value":number,"success":boolean,"error":nullable_string,"reboot_required":nullable_boolean})))})
+        "parameters_staged_read" | "parameters_stage" | "parameters_staged_discard" => {
+            json!({
+                "session_id":string,
+                "revision":integer,
+                "apply_phase":string,
+                "pending_reboot_ids":array(string.clone()),
+                "edits":array(object(json!({
+                    "id":string,
+                    "base_value":number,
+                    "staged_value":number,
+                    "reboot_required":nullable_boolean,
+                    "origin":string,
+                    "failure":nullable_string
+                })))
+            })
+        }
+        "parameters_apply" => {
+            json!({
+                "session_id":string,
+                "revision":integer,
+                "apply_phase":string,
+                "pending_reboot_ids":array(string.clone()),
+                "edits":array(object(json!({
+                    "id":string.clone(),
+                    "base_value":number.clone(),
+                    "staged_value":number.clone(),
+                    "reboot_required":nullable_boolean.clone(),
+                    "origin":string.clone(),
+                    "failure":nullable_string.clone()
+                }))),
+                "reboot_required":boolean,
+                "reboot_required_ids":array(string.clone()),
+                "results":array(object(json!({"id":string,"requested_value":number,"confirmed_value":number,"success":boolean,"error":nullable_string,"reboot_required":nullable_boolean})))
+            })
         }
         "parameters_refresh" => {
             json!({"session_id":string,"count":integer,"sync":nullable_string})

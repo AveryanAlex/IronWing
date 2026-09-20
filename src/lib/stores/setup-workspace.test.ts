@@ -213,6 +213,9 @@ function createParamsState(overrides: Partial<ParamsStoreState> = {}): ParamsSto
     metadataState: "ready",
     metadataError: null,
     stagedEdits: {},
+    stagingState: { revision: 0, edits: [], apply_phase: "idle", pending_reboot_ids: [] },
+    stagingRevision: 0,
+    pendingRebootIds: [],
     retainedFailures: {},
     applyPhase: "idle",
     applyError: null,
@@ -684,18 +687,6 @@ describe("setup workspace store", () => {
     store.selectSection("rc_receiver");
 
     paramsStore.set(createParamsState({
-      stagedEdits: {
-        RCMAP_ROLL: createStagedRcEdit("RCMAP_ROLL", 2),
-      },
-      applyPhase: "applying",
-      applyProgress: {
-        completed: 0,
-        total: 1,
-        activeName: "RCMAP_ROLL",
-      },
-    }));
-
-    paramsStore.set(createParamsState({
       paramStore: {
         expected_count: 6,
         params: {
@@ -706,6 +697,7 @@ describe("setup workspace store", () => {
       stagedEdits: {},
       applyPhase: "idle",
       applyProgress: null,
+      pendingRebootIds: ["RCMAP_ROLL"],
     }));
 
     const pendingState = get(store);
@@ -727,7 +719,7 @@ describe("setup workspace store", () => {
     expect(changedRevisionState.checkpoint.blocksActions).toBe(true);
     expect(changedRevisionState.selectedSectionId).toBe("rc_receiver");
 
-    store.clearCheckpointPlaceholder();
+    paramsStore.set(createParamsState({ pendingRebootIds: [] }));
     expect(get(store).checkpoint.phase).toBe("idle");
   });
 
@@ -737,33 +729,10 @@ describe("setup workspace store", () => {
     const store = createSetupWorkspaceStore(sessionStore, paramsStore);
 
     paramsStore.set(createParamsState({
-      stagedEdits: {
-        FORMAT_VERSION: {
-          name: "FORMAT_VERSION",
-          label: "Format version",
-          rawName: "FORMAT_VERSION",
-          description: "Factory reset marker",
-          currentValue: 13,
-          currentValueText: "13",
-          nextValue: 0,
-          nextValueText: "0",
-          units: null,
-          rebootRequired: true,
-          order: 0,
-        },
-      },
-      applyPhase: "applying",
-      applyProgress: {
-        completed: 0,
-        total: 1,
-        activeName: "FORMAT_VERSION",
-      },
-    }));
-
-    paramsStore.set(createParamsState({
       stagedEdits: {},
       applyPhase: "idle",
       applyProgress: null,
+      pendingRebootIds: [],
     }));
 
     expect(get(store).checkpoint.phase).toBe("idle");
@@ -777,21 +746,10 @@ describe("setup workspace store", () => {
     store.selectSection("calibration");
 
     paramsStore.set(createParamsState({
-      stagedEdits: {
-        RCMAP_PITCH: createStagedRcEdit("RCMAP_PITCH", 3),
-      },
-      applyPhase: "applying",
-      applyProgress: {
-        completed: 0,
-        total: 1,
-        activeName: "RCMAP_PITCH",
-      },
-    }));
-
-    paramsStore.set(createParamsState({
       stagedEdits: {},
       applyPhase: "idle",
       applyProgress: null,
+      pendingRebootIds: ["RCMAP_PITCH"],
     }));
 
     expect(get(store).checkpoint.phase).toBe("reboot_required");

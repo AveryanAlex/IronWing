@@ -63,12 +63,18 @@ function createSessionService(): SessionService {
 }
 
 function createParamsService(): ParamsService {
+  const staging = { revision: 0, edits: [], apply_phase: "idle" as const, pending_reboot_ids: [] };
   return {
     subscribeAll: vi.fn(async () => () => undefined),
     fetchMetadata: vi.fn(async () => null),
     downloadAll: vi.fn(async () => undefined),
     cancelDownload: vi.fn(async () => undefined),
-    writeBatch: vi.fn(async () => []),
+    stagingSnapshot: vi.fn(async () => staging),
+    stage: vi.fn(async () => staging),
+    discard: vi.fn(async () => staging),
+    clear: vi.fn(async () => staging),
+    apply: vi.fn(async () => ({ state: staging, results: [], reboot_required: false, reboot_required_ids: [] })),
+    resetRebootCheckpoint: vi.fn(async () => staging),
     parseFile: vi.fn(async () => ({})),
     formatFile: vi.fn(async () => ""),
     formatError: (error: unknown) => (error instanceof Error ? error.message : String(error)),

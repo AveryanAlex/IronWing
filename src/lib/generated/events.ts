@@ -5,7 +5,7 @@ import type { FirmwareProgress } from "../../firmware";
 import type { GuidedDomain } from "../../guided";
 import type { LogProgress } from "../../logs";
 import type { MissionState, TransferProgress } from "../../mission";
-import type { ParamProgress, ParamStore } from "../../params";
+import type { ParamProgress, ParamStagingState, ParamStore } from "../../params";
 import type { PlaybackStateSnapshot } from "../../playback";
 import type { MagCalProgress, MagCalReport, SensorHealthDomain } from "../../sensor-health";
 import type { SessionDomain, SessionEvent } from "../../session";
@@ -20,6 +20,7 @@ export const EVENT_NAMES = {
   MISSION_PROGRESS: "mission://progress",
   PARAM_STORE: "param://store",
   PARAM_PROGRESS: "param://progress",
+  PARAM_STAGING: "param://staging",
   SENSOR_HEALTH_STATE: "sensor_health://state",
   CALIBRATION_STATE: "calibration://state",
   COMPASS_CAL_PROGRESS: "compass://cal_progress",
@@ -41,6 +42,7 @@ export type EventPayloadMap = {
   [EVENT_NAMES.MISSION_PROGRESS]: SessionEvent<TransferProgress>;
   [EVENT_NAMES.PARAM_STORE]: SessionEvent<ParamStore>;
   [EVENT_NAMES.PARAM_PROGRESS]: SessionEvent<ParamProgress>;
+  [EVENT_NAMES.PARAM_STAGING]: SessionEvent<ParamStagingState>;
   [EVENT_NAMES.SENSOR_HEALTH_STATE]: SessionEvent<SensorHealthDomain>;
   [EVENT_NAMES.CALIBRATION_STATE]: SessionEvent<CalibrationDomain>;
   [EVENT_NAMES.COMPASS_CAL_PROGRESS]: MagCalProgress;

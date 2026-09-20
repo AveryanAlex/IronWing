@@ -1,4 +1,4 @@
-import type { ParamStore } from "../../params";
+import type { ParamEditOrigin, ParamStore } from "../../params";
 import {
   formatParamValue,
   type ParameterItemModel,
@@ -15,6 +15,7 @@ export type StagedParameterEdit = {
   nextValueText: string;
   units: string | null;
   rebootRequired: boolean;
+  origin?: ParamEditOrigin;
   order: number;
 };
 
@@ -41,6 +42,7 @@ export function stageParameterEdit(
     nextValueText: formatParamValue(nextValue, item.increment),
     units: item.units,
     rebootRequired: item.rebootRequired,
+    origin: "ui",
     order: item.order,
   };
 

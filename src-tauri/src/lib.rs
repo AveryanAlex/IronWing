@@ -5,11 +5,13 @@ use commands::{
     calibrate_compass_accept, calibrate_compass_cancel, calibrate_compass_start, calibrate_gyro,
     disarm_vehicle, fence_clear, fence_download, fence_upload, get_available_message_rates,
     get_available_modes, mission_cancel, mission_clear, mission_download, mission_set_current,
-    mission_upload, mission_validate, motor_test, open_session_snapshot, param_cancel,
-    param_download_all, param_format_file, param_parse_file, param_write, param_write_batch,
-    rally_clear, rally_download, rally_upload, rc_override, reboot_vehicle, request_prearm_checks,
-    runtime_capabilities, set_flight_mode, set_message_rate, set_servo, set_telemetry_rate,
-    start_guided_session, stop_guided_session, update_guided_session, vehicle_takeoff,
+    mission_upload, mission_validate, motor_test, open_session_snapshot, param_apply_staged,
+    param_cancel, param_clear_staged, param_discard_staged, param_download_all, param_format_file,
+    param_parse_file, param_reset_reboot_checkpoint, param_stage, param_staging_snapshot,
+    param_write, param_write_batch, rally_clear, rally_download, rally_upload, rc_override,
+    reboot_vehicle, request_prearm_checks, runtime_capabilities, set_flight_mode, set_message_rate,
+    set_servo, set_telemetry_rate, start_guided_session, stop_guided_session,
+    update_guided_session, vehicle_takeoff,
 };
 use connection::{ActiveLinkTarget, connect_link, disconnect_link};
 use firmware::commands::{
@@ -50,6 +52,7 @@ mod ipc;
 mod log_library;
 mod logs;
 mod mcp;
+mod parameter_staging;
 mod recording;
 mod remote_ui;
 mod serial_ports;
@@ -88,6 +91,7 @@ pub(crate) struct AppState {
     pub(crate) firmware_abort: tokio::sync::Mutex<Option<FirmwareAbortHandle>>,
     pub(crate) firmware_cancel_requested: std::sync::Arc<std::sync::atomic::AtomicBool>,
     pub(crate) param_download_abort: tokio::sync::Mutex<Option<tokio::task::AbortHandle>>,
+    pub(crate) param_staging: std::sync::Mutex<ironwing_core::ipc::ParamStagingState>,
     pub(crate) mission_op_cancel: tokio::sync::Mutex<Option<MissionCancelToken>>,
     pub(crate) guided_runtime: tokio::sync::Mutex<GuidedRuntime>,
     pub(crate) remote_ui_events: tokio::sync::broadcast::Sender<RemoteUiEvent>,
@@ -127,6 +131,7 @@ pub fn run() {
         firmware_abort: tokio::sync::Mutex::new(None),
         firmware_cancel_requested: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false)),
         param_download_abort: tokio::sync::Mutex::new(None),
+        param_staging: std::sync::Mutex::new(ironwing_core::ipc::ParamStagingState::default()),
         mission_op_cancel: tokio::sync::Mutex::new(None),
         guided_runtime: tokio::sync::Mutex::new(GuidedRuntime::default()),
         remote_ui_events: remote_ui::event_channel(),
@@ -211,6 +216,12 @@ pub fn run() {
         param_download_all,
         param_write,
         param_write_batch,
+        param_staging_snapshot,
+        param_stage,
+        param_discard_staged,
+        param_clear_staged,
+        param_apply_staged,
+        param_reset_reboot_checkpoint,
         param_parse_file,
         param_format_file,
         param_cancel,

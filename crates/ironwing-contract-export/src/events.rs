@@ -52,6 +52,11 @@ pub const EVENT_SPECS: &[EventSpec] = &[
         "SessionEvent<ParamProgress>",
     ),
     event(
+        "PARAM_STAGING",
+        event_names::PARAM_STAGING,
+        "SessionEvent<ParamStagingState>",
+    ),
+    event(
         "SENSOR_HEALTH_STATE",
         event_names::SENSOR_HEALTH_STATE,
         "SessionEvent<SensorHealthDomain>",
@@ -124,7 +129,7 @@ import type { FirmwareProgress } from "../../firmware";
 import type { GuidedDomain } from "../../guided";
 import type { LogProgress } from "../../logs";
 import type { MissionState, TransferProgress } from "../../mission";
-import type { ParamProgress, ParamStore } from "../../params";
+import type { ParamProgress, ParamStagingState, ParamStore } from "../../params";
 import type { PlaybackStateSnapshot } from "../../playback";
 import type { MagCalProgress, MagCalReport, SensorHealthDomain } from "../../sensor-health";
 import type { SessionDomain, SessionEvent } from "../../session";

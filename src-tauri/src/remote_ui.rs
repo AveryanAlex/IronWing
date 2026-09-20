@@ -375,6 +375,31 @@ async fn dispatch_invoke(
         "param_write_batch" => {
             ok(commands::param_write_batch(state, app.clone(), arg(&args, "params")?).await?)
         }
+        "param_staging_snapshot" => ok(commands::param_staging_snapshot(state)),
+        "param_stage" => ok(commands::param_stage(
+            state,
+            arg(&args, "changes")?,
+            optional_arg(&args, "expectedRevision")?,
+        )
+        .await?),
+        "param_discard_staged" => ok(commands::param_discard_staged(
+            state,
+            arg(&args, "names")?,
+            optional_arg(&args, "expectedRevision")?,
+        )
+        .await?),
+        "param_clear_staged" => ok(commands::param_clear_staged(
+            state,
+            optional_arg(&args, "expectedRevision")?,
+        )
+        .await?),
+        "param_apply_staged" => ok(commands::param_apply_staged(
+            state,
+            optional_arg(&args, "names")?,
+            optional_arg(&args, "expectedRevision")?,
+        )
+        .await?),
+        "param_reset_reboot_checkpoint" => ok(commands::param_reset_reboot_checkpoint(state)),
         "param_parse_file" => ok(commands::param_parse_file(arg(&args, "contents")?)?),
         "param_format_file" => ok(commands::param_format_file(arg(&args, "store")?)),
         "calibrate_accel" => {

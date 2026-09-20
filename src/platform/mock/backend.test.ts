@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ChartSeriesPage, LogExportResult, LogLibraryCatalog, LogProgress, RawMessagePage } from "../../logs";
 import type { MissionState, TransferProgress } from "../../mission";
-import type { ParamProgress, ParamStore } from "../../params";
+import type { ParamProgress, ParamStagingState, ParamStore } from "../../params";
 import type { PlaybackStateSnapshot } from "../../playback";
 import type { RecordingSettingsResult, RecordingStatus } from "../../recording";
 import type { OpenSessionSnapshot, SessionEvent } from "../../session";
@@ -1291,6 +1291,46 @@ describe("mock setup/calibration/arming backend parity", () => {
         const live = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
         expect(live.param_store.params.ARMING_CHECK.value).toBe(0);
         expect(live.param_store.params.FS_THR_ENABLE.value).toBe(1);
+    });
+
+    it("shares staged parameter state through events and creates a reboot checkpoint on apply", async () => {
+        await invokeMockCommand("connect_link", {
+            request: {
+                transport: { kind: "udp", bind_addr: "0.0.0.0:14550" },
+                mockParamStore: {
+                    expected_count: 1,
+                    params: {
+                        ARMING_CHECK: { name: "ARMING_CHECK", value: 1, param_type: "uint8", index: 0 },
+                    },
+                },
+            },
+        });
+        const live = await invokeMockCommand<OpenSessionSnapshot>("open_session_snapshot", { sourceKind: "live" });
+        await invokeMockCommand("ack_session_snapshot", {
+            sessionId: live.envelope.session_id,
+            seekEpoch: live.envelope.seek_epoch,
+            resetRevision: live.envelope.reset_revision,
+        });
+        const stagingEvents: ParamStagingState[] = [];
+        const unlisten = listenMockEvent("param://staging", (payload) => {
+            stagingEvents.push((payload as SessionEvent<ParamStagingState>).value);
+        });
+        const initialStaging = await invokeMockCommand<ParamStagingState>("param_staging_snapshot");
+
+        const staged = await invokeMockCommand<ParamStagingState>("param_stage", {
+            changes: [{ name: "ARMING_CHECK", value: 3, reboot_required: true }],
+            expectedRevision: initialStaging.revision,
+        });
+        expect(staged.edits[0]).toMatchObject({ name: "ARMING_CHECK", staged_value: 3, origin: "ui" });
+
+        const outcome = await invokeMockCommand<any>("param_apply_staged", {
+            names: ["ARMING_CHECK"],
+            expectedRevision: staged.revision,
+        });
+        expect(outcome.reboot_required_ids).toEqual(["ARMING_CHECK"]);
+        expect(outcome.state.pending_reboot_ids).toEqual(["ARMING_CHECK"]);
+        expect(stagingEvents.at(-1)?.pending_reboot_ids).toEqual(["ARMING_CHECK"]);
+        unlisten();
     });
 
     it("emits cancelled progress when param_download_all is cancelled", async () => {

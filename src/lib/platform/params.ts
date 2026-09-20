@@ -1,15 +1,23 @@
 import { fetchParamMetadata, type ParamMetadataMap } from "../../param-metadata";
 import {
   cancelParamDownload,
+  applyStagedParams,
+  clearStagedParams,
+  discardStagedParams,
   downloadAllParams,
   formatParamFile,
   parseParamFile,
+  getParamStagingState,
+  resetParamRebootCheckpoint,
+  stageParams,
   subscribeParamProgress,
+  subscribeParamStaging,
   subscribeParamStore,
-  writeBatchParams,
   type ParamProgress,
+  type ParamApplyOutcome,
+  type ParamStageChange,
+  type ParamStagingState,
   type ParamStore,
-  type ParamWriteResult,
 } from "../../params";
 import type { SessionEvent } from "../../session";
 import { formatUnknownError } from "../error-format";
@@ -17,6 +25,7 @@ import { formatUnknownError } from "../error-format";
 export type ParamsServiceEventHandlers = {
   onStore: (event: SessionEvent<ParamStore>) => void;
   onProgress: (event: SessionEvent<ParamProgress>) => void;
+  onStaging: (event: SessionEvent<ParamStagingState>) => void;
 };
 
 export type ParamsService = {
@@ -24,7 +33,12 @@ export type ParamsService = {
   fetchMetadata(vehicleType: string, firmwareVersion?: string | null): Promise<ParamMetadataMap | null>;
   downloadAll(): Promise<void>;
   cancelDownload(): Promise<void>;
-  writeBatch(params: [string, number][]): Promise<ParamWriteResult[]>;
+  stagingSnapshot(): Promise<ParamStagingState>;
+  stage(changes: ParamStageChange[], expectedRevision: number | null): Promise<ParamStagingState>;
+  discard(names: string[], expectedRevision: number | null): Promise<ParamStagingState>;
+  clear(expectedRevision: number | null): Promise<ParamStagingState>;
+  apply(names: string[] | null, expectedRevision: number | null): Promise<ParamApplyOutcome>;
+  resetRebootCheckpoint(): Promise<ParamStagingState>;
   parseFile(contents: string): Promise<Record<string, number>>;
   formatFile(store: ParamStore): Promise<string>;
   formatError(error: unknown): string;
@@ -36,7 +50,12 @@ export function createParamsService(): ParamsService {
     fetchMetadata: fetchParamMetadata,
     downloadAll: downloadAllParams,
     cancelDownload: cancelParamDownload,
-    writeBatch: writeBatchParams,
+    stagingSnapshot: getParamStagingState,
+    stage: stageParams,
+    discard: discardStagedParams,
+    clear: clearStagedParams,
+    apply: applyStagedParams,
+    resetRebootCheckpoint: resetParamRebootCheckpoint,
     parseFile: parseParamFile,
     formatFile: formatParamFile,
     formatError: formatUnknownError,
@@ -47,6 +66,7 @@ export async function subscribeAll(handlers: ParamsServiceEventHandlers): Promis
   const disposers = await Promise.all([
     subscribeParamStore(handlers.onStore),
     subscribeParamProgress(handlers.onProgress),
+    subscribeParamStaging(handlers.onStaging),
   ]);
 
   return () => {

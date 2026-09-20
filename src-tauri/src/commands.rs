@@ -9,7 +9,8 @@ use crate::guided::{emit_guided_snapshot, live_context_from_vehicle};
 use crate::ipc::{
     AckSessionSnapshotResult, DomainProvenance, DomainValue, GuidedCommandResult, GuidedFailure,
     GuidedFatalityScope, GuidedLiveContext, MissionDownload, OpenSessionSnapshot, OperationId,
-    RcOverrideChannelWire, ScopedEvent, SessionEnvelope, SourceKind, StartGuidedSessionRequest,
+    ParamApplyOutcome, ParamEditOrigin, ParamStageChange, ParamStagingState, RcOverrideChannelWire,
+    ScopedEvent, SessionEnvelope, SourceKind, StartGuidedSessionRequest,
     UpdateGuidedSessionRequest,
 };
 use crate::{
@@ -673,6 +674,63 @@ pub(crate) async fn param_write_batch(
 }
 
 #[tauri::command]
+pub(crate) fn param_staging_snapshot(state: tauri::State<'_, AppState>) -> ParamStagingState {
+    crate::parameter_staging::snapshot(state.inner())
+}
+
+#[tauri::command]
+pub(crate) async fn param_stage(
+    state: tauri::State<'_, AppState>,
+    changes: Vec<ParamStageChange>,
+    expected_revision: Option<u32>,
+) -> Result<ParamStagingState, String> {
+    ensure_live_write_allowed(state.inner(), OperationId::ParamStage).await?;
+    crate::parameter_staging::stage(
+        state.inner(),
+        changes,
+        ParamEditOrigin::Ui,
+        expected_revision,
+    )
+    .await
+}
+
+#[tauri::command]
+pub(crate) async fn param_discard_staged(
+    state: tauri::State<'_, AppState>,
+    names: Vec<String>,
+    expected_revision: Option<u32>,
+) -> Result<ParamStagingState, String> {
+    ensure_live_write_allowed(state.inner(), OperationId::ParamDiscardStaged).await?;
+    crate::parameter_staging::discard(state.inner(), &names, expected_revision)
+}
+
+#[tauri::command]
+pub(crate) async fn param_clear_staged(
+    state: tauri::State<'_, AppState>,
+    expected_revision: Option<u32>,
+) -> Result<ParamStagingState, String> {
+    ensure_live_write_allowed(state.inner(), OperationId::ParamDiscardStaged).await?;
+    crate::parameter_staging::clear(state.inner(), expected_revision)
+}
+
+#[tauri::command]
+pub(crate) async fn param_apply_staged(
+    state: tauri::State<'_, AppState>,
+    names: Option<Vec<String>>,
+    expected_revision: Option<u32>,
+) -> Result<ParamApplyOutcome, String> {
+    ensure_live_write_allowed(state.inner(), OperationId::ParamApplyStaged).await?;
+    crate::parameter_staging::apply(state.inner(), names, expected_revision).await
+}
+
+#[tauri::command]
+pub(crate) fn param_reset_reboot_checkpoint(
+    state: tauri::State<'_, AppState>,
+) -> ParamStagingState {
+    crate::parameter_staging::clear_reboot_checkpoint(state.inner())
+}
+
+#[tauri::command]
 pub(crate) fn param_parse_file(contents: String) -> Result<HashMap<String, f32>, String> {
     live_commands::param_parse_file(&contents).map_err(|e| e.to_string())
 }
@@ -697,7 +755,9 @@ pub(crate) async fn reboot_vehicle(state: tauri::State<'_, AppState>) -> Result<
     let vehicle = with_vehicle(&state).await?;
     live_commands::reboot_vehicle(&vehicle)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?;
+    crate::parameter_staging::clear_reboot_checkpoint(state.inner());
+    Ok(())
 }
 
 #[tauri::command]
@@ -895,6 +955,7 @@ mod tests {
                 false,
             )),
             param_download_abort: tokio::sync::Mutex::new(None),
+            param_staging: std::sync::Mutex::new(ParamStagingState::default()),
             mission_op_cancel: tokio::sync::Mutex::new(None),
             guided_runtime: tokio::sync::Mutex::new(crate::ipc::GuidedRuntime::default()),
             remote_ui_events: crate::remote_ui::event_channel(),

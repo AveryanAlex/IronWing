@@ -4,7 +4,6 @@ import type { CalibrationLifecycle } from "../../calibration";
 import type { SessionEnvelope, SourceKind } from "../../session";
 import type { CompactStatusNotice } from "../../statustext";
 import { selectCompactStatusNotices } from "../../statustext";
-import { FACTORY_RESET_PARAMETER_NAME } from "../params/factory-reset";
 import {
   SETUP_SECTION_CATALOG,
   getSetupSectionDefinition,
@@ -17,11 +16,6 @@ import { selectTelemetryView } from "../telemetry-selectors";
 import { createUiStateStore, type UiStateStore } from "../ui-state/ui-state";
 import type { ParamsMetadataState, ParamsStoreState } from "./params";
 import type { SessionStorePhase, SessionStoreState } from "./session";
-
-type SetupCheckpointSeed = {
-  resumeSectionId: SetupSectionId;
-  scopeKey: string | null;
-};
 
 type CalibrationCardId = "accel" | "gyro" | "compass" | "radio";
 
@@ -851,10 +845,9 @@ export function createSetupWorkspaceStore(
   let selectedSectionId: SetupSectionId = "overview";
   let previousFamilyForRestore: string | null = null;
   let checkpointState = createIdleCheckpoint();
-  let pendingCheckpointSeed: SetupCheckpointSeed | null = null;
+  let checkpointTracksPendingReboot = false;
   let previous: SetupWorkspaceStoreState | null = null;
   let previousScopeKey: string | null = null;
-  let previousApplyPhase: ParamsStoreState["applyPhase"] = "idle";
   let currentActiveScopeKey: string | null = null;
 
   function recompute() {
@@ -869,31 +862,26 @@ export function createSetupWorkspaceStore(
     const readiness = resolveSetupReadiness(sessionState, paramsState);
     const liveSessionConnected = sessionState.sessionDomain.value?.connection.kind === "connected";
 
-    const hasRebootRequiredEdits = Object.values(paramsState.stagedEdits).some(
-      (edit) => edit.rebootRequired && edit.name !== FACTORY_RESET_PARAMETER_NAME,
-    );
-    if (paramsState.applyPhase === "applying" && hasRebootRequiredEdits && pendingCheckpointSeed === null) {
-      pendingCheckpointSeed = {
+    const hasPendingReboot = (paramsState.pendingRebootIds ?? []).length > 0;
+    if (hasPendingReboot && checkpointState.phase === "idle") {
+      const resumeLabel = getSetupSectionDefinition(selectedSectionId).title;
+      checkpointState = {
+        phase: "reboot_required",
         resumeSectionId: selectedSectionId,
         scopeKey: activeScopeKey,
+        reason: `Reboot to finish applying changes before returning to ${resumeLabel}.`,
+        title: "Reboot required",
+        detailText: "Reboot-required setup changes were applied. Reboot the vehicle before continuing setup.",
+        blocksActions: true,
       };
-    }
-
-    if (previousApplyPhase === "applying" && paramsState.applyPhase !== "applying") {
-      if (pendingCheckpointSeed && paramsState.applyPhase === "idle") {
-        const resumeLabel = getSetupSectionDefinition(pendingCheckpointSeed.resumeSectionId).title;
-        checkpointState = {
-          phase: "reboot_required",
-          resumeSectionId: pendingCheckpointSeed.resumeSectionId,
-          scopeKey: pendingCheckpointSeed.scopeKey,
-          reason: `Reboot to finish applying changes before returning to ${resumeLabel}.`,
-          title: "Reboot required",
-          detailText: "Reboot-required setup changes were applied. Reboot the vehicle before continuing setup.",
-          blocksActions: true,
-        };
-      }
-
-      pendingCheckpointSeed = null;
+      checkpointTracksPendingReboot = true;
+    } else if (
+      !hasPendingReboot
+      && checkpointState.phase === "reboot_required"
+      && checkpointTracksPendingReboot
+    ) {
+      checkpointState = createIdleCheckpoint();
+      checkpointTracksPendingReboot = false;
     }
 
     const sections = CATALOG_SECTIONS;
@@ -955,7 +943,6 @@ export function createSetupWorkspaceStore(
     state.set(next);
     previous = next;
     previousScopeKey = activeScopeKey;
-    previousApplyPhase = paramsState.applyPhase;
   }
 
   sessionStore.subscribe((value) => {
@@ -986,11 +973,12 @@ export function createSetupWorkspaceStore(
     },
     setCheckpointPlaceholder(input: SetupWorkspaceCheckpointInput) {
       checkpointState = normalizeCheckpointInput(input);
+      checkpointTracksPendingReboot = false;
       recompute();
     },
     clearCheckpointPlaceholder() {
       checkpointState = createIdleCheckpoint();
-      pendingCheckpointSeed = null;
+      checkpointTracksPendingReboot = false;
       recompute();
     },
   };

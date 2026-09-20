@@ -6,6 +6,7 @@ import { fromStore } from "svelte/store";
 
 import {
   getSessionStoreContext,
+  getParamsStoreContext,
   getSetupWorkspaceStoreContext,
   getSetupWorkspaceViewStoreContext,
   getShellChromeStoreContext,
@@ -31,6 +32,7 @@ let { requestedSectionId, navigateToSetupSection, children }: Props = $props();
 
 const store = getSetupWorkspaceStoreContext();
 const sessionStore = getSessionStoreContext();
+const paramsStore = getParamsStoreContext();
 const setupWorkspaceViewStore = getSetupWorkspaceViewStoreContext();
 const viewStore = fromStore(setupWorkspaceViewStore);
 const chromeStore = fromStore(getShellChromeStoreContext());
@@ -190,7 +192,8 @@ function handleSectionDrawerLinkClick(sectionId: string, event: MouseEvent) {
   }
 }
 
-function resetCheckpoint() {
+async function resetCheckpoint() {
+  await paramsStore.resetRebootCheckpoint();
   store.clearCheckpointPlaceholder();
 }
 

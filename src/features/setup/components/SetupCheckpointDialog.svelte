@@ -13,7 +13,7 @@ let {
 }: {
   checkpoint: SetupWorkspaceCheckpointState;
   onReboot: () => Promise<void>;
-  onReset: () => void;
+  onReset: () => Promise<void>;
 } = $props();
 
 let resetConfirmationOpen = $state(false);
@@ -47,7 +47,7 @@ async function requestReboot() {
     await onReboot();
     rebootNoticeOpen = true;
     resetConfirmationOpen = false;
-    onReset();
+    await onReset();
   } catch (error) {
     notifyUnknownError("Vehicle reboot failed", error, {
       id: "setup-checkpoint-reboot-failed",
@@ -57,10 +57,16 @@ async function requestReboot() {
   }
 }
 
-function confirmReset() {
+async function confirmReset() {
   resetConfirmationOpen = false;
   rebootNoticeOpen = false;
-  onReset();
+  try {
+    await onReset();
+  } catch (error) {
+    notifyUnknownError("Checkpoint reset failed", error, {
+      id: "setup-checkpoint-reset-failed",
+    });
+  }
 }
 </script>
 

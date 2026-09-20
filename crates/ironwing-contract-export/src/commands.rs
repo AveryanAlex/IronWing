@@ -85,9 +85,15 @@ const WASM_FACADE_COMMANDS: &[WasmFacadeSpec] = &[
     wasm_facade_command("mission_validate", &["plan"]),
     wasm_facade_command("motor_test", &["motorInstance", "throttlePct", "durationS"]),
     wasm_facade_command("param_cancel", &[]),
+    wasm_facade_command("param_apply_staged", &["names", "expectedRevision"]),
+    wasm_facade_command("param_clear_staged", &["expectedRevision"]),
+    wasm_facade_command("param_discard_staged", &["names", "expectedRevision"]),
     wasm_facade_command("param_download_all", &[]),
     wasm_facade_command("param_format_file", &["store"]),
     wasm_facade_command("param_parse_file", &["contents"]),
+    wasm_facade_command("param_reset_reboot_checkpoint", &[]),
+    wasm_facade_command("param_stage", &["changes", "expectedRevision"]),
+    wasm_facade_command("param_staging_snapshot", &[]),
     wasm_facade_command("param_write", &["name", "value"]),
     wasm_facade_command("param_write_batch", &["params"]),
     wasm_facade_command("rally_clear", &[]),
@@ -165,9 +171,15 @@ pub const COMMAND_NAMES: &[&str] = &[
     "motor_test",
     "open_session_snapshot",
     "param_cancel",
+    "param_apply_staged",
+    "param_clear_staged",
+    "param_discard_staged",
     "param_download_all",
     "param_format_file",
     "param_parse_file",
+    "param_reset_reboot_checkpoint",
+    "param_stage",
+    "param_staging_snapshot",
     "param_write",
     "param_write_batch",
     "playback_pause",
@@ -490,6 +502,24 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         ALL_PLATFORMS,
     ),
     command("param_cancel", "NoArgs", "void", ALL_PLATFORMS),
+    command(
+        "param_apply_staged",
+        "{ names: string[] | null; expectedRevision: number | null }",
+        "ParamApplyOutcome",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "param_clear_staged",
+        "{ expectedRevision: number | null }",
+        "ParamStagingState",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "param_discard_staged",
+        "{ names: string[]; expectedRevision: number | null }",
+        "ParamStagingState",
+        ALL_PLATFORMS,
+    ),
     command("param_download_all", "NoArgs", "void", ALL_PLATFORMS),
     command(
         "param_format_file",
@@ -501,6 +531,24 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         "param_parse_file",
         "{ contents: string }",
         "Record<string, number>",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "param_reset_reboot_checkpoint",
+        "NoArgs",
+        "ParamStagingState",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "param_stage",
+        "{ changes: ParamStageChange[]; expectedRevision: number | null }",
+        "ParamStagingState",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "param_staging_snapshot",
+        "NoArgs",
+        "ParamStagingState",
         ALL_PLATFORMS,
     ),
     command(
@@ -776,7 +824,7 @@ import type {
 } from "../../logs";
 import type { MissionDownload, MissionIssue } from "../../mission";
 import type { FencePlan, RallyPlan, WireMissionPlan } from "../mavkit-types";
-import type { Param, ParamStore, ParamWriteResult } from "../../params";
+import type { Param, ParamApplyOutcome, ParamStageChange, ParamStagingState, ParamStore, ParamWriteResult } from "../../params";
 import type { FlightPathPoint, PlaybackSeekResult, PlaybackStateSnapshot, TelemetrySnapshot } from "../../playback";
 import type { RecordingSettings, RecordingSettingsResult, RecordingStartRequest, RecordingStatus } from "../../recording";
 import type { SerialPortInfo, SerialPortInventoryResult } from "../../serial-ports";

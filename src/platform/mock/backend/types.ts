@@ -1,5 +1,5 @@
 import type { HomePosition, MissionState, TransferProgress } from "../../../mission";
-import type { ParamProgress, ParamStore } from "../../../params";
+import type { ParamProgress, ParamStagingState, ParamStore } from "../../../params";
 import type { FencePlan } from "../../../fence";
 import type { RallyPlan } from "../../../rally";
 import type {
@@ -97,6 +97,7 @@ export type MockBackendState = {
   liveTelemetryDomain: MockTelemetryDomain | null;
   liveParamStore: MockParamStoreState | null;
   liveParamProgress: MockParamProgressState | null;
+  liveParamStaging: ParamStagingState;
   liveAvailableModes: FlightModeEntry[] | null;
   liveStatusText: MockLiveStatusTextState | null;
   liveSupportDomain: MockSupportDomain | null;

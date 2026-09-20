@@ -4,6 +4,7 @@ pub const MISSION_STATE: &str = "mission://state";
 pub const MISSION_PROGRESS: &str = "mission://progress";
 pub const PARAM_STORE: &str = "param://store";
 pub const PARAM_PROGRESS: &str = "param://progress";
+pub const PARAM_STAGING: &str = "param://staging";
 pub const SENSOR_HEALTH_STATE: &str = "sensor_health://state";
 pub const CALIBRATION_STATE: &str = "calibration://state";
 pub const COMPASS_CAL_PROGRESS: &str = "compass://cal_progress";

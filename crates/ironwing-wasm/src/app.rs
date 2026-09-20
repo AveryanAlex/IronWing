@@ -8,8 +8,9 @@ use ironwing_core::event_names;
 use ironwing_core::ipc::{
     AckSessionSnapshotResult, DomainProvenance, GuidedCommandResult, GuidedFailure,
     GuidedFatalityScope, GuidedLiveContext, GuidedRuntime, MissionDownload, OperationFailure,
-    OperationId, RcOverrideChannelWire, Reason, ReasonKind, SourceKind, StartGuidedSessionRequest,
-    UpdateGuidedSessionRequest, operation_failure_json,
+    OperationId, ParamApplyOutcome, ParamEditOrigin, ParamStageChange, ParamStagingState,
+    RcOverrideChannelWire, Reason, ReasonKind, SourceKind, StagedParamEdit,
+    StartGuidedSessionRequest, UpdateGuidedSessionRequest, operation_failure_json,
 };
 use ironwing_core::live_runtime::commands as live_commands;
 use ironwing_core::live_runtime::{
@@ -59,6 +60,7 @@ struct RuntimeState {
     next_operation_token: u64,
     mission_op_abort: Option<(u64, AbortHandle)>,
     param_download_abort: Option<(u64, AbortHandle)>,
+    param_staging: ParamStagingState,
     tasks: LocalTaskSet,
     telemetry_interval_ms: Rc<Cell<u32>>,
 }
@@ -74,6 +76,7 @@ impl RuntimeState {
             next_operation_token: 1,
             mission_op_abort: None,
             param_download_abort: None,
+            param_staging: ParamStagingState::default(),
             tasks: LocalTaskSet::new(),
             telemetry_interval_ms: Rc::new(Cell::new(
                 telemetry::DEFAULT_TELEMETRY_INTERVAL_MS
@@ -95,6 +98,7 @@ impl RuntimeState {
         if let Some((_, abort)) = self.param_download_abort.take() {
             abort.abort();
         }
+        self.param_staging.reset();
         self.guided_runtime.terminate(
             DomainProvenance::Stream,
             ironwing_core::ipc::GuidedTerminationReason::Disconnect,
@@ -448,6 +452,144 @@ impl IronwingWasmRuntime {
         to_js(&result)
     }
 
+    #[wasm_bindgen(js_name = paramStagingSnapshot)]
+    pub fn param_staging_snapshot(&self) -> Result<JsValue, JsValue> {
+        to_js(&self.state.borrow().param_staging)
+    }
+
+    #[wasm_bindgen(js_name = paramStage)]
+    pub fn param_stage(
+        &self,
+        changes: JsValue,
+        expected_revision: Option<u32>,
+    ) -> Result<JsValue, JsValue> {
+        let changes: Vec<ParamStageChange> = from_js(changes)?;
+        let vehicle = live_vehicle_for_write(&self.state, OperationId::ParamStage)?;
+        let store = vehicle
+            .params()
+            .latest()
+            .and_then(|snapshot| snapshot.store)
+            .ok_or_else(|| {
+                JsValue::from_str("parameters must be downloaded before staging changes")
+            })?;
+        let (runtime, staging) = {
+            let mut state = self.state.borrow_mut();
+            state
+                .param_staging
+                .stage(&store, &changes, ParamEditOrigin::Ui, expected_revision)
+                .map_err(|error| JsValue::from_str(&error.to_string()))?;
+            (state.live_runtime.clone(), state.param_staging.clone())
+        };
+        live_runtime::emit_scoped(&runtime, event_names::PARAM_STAGING, staging.clone());
+        to_js(&staging)
+    }
+
+    #[wasm_bindgen(js_name = paramDiscardStaged)]
+    pub fn param_discard_staged(
+        &self,
+        names: JsValue,
+        expected_revision: Option<u32>,
+    ) -> Result<JsValue, JsValue> {
+        let names: Vec<String> = from_js(names)?;
+        let (runtime, staging) = {
+            let mut state = self.state.borrow_mut();
+            state
+                .param_staging
+                .discard(&names, expected_revision)
+                .map_err(|error| JsValue::from_str(&error.to_string()))?;
+            (state.live_runtime.clone(), state.param_staging.clone())
+        };
+        live_runtime::emit_scoped(&runtime, event_names::PARAM_STAGING, staging.clone());
+        to_js(&staging)
+    }
+
+    #[wasm_bindgen(js_name = paramClearStaged)]
+    pub fn param_clear_staged(&self, expected_revision: Option<u32>) -> Result<JsValue, JsValue> {
+        let (runtime, staging) = {
+            let mut state = self.state.borrow_mut();
+            state
+                .param_staging
+                .clear(expected_revision)
+                .map_err(|error| JsValue::from_str(&error.to_string()))?;
+            (state.live_runtime.clone(), state.param_staging.clone())
+        };
+        live_runtime::emit_scoped(&runtime, event_names::PARAM_STAGING, staging.clone());
+        to_js(&staging)
+    }
+
+    #[wasm_bindgen(js_name = paramApplyStaged)]
+    pub async fn param_apply_staged(
+        &self,
+        names: JsValue,
+        expected_revision: Option<u32>,
+    ) -> Result<JsValue, JsValue> {
+        let names: Option<Vec<String>> = from_js(names)?;
+        let vehicle = live_vehicle_for_write(&self.state, OperationId::ParamApplyStaged)?;
+        let (runtime, requested, applying) = {
+            let mut state = self.state.borrow_mut();
+            let requested = state
+                .param_staging
+                .begin_apply(names.as_deref(), expected_revision)
+                .map_err(|error| JsValue::from_str(&error.to_string()))?;
+            (
+                state.live_runtime.clone(),
+                requested,
+                state.param_staging.clone(),
+            )
+        };
+        live_runtime::emit_scoped(&runtime, event_names::PARAM_STAGING, applying);
+
+        let params = requested
+            .iter()
+            .map(|edit| (edit.name.clone(), edit.staged_value))
+            .collect();
+        let handle = match vehicle.params().write_batch(params) {
+            Ok(handle) => handle,
+            Err(error) => {
+                fail_wasm_apply(&self.state, &runtime, &requested, &error.to_string());
+                return Err(JsValue::from_str(&error.to_string()));
+            }
+        };
+        let mut progress_sub = handle.subscribe();
+        let progress_runtime = runtime.clone();
+        spawn_runtime_task(&self.state, async move {
+            while let Some(progress) = progress_sub.recv().await {
+                live_runtime::emit_scoped(&progress_runtime, event_names::PARAM_PROGRESS, progress);
+            }
+        });
+
+        match handle.wait().await {
+            Ok(results) => {
+                let outcome: ParamApplyOutcome = self
+                    .state
+                    .borrow_mut()
+                    .param_staging
+                    .finish_apply(&requested, results);
+                live_runtime::emit_scoped(
+                    &runtime,
+                    event_names::PARAM_STAGING,
+                    outcome.state.clone(),
+                );
+                to_js(&outcome)
+            }
+            Err(error) => {
+                fail_wasm_apply(&self.state, &runtime, &requested, &error.to_string());
+                Err(JsValue::from_str(&error.to_string()))
+            }
+        }
+    }
+
+    #[wasm_bindgen(js_name = paramResetRebootCheckpoint)]
+    pub fn param_reset_reboot_checkpoint(&self) -> Result<JsValue, JsValue> {
+        let (runtime, staging) = {
+            let mut state = self.state.borrow_mut();
+            state.param_staging.clear_reboot_checkpoint();
+            (state.live_runtime.clone(), state.param_staging.clone())
+        };
+        live_runtime::emit_scoped(&runtime, event_names::PARAM_STAGING, staging.clone());
+        to_js(&staging)
+    }
+
     #[wasm_bindgen(js_name = paramCancel)]
     pub fn param_cancel(&self) -> Result<(), JsValue> {
         if let Some((_, abort)) = self.state.borrow_mut().param_download_abort.take() {
@@ -689,7 +831,14 @@ impl IronwingWasmRuntime {
         let vehicle = live_vehicle_for_write(&self.state, OperationId::RebootVehicle)?;
         live_commands::reboot_vehicle(&vehicle)
             .await
-            .map_err(|error| JsValue::from_str(&error.to_string()))
+            .map_err(|error| JsValue::from_str(&error.to_string()))?;
+        let (runtime, staging) = {
+            let mut state = self.state.borrow_mut();
+            state.param_staging.clear_reboot_checkpoint();
+            (state.live_runtime.clone(), state.param_staging.clone())
+        };
+        live_runtime::emit_scoped(&runtime, event_names::PARAM_STAGING, staging);
+        Ok(())
     }
 
     #[wasm_bindgen(js_name = rebootToBootloader)]
@@ -1023,6 +1172,20 @@ fn spawn_runtime_task(
     future: impl std::future::Future<Output = ()> + 'static,
 ) {
     state.borrow_mut().tasks.spawn(future);
+}
+
+fn fail_wasm_apply(
+    state: &Rc<RefCell<RuntimeState>>,
+    runtime: &LocalLiveRuntime<EventSink>,
+    requested: &[StagedParamEdit],
+    message: &str,
+) {
+    let staging = {
+        let mut state = state.borrow_mut();
+        state.param_staging.fail_apply(requested, message);
+        state.param_staging.clone()
+    };
+    live_runtime::emit_scoped(runtime, event_names::PARAM_STAGING, staging);
 }
 
 fn emit_session_state(state: &Rc<RefCell<RuntimeState>>, provenance: DomainProvenance) {

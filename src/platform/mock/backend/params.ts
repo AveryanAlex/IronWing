@@ -6,6 +6,7 @@ import type {
   MockParamStoreState,
   MockPlatformEvent,
 } from "./types";
+import type { ParamApplyOutcome, ParamStageChange, ParamStagingState } from "../../../params";
 
 const VALID_PARAM_TYPES = new Set([
   "uint8",
@@ -57,6 +58,34 @@ function publishParamStore(
   }
 
   emitEvent(EVENT_NAMES.PARAM_STORE, liveParamStoreStreamEvent(paramStore).payload);
+}
+
+function publishParamStaging(
+  emitEvent: (event: string, payload: unknown) => void,
+  staging: ParamStagingState,
+) {
+  mockState.liveParamStaging = structuredClone(staging);
+  if (!mockState.liveEnvelope) {
+    return;
+  }
+  emitEvent(EVENT_NAMES.PARAM_STAGING, {
+    envelope: requireLiveEnvelope(),
+    value: structuredClone(staging),
+  });
+}
+
+function assertStagingRevision(expectedRevision: unknown) {
+  if (expectedRevision !== null && expectedRevision !== undefined) {
+    if (!Number.isInteger(expectedRevision) || expectedRevision !== mockState.liveParamStaging.revision) {
+      throw new Error(`staging revision conflict: expected ${String(expectedRevision)}, current ${mockState.liveParamStaging.revision}`);
+    }
+  }
+  if (mockState.liveParamStaging.apply_phase === "applying") {
+    throw new Error("parameter apply already in progress");
+  }
+  if (mockState.liveParamStaging.pending_reboot_ids.length > 0) {
+    throw new Error("reboot-required parameter changes were already applied");
+  }
 }
 
 function beginParamOperation(kind: PendingParamOperation["kind"]): PendingParamOperation {
@@ -353,6 +382,136 @@ export async function writeParam(args: CommandArgs, emitEvent: (event: string, p
   }
 
   return result;
+}
+
+export function paramStagingSnapshot(): ParamStagingState {
+  return structuredClone(mockState.liveParamStaging);
+}
+
+export function resetParamStaging(emitEvent?: (event: string, payload: unknown) => void) {
+  mockState.liveParamStaging = {
+    revision: mockState.liveParamStaging.revision + 1,
+    edits: [],
+    apply_phase: "idle",
+    pending_reboot_ids: [],
+  };
+  if (emitEvent && mockState.liveEnvelope) {
+    publishParamStaging(emitEvent, mockState.liveParamStaging);
+  }
+}
+
+export function stageParams(args: CommandArgs, emitEvent: (event: string, payload: unknown) => void): ParamStagingState {
+  assertStagingRevision(args?.expectedRevision);
+  if (!Array.isArray(args?.changes) || args.changes.length === 0) {
+    throw new Error("at least one parameter change is required");
+  }
+  const store = currentParamStore();
+  const edits = new Map(mockState.liveParamStaging.edits.map((edit) => [edit.name, edit]));
+  for (const rawChange of args.changes) {
+    const change = rawChange as Partial<ParamStageChange>;
+    if (typeof change.name !== "string" || typeof change.value !== "number" || !Number.isFinite(change.value)) {
+      throw new Error("invalid parameter change");
+    }
+    const current = store.params[change.name]?.value;
+    if (typeof current !== "number") {
+      throw new Error(`parameter not found: ${change.name}`);
+    }
+    const existing = edits.get(change.name);
+    const baseValue = existing?.base_value ?? current;
+    if (change.value === baseValue) {
+      edits.delete(change.name);
+    } else {
+      edits.set(change.name, {
+        name: change.name,
+        base_value: baseValue,
+        staged_value: change.value,
+        reboot_required: change.reboot_required ?? null,
+        origin: "ui",
+        failure: null,
+      });
+    }
+  }
+  const staging: ParamStagingState = {
+    ...mockState.liveParamStaging,
+    revision: mockState.liveParamStaging.revision + 1,
+    edits: [...edits.values()].sort((left, right) => left.name.localeCompare(right.name)),
+    apply_phase: "idle",
+  };
+  publishParamStaging(emitEvent, staging);
+  return structuredClone(staging);
+}
+
+export function discardStagedParams(args: CommandArgs, emitEvent: (event: string, payload: unknown) => void): ParamStagingState {
+  assertStagingRevision(args?.expectedRevision);
+  if (!Array.isArray(args?.names) || args.names.length === 0) {
+    throw new Error("at least one staged parameter name is required");
+  }
+  const names = new Set(args.names);
+  const edits = mockState.liveParamStaging.edits.filter((edit) => !names.has(edit.name));
+  if (edits.length === mockState.liveParamStaging.edits.length) {
+    throw new Error("no matching staged parameter changes");
+  }
+  const staging = { ...mockState.liveParamStaging, revision: mockState.liveParamStaging.revision + 1, edits };
+  publishParamStaging(emitEvent, staging);
+  return structuredClone(staging);
+}
+
+export function clearStagedParams(args: CommandArgs, emitEvent: (event: string, payload: unknown) => void): ParamStagingState {
+  assertStagingRevision(args?.expectedRevision);
+  const staging = {
+    ...mockState.liveParamStaging,
+    revision: mockState.liveParamStaging.revision + 1,
+    edits: [],
+    apply_phase: "idle" as const,
+  };
+  publishParamStaging(emitEvent, staging);
+  return structuredClone(staging);
+}
+
+export async function applyStagedParams(args: CommandArgs, emitEvent: (event: string, payload: unknown) => void): Promise<ParamApplyOutcome> {
+  assertStagingRevision(args?.expectedRevision);
+  const names = args?.names === null ? null : Array.isArray(args?.names) ? new Set(args.names) : null;
+  const requested = mockState.liveParamStaging.edits.filter((edit) => names === null || names.has(edit.name));
+  if (requested.length === 0) {
+    throw new Error("no matching staged parameter changes");
+  }
+  publishParamStaging(emitEvent, {
+    ...mockState.liveParamStaging,
+    revision: mockState.liveParamStaging.revision + 1,
+    apply_phase: "applying",
+  });
+  const results = await runParamWriteBatch(
+    requested.map((edit) => [edit.name, edit.staged_value as number]),
+    emitEvent,
+  );
+  const rebootRequiredIds = requested
+    .filter((edit) => edit.reboot_required === true && edit.name !== "FORMAT_VERSION")
+    .map((edit) => edit.name)
+    .sort();
+  const requestedNames = new Set(requested.map((edit) => edit.name));
+  const staging: ParamStagingState = {
+    revision: mockState.liveParamStaging.revision + 1,
+    edits: mockState.liveParamStaging.edits.filter((edit) => !requestedNames.has(edit.name)),
+    apply_phase: "idle",
+    pending_reboot_ids: [...new Set([...mockState.liveParamStaging.pending_reboot_ids, ...rebootRequiredIds])].sort(),
+  };
+  publishParamStaging(emitEvent, staging);
+  return {
+    state: structuredClone(staging),
+    results,
+    reboot_required: rebootRequiredIds.length > 0,
+    reboot_required_ids: rebootRequiredIds,
+  };
+}
+
+export function resetRebootCheckpoint(emitEvent: (event: string, payload: unknown) => void): ParamStagingState {
+  const staging = {
+    ...mockState.liveParamStaging,
+    revision: mockState.liveParamStaging.revision + 1,
+    pending_reboot_ids: [],
+  };
+  publishParamStaging(emitEvent, staging);
+  return structuredClone(staging);
 }
 
 export function liveParamStoreStreamEvent(paramStore: MockParamStoreState): MockPlatformEvent {

@@ -21,17 +21,6 @@ pub(crate) async fn download_parameters(
         .await
         .map_err(|e| e.to_string())
 }
-#[cfg(not(target_os = "android"))]
-pub(crate) async fn write_parameters(
-    vehicle: &mavkit::Vehicle,
-    params: Vec<(String, f32)>,
-) -> Result<Vec<mavkit::ParamWriteResult>, String> {
-    begin_write(vehicle, params)?
-        .wait()
-        .await
-        .map_err(|e| e.to_string())
-}
-
 #[cfg(all(test, not(target_os = "android")))]
 mod tests {
     use super::*;
@@ -47,7 +36,7 @@ mod tests {
             .map(|(id, p)| (id.clone(), p.value))
             .collect();
         assert_eq!(params.len(), 2);
-        let written = write_parameters(&vehicle, params).await.unwrap();
+        let written = begin_write(&vehicle, params).unwrap().wait().await.unwrap();
         for result in written {
             assert!(result.success);
             assert_eq!(

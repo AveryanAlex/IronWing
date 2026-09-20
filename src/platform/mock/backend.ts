@@ -81,12 +81,19 @@ import {
 } from "./backend/mission";
 import {
   applyMockParamState,
+  applyStagedParams,
   cancelParamOperation,
+  clearStagedParams,
+  discardStagedParams,
   downloadAllParams,
   formatParamFile,
   liveParamProgressStreamEvent,
   liveParamStoreStreamEvent,
   parseParamFile,
+  paramStagingSnapshot,
+  resetParamStaging,
+  resetRebootCheckpoint,
+  stageParams,
   writeParam,
   writeParamBatch,
 } from "./backend/params";
@@ -509,6 +516,7 @@ const mockSessionCommandHandlers = definePlatformCommandHandlers({
   open_session_snapshot: (args) => openSessionSnapshotResult(((args?.sourceKind as "live" | "playback" | undefined) ?? "live")) as InvokeResult<"open_session_snapshot">,
   ack_session_snapshot: (args) => ackSessionSnapshotResult(args as CommandArgs) as InvokeResult<"ack_session_snapshot">,
   connect_link: (args) => {
+    resetParamStaging();
     connectLink(args as CommandArgs);
   },
   disconnect_link: (args) => {
@@ -516,6 +524,7 @@ const mockSessionCommandHandlers = definePlatformCommandHandlers({
     cancelParamOperation();
     cancelCompassCalibration();
     const liveEnvelope = mockState.liveEnvelope;
+    resetParamStaging();
     disconnectLink(args as CommandArgs);
     if (liveEnvelope) {
       emitEvent(EVENT_NAMES.SESSION_STATE, liveDisconnectedSessionPayload(liveEnvelope));
@@ -750,6 +759,7 @@ const mockSetupActionCommandHandlers = definePlatformCommandHandlers({
   reboot_vehicle: () => {
     ensureMockLiveWriteAllowed("reboot_vehicle");
     requireConnectedVehicle();
+    resetRebootCheckpoint(emitEvent);
   },
   request_prearm_checks: () => {
     ensureMockLiveWriteAllowed("request_prearm_checks");
@@ -785,6 +795,34 @@ const mockParamCommandHandlers = definePlatformCommandHandlers({
     ensureMockLiveWriteAllowed("param_write_batch");
     requireConnectedVehicle();
     return writeParamBatch(args as CommandArgs, emitEvent);
+  },
+  param_staging_snapshot: () => {
+    requireConnectedVehicle();
+    return paramStagingSnapshot();
+  },
+  param_stage: (args) => {
+    ensureMockLiveWriteAllowed("param_stage");
+    requireConnectedVehicle();
+    return stageParams(args as CommandArgs, emitEvent);
+  },
+  param_discard_staged: (args) => {
+    ensureMockLiveWriteAllowed("param_discard_staged");
+    requireConnectedVehicle();
+    return discardStagedParams(args as CommandArgs, emitEvent);
+  },
+  param_clear_staged: (args) => {
+    ensureMockLiveWriteAllowed("param_discard_staged");
+    requireConnectedVehicle();
+    return clearStagedParams(args as CommandArgs, emitEvent);
+  },
+  param_apply_staged: (args) => {
+    ensureMockLiveWriteAllowed("param_apply_staged");
+    requireConnectedVehicle();
+    return applyStagedParams(args as CommandArgs, emitEvent);
+  },
+  param_reset_reboot_checkpoint: () => {
+    requireConnectedVehicle();
+    return resetRebootCheckpoint(emitEvent);
   },
   param_parse_file: (args) => parseParamFile(args as CommandArgs),
   param_format_file: (args) => formatParamFile(args as CommandArgs),

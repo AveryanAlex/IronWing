@@ -253,6 +253,7 @@ pub(crate) async fn connect_vehicle(
             .unwrap_or_else(|e| e.into_inner())
             .transport = Some(request.transport.clone());
     }
+    crate::parameter_staging::reset(state);
     let auto_record_request = auto_record_start_request(request.auto_record_on_connect);
 
     // Abort any in-flight connect attempt so its socket is released
@@ -610,6 +611,7 @@ pub(crate) async fn disconnect_vehicle(
 
     #[cfg(not(target_os = "android"))]
     crate::mcp::reset_session(state);
+    crate::parameter_staging::reset(state);
     if let Some(stopped_recording) = state.recorder.stop() {
         crate::recording::queue_stopped_recording_finalization(
             &state.recorder,

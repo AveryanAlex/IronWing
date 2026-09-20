@@ -70,6 +70,18 @@ export async function wasmParamCancel(runtime: IronwingWasmRuntime): Promise<Com
   return await runtime.paramCancel() as CommandResult<"param_cancel">;
 }
 
+export async function wasmParamApplyStaged(runtime: IronwingWasmRuntime, args: CommandArgs<"param_apply_staged">): Promise<CommandResult<"param_apply_staged">> {
+  return await runtime.paramApplyStaged(args.names, args.expectedRevision) as CommandResult<"param_apply_staged">;
+}
+
+export async function wasmParamClearStaged(runtime: IronwingWasmRuntime, args: CommandArgs<"param_clear_staged">): Promise<CommandResult<"param_clear_staged">> {
+  return await runtime.paramClearStaged(args.expectedRevision) as CommandResult<"param_clear_staged">;
+}
+
+export async function wasmParamDiscardStaged(runtime: IronwingWasmRuntime, args: CommandArgs<"param_discard_staged">): Promise<CommandResult<"param_discard_staged">> {
+  return await runtime.paramDiscardStaged(args.names, args.expectedRevision) as CommandResult<"param_discard_staged">;
+}
+
 export async function wasmParamDownloadAll(runtime: IronwingWasmRuntime): Promise<CommandResult<"param_download_all">> {
   return await runtime.paramDownloadAll() as CommandResult<"param_download_all">;
 }
@@ -80,6 +92,18 @@ export async function wasmParamFormatFile(runtime: IronwingWasmRuntime, args: Co
 
 export async function wasmParamParseFile(runtime: IronwingWasmRuntime, args: CommandArgs<"param_parse_file">): Promise<CommandResult<"param_parse_file">> {
   return await runtime.paramParseFile(args.contents) as CommandResult<"param_parse_file">;
+}
+
+export async function wasmParamResetRebootCheckpoint(runtime: IronwingWasmRuntime): Promise<CommandResult<"param_reset_reboot_checkpoint">> {
+  return await runtime.paramResetRebootCheckpoint() as CommandResult<"param_reset_reboot_checkpoint">;
+}
+
+export async function wasmParamStage(runtime: IronwingWasmRuntime, args: CommandArgs<"param_stage">): Promise<CommandResult<"param_stage">> {
+  return await runtime.paramStage(args.changes, args.expectedRevision) as CommandResult<"param_stage">;
+}
+
+export async function wasmParamStagingSnapshot(runtime: IronwingWasmRuntime): Promise<CommandResult<"param_staging_snapshot">> {
+  return await runtime.paramStagingSnapshot() as CommandResult<"param_staging_snapshot">;
 }
 
 export async function wasmParamWrite(runtime: IronwingWasmRuntime, args: CommandArgs<"param_write">): Promise<CommandResult<"param_write">> {

@@ -1,4 +1,5 @@
 import { EVENT_NAMES } from "./lib/generated/events";
+import type * as GeneratedIronwing from "./lib/generated/ironwing";
 import type * as GeneratedJson from "./lib/generated/mavkit-json";
 import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 import { createLatestScopedEventHandler } from "./lib/scoped-session-events";
@@ -64,6 +65,12 @@ export function isParamTransferActive(p: ParamProgress): boolean {
 }
 
 export type ParamWriteResult = GeneratedJson.ParamWriteResult;
+export type ParamEditOrigin = GeneratedIronwing.ParamEditOrigin;
+export type ParamApplyPhase = GeneratedIronwing.ParamApplyPhase;
+export type ParamStageChange = GeneratedIronwing.ParamStageChange;
+export type StagedParamEdit = GeneratedIronwing.StagedParamEdit;
+export type ParamStagingState = GeneratedIronwing.ParamStagingState;
+export type ParamApplyOutcome = GeneratedIronwing.ParamApplyOutcome;
 
 export async function downloadAllParams(): Promise<void> {
   return typedInvoke("param_download_all");
@@ -79,6 +86,39 @@ export async function writeParam(name: string, value: number): Promise<ParamWrit
 
 export async function writeBatchParams(params: [string, number][]): Promise<ParamWriteResult[]> {
   return typedInvoke("param_write_batch", { params });
+}
+
+export async function getParamStagingState(): Promise<ParamStagingState> {
+  return typedInvoke("param_staging_snapshot");
+}
+
+export async function stageParams(
+  changes: ParamStageChange[],
+  expectedRevision: number | null,
+): Promise<ParamStagingState> {
+  return typedInvoke("param_stage", { changes, expectedRevision });
+}
+
+export async function discardStagedParams(
+  names: string[],
+  expectedRevision: number | null,
+): Promise<ParamStagingState> {
+  return typedInvoke("param_discard_staged", { names, expectedRevision });
+}
+
+export async function clearStagedParams(expectedRevision: number | null): Promise<ParamStagingState> {
+  return typedInvoke("param_clear_staged", { expectedRevision });
+}
+
+export async function applyStagedParams(
+  names: string[] | null,
+  expectedRevision: number | null,
+): Promise<ParamApplyOutcome> {
+  return typedInvoke("param_apply_staged", { names, expectedRevision });
+}
+
+export async function resetParamRebootCheckpoint(): Promise<ParamStagingState> {
+  return typedInvoke("param_reset_reboot_checkpoint");
 }
 
 export async function parseParamFile(contents: string): Promise<Record<string, number>> {
@@ -99,4 +139,10 @@ export async function subscribeParamProgress(cb: (event: SessionEvent<ParamProgr
   const handleEvent = createLatestScopedEventHandler(cb);
 
   return typedListen(EVENT_NAMES.PARAM_PROGRESS, (event) => handleEvent(event.payload));
+}
+
+export async function subscribeParamStaging(cb: (event: SessionEvent<ParamStagingState>) => void): Promise<UnlistenFn> {
+  const handleEvent = createLatestScopedEventHandler(cb);
+
+  return typedListen(EVENT_NAMES.PARAM_STAGING, (event) => handleEvent(event.payload));
 }
