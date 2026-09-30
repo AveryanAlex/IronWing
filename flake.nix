@@ -129,7 +129,7 @@
             ++ lib.optionals pkgs.stdenv.isDarwin darwinDeps;
 
           ANDROID_HOME = "${androidSdk}/libexec/android-sdk";
-          NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/ndkVersion";
+          NDK_HOME = "${androidSdk}/libexec/android-sdk/ndk/${ndkVersion}";
           JAVA_HOME = "${jdk}";
           RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
           LD_LIBRARY_PATH = lib.optionalString pkgs.stdenv.isLinux (lib.makeLibraryPath linuxDeps);

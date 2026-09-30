@@ -988,6 +988,7 @@ fn map_dfu_validation_error(err: FirmwareError) -> DfuPretransferError {
     }
 }
 
+#[cfg(not(target_os = "android"))]
 async fn resolve_source_with_cancellation(
     state: &tauri::State<'_, AppState>,
     source: SerialFlashSource,
@@ -995,6 +996,7 @@ async fn resolve_source_with_cancellation(
     await_abortable_pretransfer_string(state, async move { resolve_source(source).await }).await
 }
 
+#[cfg(not(target_os = "android"))]
 async fn resolve_dfu_source_with_cancellation(
     state: &tauri::State<'_, AppState>,
     source: DfuRecoverySource,
