@@ -18,6 +18,11 @@ test("setup workspace opens every section and persists a safe parameter edit", a
     await app.setup.expectUnifiedOutputsWorkflow();
   });
 
+  let servoEdits: Awaited<ReturnType<typeof app.setup.stageServoOutputEdits>>;
+  await test.step("Tune each servo PWM point and reverse direction from the expanded output list", async () => {
+    servoEdits = await app.setup.stageServoOutputEdits();
+  });
+
   await test.step("Preview a staged Tri without changing the applied motor-test map", async () => {
     await app.setup.expectStagedTriPreviewUsesAppliedMotorMap();
   });
@@ -43,7 +48,12 @@ test("setup workspace opens every section and persists a safe parameter edit", a
   });
 
   await test.step("Apply staged parameters to the demo vehicle", async () => {
-    await app.setup.applyStagedParameters([guidedEdit.name, vtolEdit.name, edit.name]);
+    await app.setup.applyStagedParameters([
+      guidedEdit.name,
+      vtolEdit.name,
+      edit.name,
+      ...servoEdits.map(({ name }) => name),
+    ]);
   });
 
   await test.step("Reload parameters from the vehicle and verify the edit persisted", async () => {
@@ -51,5 +61,8 @@ test("setup workspace opens every section and persists a safe parameter edit", a
     await app.setup.expectParameterValue(guidedEdit.name, guidedEdit.next);
     await app.setup.expectParameterValue(vtolEdit.name, vtolEdit.next);
     await app.setup.expectParameterValue(edit.name, edit.next);
+    for (const servoEdit of servoEdits) {
+      await app.setup.expectParameterValue(servoEdit.name, servoEdit.next);
+    }
   });
 });

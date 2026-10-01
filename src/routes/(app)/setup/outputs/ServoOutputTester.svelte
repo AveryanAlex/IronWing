@@ -37,6 +37,7 @@ import {
   HelperText,
   Input,
   MonoValue,
+  Slider,
 } from "../../../../components/ui";
 import {
   getSetupWorkspaceRouteContext,
@@ -733,6 +734,14 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                           </Button>
                           <Button
                             variant="secondary"
+                            testId={`setup-workspace-servo-outputs-row-mid-${target.index}`}
+                            disabled={servoCommandDisabled(target)}
+                            onclick={() => sendServoCommand(target, target.trimPwm)}
+                          >
+                            {activeOutputIndex === target.index ? "Sending…" : `Send Mid ${target.trimPwm}`}
+                          </Button>
+                          <Button
+                            variant="secondary"
                             testId={`${setupWorkspaceTestIds.servoOutputsRowMaxPrefix}-${target.index}`}
                             disabled={servoCommandDisabled(target)}
                             onclick={() => sendServoCommand(target, target.maxPwm)}
@@ -740,6 +749,23 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                             {activeOutputIndex === target.index ? "Sending…" : `Send Max ${target.maxPwm}`}
                           </Button>
                         </div>
+                      </div>
+
+                      <div class="mt-4">
+                        <Slider
+                          value={rawDraftValue(target)}
+                          min={target.minPwm}
+                          max={target.maxPwm}
+                          step={1}
+                          label={`SERVO${target.index} PWM`}
+                          unit=" µs"
+                          showValue
+                          disabled={servoCommandDisabled(target)}
+                          testId={`setup-workspace-servo-outputs-row-slider-${target.index}`}
+                          onValueChange={(value) => updateRawDraft(target, String(value))}
+                          onValueCommit={(value) => sendServoCommand(target, value)}
+                        />
+                        <HelperText class="mt-1" size="xs">Release the slider to send PWM using the applied Min/Mid/Max points.</HelperText>
                       </div>
 
                       {#if commandErrorByOutput[target.index]}

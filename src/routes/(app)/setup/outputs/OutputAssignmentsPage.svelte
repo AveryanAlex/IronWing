@@ -1,19 +1,9 @@
 <script lang="ts">
-import { Cable, Cpu, Plus, Search, TriangleAlert } from "lucide-svelte";
+import { Cable, Cpu, Plus, Search, Trash2, TriangleAlert } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
-import {
-  Badge,
-  Button,
-  Checkbox,
-  Dialog,
-  EmptyState,
-  Eyebrow,
-  HelperText,
-  Input,
-  InternalLink,
-} from "../../../../components/ui";
+import { Badge, Button, Dialog, EmptyState, Eyebrow, HelperText, Input, InternalLink } from "../../../../components/ui";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import {
   getSetupWorkspaceRouteContext,
@@ -31,8 +21,9 @@ import {
   type OutputFunctionCategory,
   type OutputFunctionRow,
 } from "../../../../lib/setup/output-mapping-model";
-import { buildParameterItemIndex } from "../../../../lib/params/parameter-item-model";
+import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import OutputModeTabs from "./OutputModeTabs.svelte";
+import ServoOutputSettings from "./ServoOutputSettings.svelte";
 
 const route = getSetupWorkspaceRouteContext();
 const viewStore = fromStore(route.viewStore);
@@ -47,7 +38,6 @@ let functionPickerCategory = $state<OutputFunctionCategory>("servo");
 let functionSearch = $state("");
 let assignmentPickerOpen = $state(false);
 let selectedFunctionValue = $state<number | null>(null);
-let selectedOutputIndexes = $state<number[]>([]);
 let confirmationOpen = $state(false);
 let pendingPlan = $state<OutputAssignmentPlan | null>(null);
 
@@ -110,29 +100,23 @@ function addFunction(value: number) {
 function openAssignmentPicker(row: OutputFunctionRow) {
   if (actionsBlocked || row.mappingLocked) return;
   selectedFunctionValue = row.value;
-  selectedOutputIndexes = [...row.proposedOutputIndexes];
   assignmentPickerOpen = true;
 }
 
-function toggleOutput(index: number, checked: boolean) {
-  selectedOutputIndexes = checked
-    ? [...new Set([...selectedOutputIndexes, index])].sort((left, right) => left - right)
-    : selectedOutputIndexes.filter((candidate) => candidate !== index);
-}
-
-function requestStageAssignment() {
-  if (!selectedRow || actionsBlocked || selectedRow.mappingLocked) return;
+function requestStageAssignment(row: OutputFunctionRow, desiredOutputIndexes: number[]) {
+  if (actionsBlocked || row.mappingLocked) return;
+  selectedFunctionValue = row.value;
   const plan = planOutputFunctionAssignment(
     {
       paramStore: params.paramStore,
       metadata: params.metadata,
       stagedEdits: params.stagedEdits,
     },
-    selectedRow.value,
-    selectedOutputIndexes,
+    row.value,
+    desiredOutputIndexes,
     {
       requiredFunctionValues: model.requiredFunctionValues,
-      category: selectedRow.category,
+      category: row.category,
     },
   );
   if (!plan || plan.edits.length === 0) {
@@ -153,12 +137,21 @@ function requestStageAssignment() {
 }
 
 function stagePlan(plan: OutputAssignmentPlan) {
+  if (actionsBlocked || selectedRow?.mappingLocked) return;
   for (const edit of plan.edits) {
     stageSetupParameterEdit(paramsStore, itemIndex.get(edit.paramName), edit.nextValue, { actionsBlocked });
   }
   pendingPlan = null;
   confirmationOpen = false;
   assignmentPickerOpen = false;
+}
+
+function stageServoSetting(item: ParameterItemModel, value: number) {
+  stageSetupParameterEdit(paramsStore, item, value, { actionsBlocked });
+}
+
+function canAddOutput(row: OutputFunctionRow): boolean {
+  return model.outputs.some((output) => !output.readOnly && !row.proposedOutputIndexes.includes(output.index));
 }
 
 function handleConfirmationOpenChange(open: boolean) {
@@ -201,18 +194,18 @@ function verificationHref(row: OutputFunctionRow): string | null {
       description="Use Add function to choose an output function exposed by the active firmware."
     />
   {:else}
-    <div class="space-y-3">
+    <div class="space-y-4">
       {#each rows as row (row.value)}
         {@const verifyHref = verificationHref(row)}
         <article
           id={`output-function-${row.value}`}
-          class="rounded-lg border border-border bg-bg-primary/70 p-4"
+          class="min-w-0 rounded-lg border border-border bg-bg-primary/70 p-3 sm:p-4"
           data-testid={`${setupWorkspaceTestIds.outputsFunctionRowPrefix}-${row.value}`}
         >
-          <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div class="min-w-0 flex-1">
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
               <div class="flex flex-wrap items-center gap-2">
-                <p class="font-semibold text-text-primary">{row.label}</p>
+                <h3 class="font-semibold text-text-primary">{row.label}</h3>
                 <Badge variant="muted" size="sm" case="normal" shape="pill">Fn {row.value}</Badge>
                 <Badge variant={sourceVariant(row)} size="sm" case="normal" shape="pill">{sourceLabel(row)}</Badge>
                 {#if row.hasStagedChange}
@@ -220,66 +213,72 @@ function verificationHref(row: OutputFunctionRow): string | null {
                 {/if}
               </div>
               <HelperText class="mt-1">{row.sourceDetail}</HelperText>
-
-              <div class="mt-3 space-y-2" data-testid={`${setupWorkspaceTestIds.outputsFunctionOwnersPrefix}-${row.value}`}>
-                {#if row.hasStagedChange}
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span class="text-xs font-semibold uppercase tracking-wide text-text-muted">Applied</span>
-                    {#if row.appliedOutputIndexes.length === 0}
-                      <Badge variant="muted" case="normal" shape="rounded">Unassigned</Badge>
-                    {:else}
-                      {#each row.appliedOutputIndexes as outputIndex (outputIndex)}
-                        <Badge variant="muted" case="normal" shape="rounded">SERVO{outputIndex}</Badge>
-                      {/each}
-                    {/if}
-                  </div>
-                  <div class="flex flex-wrap items-center gap-2">
-                    <span class="text-xs font-semibold uppercase tracking-wide text-warning">Staged</span>
-                    {#if row.proposedOutputIndexes.length === 0}
-                      <Badge variant={row.required ? "warning" : "muted"} case="normal" shape="rounded">Unassigned</Badge>
-                    {:else}
-                      {#each row.proposedOutputIndexes as outputIndex (outputIndex)}
-                        <Badge variant="warning" case="normal" shape="rounded">SERVO{outputIndex}</Badge>
-                      {/each}
-                    {/if}
-                  </div>
-                {:else if row.proposedOutputIndexes.length === 0}
-                  <Badge variant={row.required ? "warning" : "muted"} case="normal" shape="rounded">Unassigned</Badge>
-                {:else}
-                  <div class="flex flex-wrap gap-2">
-                    {#each row.proposedOutputIndexes as outputIndex (outputIndex)}
-                      <Badge variant="muted" case="normal" shape="rounded">SERVO{outputIndex}</Badge>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-
-              {#if row.mirroredMotor}
-                <p class="mt-3 flex items-start gap-2 text-sm leading-6 text-warning" data-testid={`${setupWorkspaceTestIds.outputsMirroredWarningPrefix}-${row.value}`}>
-                  <TriangleAlert class="mt-1 shrink-0" size={14} aria-hidden="true" />
-                  Mirrored motor command. ArduPilot supports this mapping, but it is unusual for a standard mixer; verify wiring and output protocol.
-                </p>
-              {/if}
-              {#if row.mappingLocked}
-                <p class="mt-3 text-sm leading-6 text-warning">Apply the pending frame or VTOL topology, reboot, and refresh parameters before mapping this required function.</p>
+              {#if row.hasStagedChange}
+                <HelperText class="mt-1">Applied · {row.appliedOutputIndexes.map((index) => `SERVO${index}`).join(", ") || "Unassigned"}</HelperText>
               {/if}
             </div>
+            {#if verifyHref}
+              <InternalLink href={verifyHref as "/"} variant="button">
+                {row.category === "propulsion" ? "Motor test" : "Servo test"}
+              </InternalLink>
+            {/if}
+          </div>
 
-            <div class="flex shrink-0 flex-wrap gap-2">
-              <Button
-                variant="secondary"
-                disabled={actionsBlocked || row.mappingLocked || model.outputs.length === 0}
-                onclick={() => openAssignmentPicker(row)}
-                testId={`${setupWorkspaceTestIds.outputsEditFunctionPrefix}-${row.value}`}
+          {#if row.mirroredMotor}
+            <p class="mt-3 flex items-start gap-2 text-sm leading-6 text-warning" data-testid={`${setupWorkspaceTestIds.outputsMirroredWarningPrefix}-${row.value}`}>
+              <TriangleAlert class="mt-1 shrink-0" size={14} aria-hidden="true" />
+              Mirrored motor command. ArduPilot supports this mapping, but it is unusual for a standard mixer; verify wiring and output protocol.
+            </p>
+          {/if}
+          {#if row.mappingLocked}
+            <p class="mt-3 text-sm leading-6 text-warning">Apply the pending frame or VTOL topology, reboot, and refresh parameters before mapping this required function.</p>
+          {/if}
+
+          <div class="mt-4 space-y-3" data-testid={`${setupWorkspaceTestIds.outputsFunctionOwnersPrefix}-${row.value}`}>
+            {#each row.proposedOutputIndexes as outputIndex (outputIndex)}
+              {@const output = model.outputs.find((candidate) => candidate.index === outputIndex)}
+              <section
+                class="min-w-0 rounded-lg border border-border bg-bg-secondary/50 p-3"
+                aria-label={`SERVO${outputIndex} settings`}
+                data-testid={`setup-workspace-output-settings-${outputIndex}`}
               >
-                {row.proposedOutputIndexes.length > 0 ? "Edit outputs" : "Assign outputs"}
-              </Button>
-              {#if verifyHref}
-                <InternalLink href={verifyHref as "/"} variant="button">
-                  {row.category === "propulsion" ? "Motor test" : "Servo test"}
-                </InternalLink>
-              {/if}
-            </div>
+                <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h4 class="text-sm font-semibold text-text-primary">SERVO{outputIndex}</h4>
+                    {#if output?.hasStagedChange}
+                      <Badge variant="warning" size="sm" case="normal" shape="pill">Assignment staged</Badge>
+                    {/if}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    ariaLabel={`Remove SERVO${outputIndex} from ${row.label}`}
+                    disabled={actionsBlocked || row.mappingLocked || output?.readOnly}
+                    onclick={() => requestStageAssignment(row, row.proposedOutputIndexes.filter((index) => index !== outputIndex))}
+                  >
+                    <Trash2 size={14} aria-hidden="true" /> Remove
+                  </Button>
+                </div>
+                <ServoOutputSettings
+                  {outputIndex}
+                  {itemIndex}
+                  stagedEdits={params.stagedEdits}
+                  {actionsBlocked}
+                  onStage={stageServoSetting}
+                  onUnstage={paramsStore.discardStagedEdit}
+                />
+              </section>
+            {:else}
+              <HelperText>{row.required ? "Required function is unassigned." : "No outputs assigned."}</HelperText>
+            {/each}
+            <Button
+              variant="outline"
+              disabled={actionsBlocked || row.mappingLocked || !canAddOutput(row)}
+              onclick={() => openAssignmentPicker(row)}
+              testId={`${setupWorkspaceTestIds.outputsEditFunctionPrefix}-${row.value}`}
+            >
+              <Plus size={14} aria-hidden="true" /> Add {category === "servo" ? "servo" : "output"}
+            </Button>
           </div>
         </article>
       {/each}
@@ -290,8 +289,8 @@ function verificationHref(row: OutputFunctionRow): string | null {
 <SetupSectionShell
   sectionId={section.id}
   eyebrow={section.title}
-  title="Assign logical functions to physical outputs"
-  description="Manage the complete SERVOx_FUNCTION map in one place. Functions can drive multiple outputs, while every physical output keeps exactly one owner."
+  title="Configure outputs by function"
+  description="Add physical outputs under each function, then tune direction and Min/Mid/Max PWM points for every servo. Changes stay staged until review and apply."
   testId={setupWorkspaceTestIds.outputsSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.outputsDocsLink }]}
 >
@@ -390,26 +389,27 @@ function verificationHref(row: OutputFunctionRow): string | null {
 <Dialog.Root bind:open={assignmentPickerOpen}>
   <Dialog.Content size="lg">
     <Dialog.Header>
-      <Dialog.Title>{selectedRow ? `Outputs for ${selectedRow.label}` : "Assign outputs"}</Dialog.Title>
-      <Dialog.Description>Select every physical output that should receive this function. Occupied outputs are replaced only after confirmation.</Dialog.Description>
+      <Dialog.Title>{selectedRow ? `Add output to ${selectedRow.label}` : "Add output"}</Dialog.Title>
+      <Dialog.Description>Choose a physical output to add. Occupied outputs are replaced after confirmation.</Dialog.Description>
     </Dialog.Header>
     <div class="grid max-h-[55dvh] gap-2 overflow-y-auto sm:grid-cols-2" data-testid={setupWorkspaceTestIds.outputsOutputPicker}>
-      {#each model.outputs as output (output.index)}
-        <div class="rounded-lg border border-border bg-bg-primary/70 p-3">
-          <Checkbox
-            checked={selectedOutputIndexes.includes(output.index)}
-            disabled={output.readOnly || actionsBlocked || selectedRow?.mappingLocked}
-            label={`SERVO${output.index}`}
-            description={`${outputOwnerText(output.index)}${output.hasStagedChange ? " · staged" : ""}`}
-            testId={`${setupWorkspaceTestIds.outputsOutputOptionPrefix}-${output.index}`}
-            onCheckedChange={(checked) => toggleOutput(output.index, checked)}
-          />
-        </div>
+      {#each model.outputs.filter((output) => !selectedRow?.proposedOutputIndexes.includes(output.index)) as output (output.index)}
+        <Button
+          class="h-auto justify-start whitespace-normal px-3 py-3 text-left"
+          variant="outline"
+          disabled={output.readOnly || actionsBlocked || selectedRow?.mappingLocked}
+          testId={`${setupWorkspaceTestIds.outputsOutputOptionPrefix}-${output.index}`}
+          onclick={() => selectedRow && requestStageAssignment(selectedRow, [...selectedRow.proposedOutputIndexes, output.index])}
+        >
+          <span class="min-w-0">
+            <span class="block font-semibold">SERVO{output.index}</span>
+            <span class="mt-1 block text-xs text-text-muted">{outputOwnerText(output.index)}{output.hasStagedChange ? " · staged" : ""}</span>
+          </span>
+        </Button>
       {/each}
     </div>
     <Dialog.Footer>
       <Button variant="outline" onclick={() => (assignmentPickerOpen = false)}>Cancel</Button>
-      <Button onclick={requestStageAssignment} testId={setupWorkspaceTestIds.outputsStageAssignment}>Stage assignments</Button>
     </Dialog.Footer>
   </Dialog.Content>
 </Dialog.Root>

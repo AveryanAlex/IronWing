@@ -56,7 +56,6 @@ const ids = {
   outputsFunctionOwnersPrefix: "setup-workspace-outputs-function-owners",
   outputsEditFunctionPrefix: "setup-workspace-outputs-edit-function",
   outputsOutputOptionPrefix: "setup-workspace-outputs-output-option",
-  outputsStageAssignment: "setup-workspace-outputs-stage-assignment",
   outputsReassignmentConfirmation: "setup-workspace-outputs-reassignment-confirmation",
   servoOutputsRowPrefix: "setup-workspace-servo-outputs-row",
 } as const;
@@ -164,6 +163,7 @@ export class SetupWorkspacePage {
     const airframe = this.page.getByTestId(ids.vtolAirframe);
     await expect(airframe).toBeVisible({ timeout: 10_000 });
 
+    await this.page.getByTestId("vtol-output-assignment-status").getByRole("link", { name: "Open Outputs" }).click();
     const motorTestLink = this.page.getByRole("link", { name: "Motor test" }).first();
     const motorTestHref = await motorTestLink.getAttribute("href");
     const linkedMotor = motorTestHref?.match(/[?&]motor=(\d+)/)?.[1];
@@ -211,22 +211,43 @@ export class SetupWorkspacePage {
     await expect(this.page.getByTestId(ids.outputsPropulsionSection)).toBeVisible();
     await expect(this.page.getByTestId(ids.outputsServoSection)).toBeVisible();
     await expect(this.page.getByTestId(`${ids.outputsFunctionRowPrefix}-33`)).toBeVisible();
+    await this.page
+      .getByTestId(ids.outputsServoSection)
+      .getByRole("button", { name: "Add function", exact: true })
+      .click();
+    await this.page
+      .getByRole("dialog")
+      .getByRole("button", { name: /Tilt motors front/ })
+      .click();
     await expect(this.page.getByTestId(`${ids.outputsFunctionRowPrefix}-41`)).toBeVisible();
     await expect(this.page.getByTestId(`${ids.outputsFunctionRowPrefix}-4`)).toBeVisible();
     await expect(this.page.getByTestId(`${ids.outputsFunctionRowPrefix}-19`)).toBeVisible();
+    const servo = this.page.getByTestId("setup-workspace-output-settings-1");
+    await expect(servo.getByTestId("setup-workspace-output-reversed-1")).toBeVisible();
+    for (const point of ["min", "mid", "max"]) {
+      await expect(servo.getByTestId(`setup-workspace-output-${point}-1`)).toBeVisible();
+      await expect(servo.getByTestId(`setup-workspace-output-${point}-1-slider`).getByRole("slider")).toBeVisible();
+    }
     await this.auditLayout("setup unified output assignments");
 
     await this.page.getByTestId(`${ids.outputsEditFunctionPrefix}-4`).click();
-    await expect(this.page.getByTestId(`${ids.outputsOutputOptionPrefix}-1`)).toBeChecked();
-    await this.page.getByTestId(`${ids.outputsOutputOptionPrefix}-9`).check();
-    await this.page.getByTestId(ids.outputsStageAssignment).click();
+    await expect(this.page.getByTestId(`${ids.outputsOutputOptionPrefix}-1`)).toHaveCount(0);
+    await this.page.getByTestId(`${ids.outputsOutputOptionPrefix}-9`).click();
+    await this.ensureReviewSurfaceVisible();
     await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-SERVO9_FUNCTION`)).toBeVisible({ timeout: 10_000 });
     await expect(this.page.getByTestId(`${ids.outputsFunctionOwnersPrefix}-4`)).toContainText("SERVO1");
     await expect(this.page.getByTestId(`${ids.outputsFunctionOwnersPrefix}-4`)).toContainText("SERVO9");
 
+    const aileron = this.page.getByTestId(`${ids.outputsFunctionRowPrefix}-4`);
+    await aileron.getByRole("button", { name: "Remove SERVO9 from Aileron", exact: true }).click();
+    await expect(this.page.getByTestId("setup-workspace-output-settings-9")).toHaveCount(0);
+    await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-SERVO9_FUNCTION`)).toHaveCount(0);
     await this.page.getByTestId(`${ids.outputsEditFunctionPrefix}-4`).click();
-    await this.page.getByTestId(`${ids.outputsOutputOptionPrefix}-2`).check();
-    await this.page.getByTestId(ids.outputsStageAssignment).click();
+    await this.page.getByTestId(`${ids.outputsOutputOptionPrefix}-9`).click();
+    await expect(this.page.getByTestId("setup-workspace-output-settings-9")).toBeVisible();
+
+    await this.page.getByTestId(`${ids.outputsEditFunctionPrefix}-4`).click();
+    await this.page.getByTestId(`${ids.outputsOutputOptionPrefix}-2`).click();
     const confirmation = this.page.getByTestId(ids.outputsReassignmentConfirmation);
     await expect(confirmation).toBeVisible();
     await expect(confirmation).toContainText("SERVO2: Elevator → Aileron");
@@ -238,7 +259,18 @@ export class SetupWorkspacePage {
 
     await this.page.getByRole("link", { name: "Servo test", exact: true }).first().click();
     await expect(this.page).toHaveURL(/\/setup\/outputs\?mode=test/);
-    await expect(this.page.getByTestId(`${ids.servoOutputsRowPrefix}-2`)).toContainText("Elevator");
+    const elevatorTest = this.page.getByTestId(`${ids.servoOutputsRowPrefix}-2`);
+    await expect(this.page.getByTestId("setup-workspace-servo-outputs-function-group-19")).toContainText("Elevator");
+    await expect(elevatorTest).toContainText("SERVO2");
+    await expect(elevatorTest.getByRole("button", { name: /Send Mid/ })).toBeDisabled();
+    await expect(elevatorTest.getByRole("slider", { name: "SERVO2 PWM" })).toHaveAttribute("aria-disabled", "true");
+    await this.page.getByTestId("setup-workspace-servo-outputs-unlock").click();
+    const pwmSlider = elevatorTest.getByRole("slider", { name: "SERVO2 PWM" });
+    await pwmSlider.focus();
+    await pwmSlider.press("ArrowRight");
+    await expect(elevatorTest.getByRole("alert")).toContainText("command=183, result=unsupported");
+    await expect(this.page.getByTestId("setup-workspace-servo-outputs-raw-input-2")).toHaveValue("1501");
+    await this.page.getByTestId("setup-workspace-servo-outputs-unlock").click();
     await this.auditLayout("setup output servo test");
 
     await this.ensureReviewSurfaceVisible();
@@ -247,6 +279,48 @@ export class SetupWorkspacePage {
       if (await isVisible(discard)) await discard.click();
       await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-${name}`)).toHaveCount(0);
     }
+  }
+
+  async stageServoOutputEdits(): Promise<ParameterEdit[]> {
+    await this.openSectionById("outputs");
+    const servo = this.page.getByTestId("setup-workspace-output-settings-1");
+    await expect(servo).toBeVisible();
+    const edits: ParameterEdit[] = [];
+    const mid = servo.getByTestId("setup-workspace-output-mid-1");
+    const appliedMid = Number(await mid.inputValue());
+    const min = servo.getByTestId("setup-workspace-output-min-1");
+    const appliedMin = Number(await min.inputValue());
+    await min.fill(String(appliedMid + 1));
+    await expect(min).toHaveAttribute("aria-invalid", "true");
+    await expect(servo.getByRole("alert")).toContainText("Keep Min ≤ Mid ≤ Max");
+    await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-SERVO1_MIN`)).toHaveCount(0);
+
+    for (const [point, suffix, delta] of [
+      ["min", "MIN", 10],
+      ["max", "MAX", -10],
+    ] as const) {
+      const input = servo.getByTestId(`setup-workspace-output-${point}-1`);
+      const current = point === "min" ? appliedMin : Number(await input.inputValue());
+      const next = current + delta;
+      await fillAndBlur(input, String(next));
+      await expect(input).toHaveValue(String(next));
+      await expect(input).not.toHaveAttribute("aria-invalid", "true");
+      edits.push({ name: `SERVO1_${suffix}`, current, next });
+    }
+    const midSlider = servo.getByTestId("setup-workspace-output-mid-1-slider").getByRole("slider");
+    await midSlider.focus();
+    await midSlider.press("ArrowRight");
+    await expect(mid).toHaveValue(String(appliedMid + 1));
+    edits.push({ name: "SERVO1_TRIM", current: appliedMid, next: appliedMid + 1 });
+
+    const reverse = servo.getByTestId("setup-workspace-output-reversed-1");
+    const currentReverse = (await reverse.getAttribute("aria-checked")) === "true" ? 1 : 0;
+    await reverse.click();
+    await expect(reverse).toHaveAttribute("aria-checked", currentReverse === 1 ? "false" : "true");
+    edits.push({ name: "SERVO1_REVERSED", current: currentReverse, next: currentReverse === 1 ? 0 : 1 });
+    await this.expectReviewContains(edits.map(({ name }) => name));
+    await this.auditLayout("setup expanded servo PWM settings");
+    return edits;
   }
 
   async expectDisabledOsdWithoutLayoutParameters(): Promise<void> {
@@ -328,7 +402,17 @@ export class SetupWorkspacePage {
       throw new Error(`Parameter ${name} disappeared after reload`);
     }
 
-    await expect.poll(async () => Number(await input.inputValue()), { timeout: 10_000 }).toBeCloseTo(expected, 2);
+    await expect
+      .poll(
+        async () => {
+          if ((await input.getAttribute("role")) === "switch") {
+            return (await input.getAttribute("aria-checked")) === "true" ? 1 : 0;
+          }
+          return Number(await input.inputValue());
+        },
+        { timeout: 10_000 },
+      )
+      .toBeCloseTo(expected, 2);
     await this.auditLayout(`setup parameter ${name} value`);
   }
 
@@ -418,13 +502,19 @@ export class SetupWorkspacePage {
     await expect(this.page.getByTestId(ids.progress)).toBeVisible();
     await expect(this.page.getByTestId(ids.metadata)).toBeVisible();
     await expect(this.page.getByTestId(ids.catalogRoot)).toBeVisible();
+    await this.page.getByRole("button", { name: "All", exact: true }).click();
   }
 
   private async findParameterInput(name: string): Promise<Locator | null> {
     const search = this.page.getByTestId(ids.search);
     await search.fill(name);
+    const group = this.page.getByTestId(`parameter-catalog-group-${name.split("_")[0]}`);
     const row = this.page.getByTestId(`${ids.itemPrefix}-${name}`);
-    if (!(await isVisible(row))) {
+    try {
+      await expect(group).toBeVisible({ timeout: 2500 });
+      if ((await group.getAttribute("aria-expanded")) !== "true") await group.click();
+      await expect(row).toBeVisible({ timeout: 2500 });
+    } catch {
       return null;
     }
 

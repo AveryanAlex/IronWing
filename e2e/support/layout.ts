@@ -197,6 +197,17 @@ async function collectVisibleHorizontalLayoutOffenders(page: Page): Promise<Layo
         return element instanceof SVGElement && element.ownerSVGElement != null;
       }
 
+      function visibleHorizontalBounds(element: Element, rect: DOMRect): { left: number; right: number } {
+        let { left, right } = rect;
+        for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+          if (!["hidden", "clip"].includes(window.getComputedStyle(parent).overflowX)) continue;
+          const bounds = parent.getBoundingClientRect();
+          left = Math.max(left, bounds.left);
+          right = Math.min(right, bounds.right);
+        }
+        return { left, right };
+      }
+
       function addOffender(offender: LayoutOffender): void {
         if (offenders.length < maxOffenders) {
           offenders.push(offender);
@@ -211,15 +222,21 @@ async function collectVisibleHorizontalLayoutOffenders(page: Page): Promise<Layo
 
         const rect = element.getBoundingClientRect();
         if (rect.left < -tolerance || rect.right > window.innerWidth + tolerance) {
-          addOffender({
-            ...describe(element),
-            reason: "outside_viewport",
-            rect: {
-              left: rounded(rect.left),
-              right: rounded(rect.right),
-              width: rounded(rect.width),
-            },
-          });
+          const visible = visibleHorizontalBounds(element, rect);
+          if (
+            visible.right > visible.left &&
+            (visible.left < -tolerance || visible.right > window.innerWidth + tolerance)
+          ) {
+            addOffender({
+              ...describe(element),
+              reason: "outside_viewport",
+              rect: {
+                left: rounded(visible.left),
+                right: rounded(visible.right),
+                width: rounded(visible.right - visible.left),
+              },
+            });
+          }
         }
 
         if (
