@@ -1,8 +1,9 @@
 import type { ParamStore } from "../../params";
+import type { StatusMessage } from "../../statustext";
 import type { MotorDiagramEntry, MotorDiagramModel } from "./vtol-layout-model";
 import { servoFunctionForMotor } from "./motor-functions";
 
-export const MOTOR_TEST_BRIDGE_LIMIT = 8;
+export const MOTOR_TEST_BRIDGE_LIMIT = 12;
 export const MOTOR_OUTPUT_COUNT = 32;
 
 export type MotorDirection = "cw" | "ccw" | "unknown";
@@ -38,6 +39,73 @@ export type MotorTestRow = {
   functionParamName: string | null;
   reversalParamName: string | null;
 };
+
+export type MotorTestUnlockInput = {
+  checkpointBlocked: boolean;
+  liveConnected: boolean;
+  vehicleArmed: boolean | null;
+  layoutModel: MotorDiagramModel | null;
+  rowCount: number;
+};
+
+export function resolveMotorTestUnlockDisabledReason(input: MotorTestUnlockInput): string | null {
+  if (input.checkpointBlocked) {
+    return "Testing stays locked while the reboot/reconnect checkpoint is unresolved.";
+  }
+
+  if (!input.liveConnected) {
+    return "Testing stays locked until the live vehicle link is connected.";
+  }
+
+  if (input.vehicleArmed === true) {
+    return "Disarm the vehicle before unlocking motor testing.";
+  }
+
+  if (input.vehicleArmed === null) {
+    return "Testing stays locked until the vehicle reports that it is disarmed.";
+  }
+
+  if (!input.layoutModel) {
+    return "Testing stays locked because the active layout is unavailable.";
+  }
+
+  if (input.layoutModel.status === "preview-only") {
+    return "Testing stays locked because this layout is preview-only. Verify the airframe manually first.";
+  }
+
+  if (input.layoutModel.status === "unsupported") {
+    return "Testing stays locked because the active layout is unsupported and motor order cannot be trusted here.";
+  }
+
+  if (input.rowCount === 0) {
+    return "Testing stays locked because no mapped motors are available for this layout.";
+  }
+
+  return null;
+}
+
+export function latestStatusTextSequence(entries: readonly StatusMessage[]): number {
+  return entries.reduce((latest, entry) => Math.max(latest, entry.sequence), 0);
+}
+
+export function findMotorTestFailureStatus(
+  entries: readonly StatusMessage[],
+  afterSequence: number,
+): string | null {
+  for (let index = entries.length - 1; index >= 0; index -= 1) {
+    const entry = entries[index];
+    if (entry.sequence <= afterSequence) {
+      break;
+    }
+
+    const text = entry.text.trim();
+    if (/^motor test:|must be disarmed for motor test/i.test(text)) {
+      return text;
+    }
+  }
+
+  return null;
+}
 
 function getCurrentParamValue(input: MotorTestParamsInput, name: string): number | null {
   return input.paramStore?.params[name]?.value ?? null;
@@ -170,7 +238,7 @@ export function resolveMotorOwner(
 
 function resolveLayoutTestStatus(
   layoutModel: MotorDiagramModel,
-  motorNumber: number,
+  testOrder: number,
   bridgeLimit: number,
 ): { bridgeSupported: boolean; testStatus: MotorTestStatus; testReason: string | null } {
   if (layoutModel.status !== "supported") {
@@ -179,17 +247,17 @@ function resolveLayoutTestStatus(
       : "Direction-dependent testing is blocked because the active layout is unsupported. Verify the airframe manually first.";
 
     return {
-      bridgeSupported: motorNumber <= bridgeLimit,
+      bridgeSupported: testOrder <= bridgeLimit,
       testStatus: "blocked-layout",
       testReason: layoutReason,
     };
   }
 
-  if (motorNumber > bridgeLimit) {
+  if (testOrder > bridgeLimit) {
     return {
       bridgeSupported: false,
       testStatus: "unsupported-bridge",
-      testReason: `The current motor_test bridge only supports motors 1..=${bridgeLimit}. Verify this row manually before staging any reversal.`,
+      testReason: `The current motor_test bridge only supports test sequences 1..=${bridgeLimit}. Verify this row manually before staging any reversal.`,
     };
   }
 
@@ -213,7 +281,7 @@ export function buildMotorTestRows(
     .sort((left, right) => left.testOrder - right.testOrder || left.motorNumber - right.motorNumber)
     .map((motor) => {
       const owner = resolveMotorOwner(motor.motorNumber, input);
-      const testability = resolveLayoutTestStatus(layoutModel, motor.motorNumber, bridgeLimit);
+      const testability = resolveLayoutTestStatus(layoutModel, motor.testOrder, bridgeLimit);
 
       return {
         motorNumber: motor.motorNumber,

@@ -852,12 +852,12 @@ impl IronwingWasmRuntime {
     #[wasm_bindgen(js_name = motorTest)]
     pub async fn motor_test(
         &self,
-        motor_instance: u8,
+        motor_sequence: u8,
         throttle_pct: f32,
-        duration_s: f32,
+        duration_s: u16,
     ) -> Result<(), JsValue> {
         let vehicle = live_vehicle_for_write(&self.state, OperationId::MotorTest)?;
-        live_commands::motor_test(&vehicle, motor_instance, throttle_pct, duration_s)
+        live_commands::motor_test(&vehicle, motor_sequence, throttle_pct, duration_s)
             .await
             .map_err(|error| JsValue::from_str(&error.to_string()))
     }

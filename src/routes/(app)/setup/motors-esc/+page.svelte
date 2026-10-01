@@ -11,9 +11,13 @@ import { buildParameterItemIndex, type ParameterItemModel } from "../../../../li
 import {
   MOTOR_TEST_BRIDGE_LIMIT,
   buildMotorTestRows,
+  findMotorTestFailureStatus,
+  latestStatusTextSequence,
+  resolveMotorTestUnlockDisabledReason,
   type MotorDirection,
   type MotorTestRow,
 } from "../../../../lib/setup/motor-test-model";
+import { readLiveStatusText } from "../../../../statustext";
 import { deriveVehicleProfile, getVehicleSlug, type VehicleProfile } from "../../../../lib/setup/vehicle-profile";
 import {
   getApMotorDiagramModel,
@@ -57,6 +61,9 @@ type ScopedLayoutSummary = {
 
 const MOTOR_TEST_THROTTLE_PCT = 5;
 const MOTOR_TEST_DURATION_S = 2;
+const MOTOR_TEST_COMPLETION_GRACE_MS = 250;
+const MOTOR_TEST_STATUS_WAIT_ATTEMPTS = 5;
+const MOTOR_TEST_STATUS_WAIT_INTERVAL_MS = 100;
 const vtolEscOutputParams = [
   { id: "Q_M_PWM_TYPE" },
   { id: "Q_M_PWM_MIN" },
@@ -110,6 +117,8 @@ let rows = $derived(
 );
 let docsUrl = $derived(resolveDocsUrl("motors_esc", getVehicleSlug(vehicleType)));
 let liveConnected = $derived(session.sessionDomain.value?.connection.kind === "connected");
+let vehicleArmed = $derived(session.sessionDomain.value?.vehicle_state?.armed ?? null);
+let statusTextEntries = $derived(readLiveStatusText(session.statusText));
 let testableCount = $derived(rows.filter((row) => row.testStatus === "available").length);
 let bridgeLimitedCount = $derived(rows.filter((row) => row.testStatus === "unsupported-bridge").length);
 let resolvedOwnerCount = $derived(rows.filter((row) => row.ownerStatus === "resolved").length);
@@ -120,9 +129,10 @@ let retainedReversalFailures = $derived(
   Object.values(params.retainedFailures).filter((failure) => /SERVO\d+_REVERSED/.test(failure.name)),
 );
 let unlockDisabledReason = $derived(
-  resolveUnlockDisabledReason({
+  resolveMotorTestUnlockDisabledReason({
     checkpointBlocked: view.checkpoint.blocksActions,
     liveConnected,
+    vehicleArmed,
     layoutModel,
     rowCount: rows.length,
   }),
@@ -269,6 +279,10 @@ $effect(() => {
       detail: layoutModelDetail(layoutModel),
     };
   }
+
+  if (testUnlocked && unlockDisabledReason !== null) {
+    testUnlocked = false;
+  }
 });
 
 function resolveAppliedLayoutModel(profile: VehicleProfile): MotorDiagramModel | null {
@@ -286,39 +300,6 @@ function resolveAppliedLayoutModel(profile: VehicleProfile): MotorDiagramModel |
 function requestedMotorNumber(): number | null {
   const value = Number(page.url.searchParams.get("motor"));
   return Number.isInteger(value) && value > 0 ? value : null;
-}
-
-function resolveUnlockDisabledReason(input: {
-  checkpointBlocked: boolean;
-  liveConnected: boolean;
-  layoutModel: MotorDiagramModel | null;
-  rowCount: number;
-}): string | null {
-  if (input.checkpointBlocked) {
-    return "Testing stays locked while the reboot/reconnect checkpoint is unresolved.";
-  }
-
-  if (!input.liveConnected) {
-    return "Testing stays locked until the live vehicle link is connected.";
-  }
-
-  if (!input.layoutModel) {
-    return "Testing stays locked because the active layout is unavailable.";
-  }
-
-  if (input.layoutModel.status === "preview-only") {
-    return "Testing stays locked because this layout is preview-only. Verify the airframe manually first.";
-  }
-
-  if (input.layoutModel.status === "unsupported") {
-    return "Testing stays locked because the active layout is unsupported and motor order cannot be trusted here.";
-  }
-
-  if (input.rowCount === 0) {
-    return "Testing stays locked because no mapped motors are available for this layout.";
-  }
-
-  return null;
 }
 
 function resolveLayoutStateLabel(profile: VehicleProfile, currentLayoutModel: MotorDiagramModel | null): string {
@@ -402,6 +383,7 @@ function testButtonDisabled(row: MotorTestRow): boolean {
     !testUnlocked ||
     activeMotorNumber !== null ||
     !liveConnected ||
+    vehicleArmed !== false ||
     view.checkpoint.blocksActions ||
     row.testStatus !== "available"
   );
@@ -413,7 +395,7 @@ function testButtonLabel(row: MotorTestRow): string {
   }
 
   if (row.testStatus === "unsupported-bridge") {
-    return `Bridge supports 1..=${MOTOR_TEST_BRIDGE_LIMIT}`;
+    return `Bridge supports sequences 1..=${MOTOR_TEST_BRIDGE_LIMIT}`;
   }
 
   if (row.testStatus === "blocked-layout") {
@@ -488,6 +470,23 @@ function toggleUnlock() {
   selectedMotorNumber = null;
 }
 
+function delay(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+async function waitForMotorTestFailureStatus(afterSequence: number): Promise<string | null> {
+  for (let attempt = 0; attempt < MOTOR_TEST_STATUS_WAIT_ATTEMPTS; attempt += 1) {
+    const status = findMotorTestFailureStatus(statusTextEntries, afterSequence);
+    if (status) {
+      return status;
+    }
+
+    await delay(MOTOR_TEST_STATUS_WAIT_INTERVAL_MS);
+  }
+
+  return null;
+}
+
 async function runMotorTest(row: MotorTestRow) {
   if (testButtonDisabled(row)) {
     return;
@@ -498,20 +497,24 @@ async function runMotorTest(row: MotorTestRow) {
   const nextErrors = { ...commandErrorByMotor };
   delete nextErrors[row.motorNumber];
   commandErrorByMotor = nextErrors;
+  const statusSequenceBeforeCommand = latestStatusTextSequence(statusTextEntries);
 
   try {
-    await motorTest(row.motorNumber, MOTOR_TEST_THROTTLE_PCT, MOTOR_TEST_DURATION_S);
+    await motorTest(row.testOrder, MOTOR_TEST_THROTTLE_PCT, MOTOR_TEST_DURATION_S);
+    await delay(MOTOR_TEST_DURATION_S * 1000 + MOTOR_TEST_COMPLETION_GRACE_MS);
     testSuccessByMotor = {
       ...testSuccessByMotor,
       [row.motorNumber]: true,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const commandMessage = error instanceof Error ? error.message : String(error);
+    const statusMessage = await waitForMotorTestFailureStatus(statusSequenceBeforeCommand);
+    const message = statusMessage ? `${statusMessage} · ${commandMessage}` : commandMessage;
     commandErrorByMotor = {
       ...commandErrorByMotor,
       [row.motorNumber]: message,
     };
-    notifyUnknownError(`Motor ${row.motorNumber} test rejected`, error, {
+    notifyUnknownError(`Motor ${row.motorNumber} test rejected`, new Error(message), {
       id: `setup-motor-${row.motorNumber}-test-failed`,
     });
   } finally {
@@ -683,7 +686,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
     {#if unlockDisabledReason}
       <HelperText>{unlockDisabledReason}</HelperText>
     {:else if !testUnlocked}
-      <HelperText>Unlock once to expose direct row actions. Keep props removed before sending any motor test pulse.</HelperText>
+      <HelperText>Keep props removed, confirm the vehicle is disarmed, and release the hardware safety switch before unlocking.</HelperText>
     {:else}
       <HelperText>Motor test is unlocked for this session. Use the row actions below, confirm the observed direction, and stage any reversal fix for review.</HelperText>
     {/if}

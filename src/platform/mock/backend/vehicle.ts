@@ -91,12 +91,12 @@ export function validateSetServoArgs(args: CommandArgs) {
 }
 
 export function validateMotorTestArgs(args: CommandArgs) {
-  const motorInstance = requireFiniteInteger(args?.motorInstance, "motor_test.motorInstance");
+  const motorSequence = requireFiniteInteger(args?.motorSequence, "motor_test.motorSequence");
   const throttlePct = args?.throttlePct;
-  const durationS = args?.durationS;
+  const durationS = requireFiniteInteger(args?.durationS, "motor_test.durationS");
 
-  if (motorInstance < 1 || motorInstance > 8) {
-    throw new Error(`motor_test motorInstance must be in 1..=8, got ${motorInstance}`);
+  if (motorSequence < 1 || motorSequence > 12) {
+    throw new Error(`motor_test motorSequence must be in 1..=12, got ${motorSequence}`);
   }
   if (typeof throttlePct !== "number" || !Number.isFinite(throttlePct)) {
     throw new Error("missing or invalid motor_test.throttlePct");
@@ -104,11 +104,8 @@ export function validateMotorTestArgs(args: CommandArgs) {
   if (throttlePct < 0 || throttlePct > 100) {
     throw new Error(`motor_test throttlePct must be in 0..=100, got ${throttlePct}`);
   }
-  if (typeof durationS !== "number" || !Number.isFinite(durationS)) {
-    throw new Error("missing or invalid motor_test.durationS");
-  }
-  if (durationS <= 0) {
-    throw new Error(`motor_test durationS must be greater than 0, got ${durationS}`);
+  if (durationS < 1 || durationS > 30) {
+    throw new Error(`motor_test durationS must be in 1..=30, got ${durationS}`);
   }
 }
 

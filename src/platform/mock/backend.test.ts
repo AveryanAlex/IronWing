@@ -329,7 +329,7 @@ describe("mock guided backend parity", () => {
             { cmd: "reboot_vehicle", args: undefined, operationId: "reboot_vehicle" },
             { cmd: "request_prearm_checks", args: undefined, operationId: "request_prearm_checks" },
             { cmd: "set_servo", args: { instance: 1, pwmUs: 1500 }, operationId: "set_servo" },
-            { cmd: "motor_test", args: { motorInstance: 1, throttlePct: 10, durationS: 1 }, operationId: "motor_test" },
+            { cmd: "motor_test", args: { motorSequence: 1, throttlePct: 10, durationS: 1 }, operationId: "motor_test" },
             { cmd: "rc_override", args: { channels: [{ channel: 1, value: 1500 }] }, operationId: "rc_override" },
             {
                 cmd: "firmware_install_update",
@@ -1092,7 +1092,7 @@ describe("mock backend actuation parity", () => {
         });
 
         await expect(invokeMockCommand("set_servo", { instance: 3, pwmUs: 1500 })).resolves.toBeUndefined();
-        await expect(invokeMockCommand("motor_test", { motorInstance: 4, throttlePct: 5, durationS: 2 })).resolves.toBeUndefined();
+        await expect(invokeMockCommand("motor_test", { motorSequence: 4, throttlePct: 5, durationS: 2 })).resolves.toBeUndefined();
         await expect(invokeMockCommand("rc_override", {
             channels: [
                 { channel: 1, value: { kind: "pwm", pwm_us: 1500 } },
@@ -1104,7 +1104,7 @@ describe("mock backend actuation parity", () => {
 
     it("surfaces disconnected actuation calls as rejected invokes", async () => {
         await expect(invokeMockCommand("set_servo", { instance: 3, pwmUs: 1500 })).rejects.toThrow("not connected");
-        await expect(invokeMockCommand("motor_test", { motorInstance: 2, throttlePct: 3, durationS: 2 })).rejects.toThrow("not connected");
+        await expect(invokeMockCommand("motor_test", { motorSequence: 2, throttlePct: 3, durationS: 2 })).rejects.toThrow("not connected");
         await expect(invokeMockCommand("rc_override", {
             channels: [{ channel: 1, value: { kind: "release" } }],
         })).rejects.toThrow("not connected");
@@ -1121,14 +1121,20 @@ describe("mock backend actuation parity", () => {
         await expect(invokeMockCommand("set_servo", { instance: 0, pwmUs: 1500 })).rejects.toThrow(
             "set_servo instance must be in 1..=16, got 0",
         );
-        await expect(invokeMockCommand("motor_test", { motorInstance: 2, throttlePct: 5 })).rejects.toThrow(
+        await expect(invokeMockCommand("motor_test", { motorSequence: 2, throttlePct: 5 })).rejects.toThrow(
             "missing or invalid motor_test.durationS",
         );
-        await expect(invokeMockCommand("motor_test", { motorInstance: 9, throttlePct: 5, durationS: 2 })).rejects.toThrow(
-            "motor_test motorInstance must be in 1..=8, got 9",
+        await expect(invokeMockCommand("motor_test", { motorSequence: 13, throttlePct: 5, durationS: 2 })).rejects.toThrow(
+            "motor_test motorSequence must be in 1..=12, got 13",
         );
-        await expect(invokeMockCommand("motor_test", { motorInstance: 2, throttlePct: 101, durationS: 2 })).rejects.toThrow(
+        await expect(invokeMockCommand("motor_test", { motorSequence: 2, throttlePct: 101, durationS: 2 })).rejects.toThrow(
             "motor_test throttlePct must be in 0..=100, got 101",
+        );
+        await expect(invokeMockCommand("motor_test", { motorSequence: 2, throttlePct: 5, durationS: 2.5 })).rejects.toThrow(
+            "missing or invalid motor_test.durationS",
+        );
+        await expect(invokeMockCommand("motor_test", { motorSequence: 2, throttlePct: 5, durationS: 31 })).rejects.toThrow(
+            "motor_test durationS must be in 1..=30, got 31",
         );
         await expect(invokeMockCommand("rc_override", {
             channels: [{ channel: 1, value: {} }],

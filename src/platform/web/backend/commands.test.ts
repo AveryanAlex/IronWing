@@ -530,7 +530,7 @@ describe("web backend commands", () => {
     await expect(invokeWebCommand("calibrate_compass_accept", { compassMask: 3 })).resolves.toBeUndefined();
     await expect(invokeWebCommand("calibrate_compass_cancel", { compassMask: 3 })).resolves.toBeUndefined();
     await expect(invokeWebCommand("reboot_vehicle")).resolves.toBeUndefined();
-    await expect(invokeWebCommand("motor_test", { motorInstance: 4, throttlePct: 5, durationS: 2 })).resolves.toBeUndefined();
+    await expect(invokeWebCommand("motor_test", { motorSequence: 4, throttlePct: 5, durationS: 2 })).resolves.toBeUndefined();
     await expect(invokeWebCommand("set_servo", { instance: 6, pwmUs: 1750 })).resolves.toBeUndefined();
     await expect(invokeWebCommand("rc_override", { channels })).resolves.toBeUndefined();
     await expect(invokeWebCommand("request_prearm_checks")).resolves.toBeUndefined();

@@ -63,7 +63,7 @@ export async function wasmMissionValidate(runtime: IronwingWasmRuntime, args: Co
 }
 
 export async function wasmMotorTest(runtime: IronwingWasmRuntime, args: CommandArgs<"motor_test">): Promise<CommandResult<"motor_test">> {
-  return await runtime.motorTest(args.motorInstance, args.throttlePct, args.durationS) as CommandResult<"motor_test">;
+  return await runtime.motorTest(args.motorSequence, args.throttlePct, args.durationS) as CommandResult<"motor_test">;
 }
 
 export async function wasmParamCancel(runtime: IronwingWasmRuntime): Promise<CommandResult<"param_cancel">> {

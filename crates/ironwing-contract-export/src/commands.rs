@@ -83,7 +83,7 @@ const WASM_FACADE_COMMANDS: &[WasmFacadeSpec] = &[
     wasm_facade_command("mission_set_current", &["seq"]),
     wasm_facade_command("mission_upload", &["plan"]),
     wasm_facade_command("mission_validate", &["plan"]),
-    wasm_facade_command("motor_test", &["motorInstance", "throttlePct", "durationS"]),
+    wasm_facade_command("motor_test", &["motorSequence", "throttlePct", "durationS"]),
     wasm_facade_command("param_cancel", &[]),
     wasm_facade_command("param_apply_staged", &["names", "expectedRevision"]),
     wasm_facade_command("param_clear_staged", &["expectedRevision"]),
@@ -491,7 +491,7 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
     ),
     command(
         "motor_test",
-        "{ motorInstance: number; throttlePct: number; durationS: number }",
+        "{ motorSequence: number; throttlePct: number; durationS: number }",
         "void",
         ALL_PLATFORMS,
     ),

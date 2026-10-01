@@ -6,6 +6,9 @@ import { buildVtolTopologyModel } from "./vtol-topology-model";
 import {
   MOTOR_TEST_BRIDGE_LIMIT,
   buildMotorTestRows,
+  findMotorTestFailureStatus,
+  latestStatusTextSequence,
+  resolveMotorTestUnlockDisabledReason,
   resolveMotorOwner,
 } from "./motor-test-model";
 import { servoFunctionForMotor } from "./motor-functions";
@@ -77,7 +80,7 @@ describe("motor-test-model", () => {
     expect(rows).toEqual([]);
   });
 
-  it("marks rows above the motor_test bridge limit as visible but non-testable", () => {
+  it("supports all twelve motor-test sequences accepted by mavkit", () => {
     const servoEntries = Object.fromEntries(
       Array.from({ length: 12 }, (_, index) => [`SERVO${index + 1}_FUNCTION`, servoFunctionForMotor(index + 1) ?? 0]).flatMap(
         ([name, value], index) => [
@@ -92,12 +95,50 @@ describe("motor-test-model", () => {
     );
 
     expect(rows).toHaveLength(12);
-    expect(rows[MOTOR_TEST_BRIDGE_LIMIT]).toMatchObject({
-      motorNumber: 9,
-      bridgeSupported: false,
+    expect(MOTOR_TEST_BRIDGE_LIMIT).toBe(12);
+    expect(rows.every((row) => row.bridgeSupported && row.testStatus === "available")).toBe(true);
+  });
+
+  it("applies a bridge limit to test order rather than logical motor number", () => {
+    const rows = buildMotorTestRows(
+      getApMotorDiagramModel(1, 1),
+      createInput({}),
+      2,
+    );
+
+    expect(rows.find((row) => row.motorNumber === 4)).toMatchObject({
+      testOrder: 2,
+      testStatus: "available",
+    });
+    expect(rows.find((row) => row.motorNumber === 2)).toMatchObject({
+      testOrder: 3,
       testStatus: "unsupported-bridge",
     });
-    expect(rows[MOTOR_TEST_BRIDGE_LIMIT].testReason).toContain("1..=8");
+  });
+
+  it("blocks motor-test unlock while the vehicle is armed", () => {
+    const layoutModel = getApMotorDiagramModel(1, 1);
+
+    expect(resolveMotorTestUnlockDisabledReason({
+      checkpointBlocked: false,
+      liveConnected: true,
+      vehicleArmed: true,
+      layoutModel,
+      rowCount: layoutModel?.motors.length ?? 0,
+    })).toBe("Disarm the vehicle before unlocking motor testing.");
+  });
+
+  it("selects a new ArduPilot motor-test failure without reusing stale status text", () => {
+    const entries = [
+      { sequence: 10, severity: "critical", text: "Motor Test: RC not calibrated" },
+      { sequence: 11, severity: "info", text: "unrelated status" },
+      { sequence: 12, severity: "critical", text: "Motor Test: Safety switch" },
+      { sequence: 13, severity: "info", text: "finished motor test" },
+    ];
+
+    expect(latestStatusTextSequence(entries)).toBe(13);
+    expect(findMotorTestFailureStatus(entries, 10)).toBe("Motor Test: Safety switch");
+    expect(findMotorTestFailureStatus(entries, 13)).toBeNull();
   });
 
   it("fails owner resolution closed when a servo mapping is staged or the reverse row is missing", () => {

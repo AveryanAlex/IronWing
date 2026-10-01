@@ -387,9 +387,9 @@ export async function wasmDisconnectLink(): Promise<void> {
   return runtime.disconnectLink();
 }
 
-export async function wasmMotorTest(motorInstance: number, throttlePct: number, durationS: number): Promise<void> {
+export async function wasmMotorTest(motorSequence: number, throttlePct: number, durationS: number): Promise<void> {
   const runtime = await ensureWasmRuntime();
-  return wasmFacade.wasmMotorTest(runtime, { motorInstance, throttlePct, durationS });
+  return wasmFacade.wasmMotorTest(runtime, { motorSequence, throttlePct, durationS });
 }
 
 export async function wasmSetServo(instance: number, pwmUs: number): Promise<void> {

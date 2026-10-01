@@ -763,13 +763,13 @@ pub(crate) async fn reboot_vehicle(state: tauri::State<'_, AppState>) -> Result<
 #[tauri::command]
 pub(crate) async fn motor_test(
     state: tauri::State<'_, AppState>,
-    motor_instance: u8,
+    motor_sequence: u8,
     throttle_pct: f32,
-    duration_s: f32,
+    duration_s: u16,
 ) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::MotorTest).await?;
     let vehicle = with_vehicle(&state).await?;
-    live_commands::motor_test(&vehicle, motor_instance, throttle_pct, duration_s)
+    live_commands::motor_test(&vehicle, motor_sequence, throttle_pct, duration_s)
         .await
         .map_err(|e| e.to_string())
 }

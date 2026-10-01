@@ -18,7 +18,7 @@ describe("calibration bridge actuation wrappers", () => {
     await motorTest(4, 5, 2);
 
     expect(invoke).toHaveBeenCalledWith("motor_test", {
-      motorInstance: 4,
+      motorSequence: 4,
       throttlePct: 5,
       durationS: 2,
     });

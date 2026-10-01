@@ -225,7 +225,7 @@ export type InvokeCommandMap = {
   mission_set_current: CommandSpec<{ seq: number }, void>;
   mission_upload: CommandSpec<{ plan: WireMissionPlan }, void>;
   mission_validate: CommandSpec<{ plan: WireMissionPlan }, MissionIssue[]>;
-  motor_test: CommandSpec<{ motorInstance: number; throttlePct: number; durationS: number }, void>;
+  motor_test: CommandSpec<{ motorSequence: number; throttlePct: number; durationS: number }, void>;
   open_session_snapshot: CommandSpec<{ sourceKind: SourceKind }, OpenSessionSnapshot>;
   param_cancel: CommandSpec<NoArgs, void>;
   param_apply_staged: CommandSpec<{ names: string[] | null; expectedRevision: number | null }, ParamApplyOutcome>;

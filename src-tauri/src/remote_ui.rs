@@ -425,7 +425,7 @@ async fn dispatch_invoke(
         "motor_test" => {
             commands::motor_test(
                 state,
-                arg(&args, "motorInstance")?,
+                arg(&args, "motorSequence")?,
                 arg(&args, "throttlePct")?,
                 arg(&args, "durationS")?,
             )

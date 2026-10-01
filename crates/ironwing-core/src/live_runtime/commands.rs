@@ -306,17 +306,13 @@ pub async fn reboot_to_bootloader(vehicle: &mavkit::Vehicle) -> LiveCommandResul
 
 pub async fn motor_test(
     vehicle: &mavkit::Vehicle,
-    motor_instance: u8,
+    motor_sequence: u8,
     throttle_pct: f32,
-    duration_s: f32,
+    duration_s: u16,
 ) -> LiveCommandResult<()> {
     vehicle
         .ardupilot()
-        .motor_test(
-            motor_instance,
-            throttle_pct,
-            duration_s.clamp(0.0, u16::MAX as f32) as u16,
-        )
+        .motor_test(motor_sequence, throttle_pct, duration_s)
         .await
         .map_err(LiveCommandError::vehicle)
 }

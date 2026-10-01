@@ -53,8 +53,8 @@ export function calibrateCompassCancel(compassMask: number = 0): Promise<void> {
   return typedInvoke("calibrate_compass_cancel", { compassMask });
 }
 
-export function motorTest(motorInstance: number, throttlePct: number, durationS: number): Promise<void> {
-  return typedInvoke("motor_test", { motorInstance, throttlePct, durationS });
+export function motorTest(motorSequence: number, throttlePct: number, durationS: number): Promise<void> {
+  return typedInvoke("motor_test", { motorSequence, throttlePct, durationS });
 }
 
 export function setServo(instance: number, pwmUs: number): Promise<void> {
