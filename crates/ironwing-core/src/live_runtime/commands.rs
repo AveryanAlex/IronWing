@@ -7,7 +7,9 @@ use mavkit::{
     parse_param_file, validate_plan,
 };
 
-use crate::ipc::{GuidedLiveContext, MissionDownload, RcOverrideChannelWire};
+use crate::ipc::{
+    AccelCalibrationPosition, GuidedLiveContext, MissionDownload, RcOverrideChannelWire,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LiveCommandError {
@@ -277,6 +279,21 @@ pub async fn calibrate_accel(vehicle: &mavkit::Vehicle) -> LiveCommandResult<()>
         .ardupilot()
         .preflight_calibration(false, true, false, false)
         .await
+        .map_err(LiveCommandError::vehicle)
+}
+
+pub async fn calibrate_accel_confirm(
+    vehicle: &mavkit::Vehicle,
+    position: AccelCalibrationPosition,
+) -> LiveCommandResult<()> {
+    vehicle
+        .raw()
+        .command_long(
+            MavCmd::MAV_CMD_ACCELCAL_VEHICLE_POS as u16,
+            [position.wire_value() as f32, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        )
+        .await
+        .map(|_| ())
         .map_err(LiveCommandError::vehicle)
 }
 

@@ -6,10 +6,10 @@ use futures::channel::oneshot;
 use futures::future::{AbortHandle, Abortable};
 use ironwing_core::event_names;
 use ironwing_core::ipc::{
-    AckSessionSnapshotResult, DomainProvenance, GuidedCommandResult, GuidedFailure,
-    GuidedFatalityScope, GuidedLiveContext, GuidedRuntime, MissionDownload, OperationFailure,
-    OperationId, ParamApplyOutcome, ParamEditOrigin, ParamStageChange, ParamStagingState,
-    RcOverrideChannelWire, Reason, ReasonKind, SourceKind, StagedParamEdit,
+    AccelCalibrationPosition, AckSessionSnapshotResult, DomainProvenance, GuidedCommandResult,
+    GuidedFailure, GuidedFatalityScope, GuidedLiveContext, GuidedRuntime, MissionDownload,
+    OperationFailure, OperationId, ParamApplyOutcome, ParamEditOrigin, ParamStageChange,
+    ParamStagingState, RcOverrideChannelWire, Reason, ReasonKind, SourceKind, StagedParamEdit,
     StartGuidedSessionRequest, UpdateGuidedSessionRequest, operation_failure_json,
 };
 use ironwing_core::live_runtime::commands as live_commands;
@@ -790,6 +790,17 @@ impl IronwingWasmRuntime {
     pub async fn calibrate_accel(&self) -> Result<(), JsValue> {
         let vehicle = live_vehicle_for_write(&self.state, OperationId::CalibrateAccel)?;
         live_commands::calibrate_accel(&vehicle)
+            .await
+            .map_err(|error| JsValue::from_str(&error.to_string()))
+    }
+
+    #[wasm_bindgen(js_name = calibrateAccelConfirm)]
+    pub async fn calibrate_accel_confirm(&self, position: String) -> Result<(), JsValue> {
+        let position = position
+            .parse::<AccelCalibrationPosition>()
+            .map_err(|error| JsValue::from_str(&error))?;
+        let vehicle = live_vehicle_for_write(&self.state, OperationId::CalibrateAccel)?;
+        live_commands::calibrate_accel_confirm(&vehicle, position)
             .await
             .map_err(|error| JsValue::from_str(&error.to_string()))
     }

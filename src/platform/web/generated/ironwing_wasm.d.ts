@@ -8,6 +8,7 @@ export class IronwingWasmRuntime {
     armVehicle(force: boolean): Promise<void>;
     beginConnect(): WasmByteBridge;
     calibrateAccel(): Promise<void>;
+    calibrateAccelConfirm(position: string): Promise<void>;
     calibrateCompassAccept(_compass_mask: number): Promise<void>;
     calibrateCompassCancel(_compass_mask: number): Promise<void>;
     calibrateCompassStart(compass_mask: number): Promise<void>;
@@ -109,6 +110,7 @@ export interface InitOutput {
     readonly ironwingwasmruntime_armVehicle: (a: number, b: number) => any;
     readonly ironwingwasmruntime_beginConnect: (a: number) => [number, number, number];
     readonly ironwingwasmruntime_calibrateAccel: (a: number) => any;
+    readonly ironwingwasmruntime_calibrateAccelConfirm: (a: number, b: number, c: number) => any;
     readonly ironwingwasmruntime_calibrateCompassAccept: (a: number, b: number) => any;
     readonly ironwingwasmruntime_calibrateCompassCancel: (a: number, b: number) => any;
     readonly ironwingwasmruntime_calibrateCompassStart: (a: number, b: number) => any;

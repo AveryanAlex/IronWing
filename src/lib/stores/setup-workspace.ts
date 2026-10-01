@@ -1,6 +1,6 @@
 import { writable, type Readable } from "svelte/store";
 
-import type { CalibrationLifecycle } from "../../calibration";
+import type { AccelCalibrationPosition, CalibrationLifecycle } from "../../calibration";
 import type { SessionEnvelope, SourceKind } from "../../session";
 import type { CompactStatusNotice } from "../../statustext";
 import { selectCompactStatusNotices } from "../../statustext";
@@ -80,6 +80,7 @@ export type SetupWorkspaceCalibrationCard = {
   lifecycle: SetupWorkspaceCalibrationLifecycle;
   statusText: string;
   detailText: string;
+  requestedPosition: AccelCalibrationPosition | null;
   actionLabel: string | null;
   actionAvailability: CalibrationActionAvailability;
 };
@@ -142,13 +143,15 @@ function createInitialRcReceiverState(): SetupWorkspaceRcReceiverState {
 }
 
 function createCalibrationCard(
-  input: Omit<SetupWorkspaceCalibrationCard, "actionLabel" | "actionAvailability"> & {
+  input: Omit<SetupWorkspaceCalibrationCard, "requestedPosition" | "actionLabel" | "actionAvailability"> & {
+    requestedPosition?: AccelCalibrationPosition | null;
     actionLabel?: string | null;
     actionAvailability?: CalibrationActionAvailability;
   },
 ): SetupWorkspaceCalibrationCard {
   return {
     ...input,
+    requestedPosition: input.requestedPosition ?? null,
     actionLabel: input.actionLabel ?? null,
     actionAvailability: input.actionAvailability ?? "blocked",
   };
@@ -162,14 +165,16 @@ function createInitialCalibrationSummary(): SetupWorkspaceCalibrationSummary {
         title: "Accelerometer",
         lifecycle: "not_started",
         statusText: "Not started",
-        detailText: "Dedicated accelerometer workflow lands later in Setup.",
+        detailText: "Run the guided six-position calibration with the vehicle disarmed on a stable surface.",
+        actionLabel: "Start accelerometer calibration",
       }),
       createCalibrationCard({
         id: "gyro",
         title: "Gyroscope",
         lifecycle: "not_started",
         statusText: "Not started",
-        detailText: "Quick gyro calibration stays outside this workspace for now.",
+        detailText: "Keep the disarmed vehicle still and level throughout the quick calibration.",
+        actionLabel: "Calibrate gyroscope",
       }),
       createCalibrationCard({
         id: "compass",
@@ -539,6 +544,7 @@ function normalizeLifecycle(step: unknown): {
   malformed: boolean;
   progressPct: number | null;
   autosaved: boolean | null;
+  requestedPosition: AccelCalibrationPosition | null;
 } {
   if (!step || typeof step !== "object") {
     return {
@@ -546,6 +552,7 @@ function normalizeLifecycle(step: unknown): {
       malformed: false,
       progressPct: null,
       autosaved: null,
+      requestedPosition: null,
     };
   }
 
@@ -557,6 +564,13 @@ function normalizeLifecycle(step: unknown): {
   const autosaved = typeof (step as { report?: { autosaved?: unknown } }).report?.autosaved === "boolean"
     ? Boolean((step as { report?: { autosaved?: boolean } }).report?.autosaved)
     : null;
+  const requestedPositionValue = (step as { requested_position?: unknown }).requested_position;
+  const requestedPosition = isAccelCalibrationPosition(requestedPositionValue)
+    ? requestedPositionValue
+    : null;
+  const requestedPositionMalformed = requestedPositionValue !== undefined
+    && requestedPositionValue !== null
+    && requestedPosition === null;
 
   switch (lifecycle) {
     case "not_started":
@@ -565,9 +579,10 @@ function normalizeLifecycle(step: unknown): {
     case "failed":
       return {
         lifecycle,
-        malformed: false,
+        malformed: requestedPositionMalformed,
         progressPct,
         autosaved,
+        requestedPosition,
       };
     default:
       return {
@@ -575,7 +590,39 @@ function normalizeLifecycle(step: unknown): {
         malformed: true,
         progressPct: null,
         autosaved: null,
+        requestedPosition: null,
       };
+  }
+}
+
+const ACCEL_CALIBRATION_POSITIONS: AccelCalibrationPosition[] = [
+  "level",
+  "left",
+  "right",
+  "nose_down",
+  "nose_up",
+  "back",
+];
+
+function isAccelCalibrationPosition(value: unknown): value is AccelCalibrationPosition {
+  return typeof value === "string"
+    && ACCEL_CALIBRATION_POSITIONS.includes(value as AccelCalibrationPosition);
+}
+
+function accelPositionLabel(position: AccelCalibrationPosition): string {
+  switch (position) {
+    case "level":
+      return "Level";
+    case "left":
+      return "Left side";
+    case "right":
+      return "Right side";
+    case "nose_down":
+      return "Nose down";
+    case "nose_up":
+      return "Nose up";
+    case "back":
+      return "On its back";
   }
 }
 
@@ -600,6 +647,9 @@ function buildAccelCard(input: {
   step: unknown;
   previous: SetupWorkspaceCalibrationCard | null;
   sameScope: boolean;
+  liveSessionConnected: boolean;
+  vehicleArmed: boolean;
+  checkpoint: SetupWorkspaceCheckpointState;
 }): SetupWorkspaceCalibrationCard {
   const normalized = normalizeLifecycle(input.step);
   const preserve = input.sameScope && !normalized.malformed && normalized.lifecycle === null && input.previous !== null && input.supported !== false;
@@ -611,40 +661,90 @@ function buildAccelCard(input: {
         ? "not_started"
         : normalized.lifecycle ?? "not_started";
 
+  const requestedPosition = preserve
+    ? input.previous?.requestedPosition ?? null
+    : normalized.requestedPosition;
+  const actionAvailability: CalibrationActionAvailability = input.supported === false
+    ? "unsupported"
+    : input.checkpoint.blocksActions || !input.liveSessionConnected || input.vehicleArmed
+      ? "blocked"
+      : lifecycle === "running" && requestedPosition === null
+        ? "blocked"
+        : "available";
+  const actionLabel = input.supported === false
+    ? null
+    : lifecycle === "running" && requestedPosition
+      ? `Capture ${accelPositionLabel(requestedPosition).toLowerCase()}`
+      : lifecycle === "complete"
+        ? "Recalibrate accelerometer"
+        : lifecycle === "failed"
+          ? "Retry accelerometer calibration"
+          : "Start accelerometer calibration";
   const detailText = preserve
     ? input.previous?.detailText ?? "Accelerometer lifecycle is still waiting for a scoped update."
     : input.supported === false
       ? "This vehicle does not expose accelerometer calibration support on the active shell contract."
-      : normalized.malformed
-        ? "Accelerometer lifecycle payload was malformed, so Setup fell back to a not-started state."
+        : normalized.malformed
+          ? "Accelerometer lifecycle payload was malformed, so Setup fell back to a not-started state."
         : lifecycle === "complete"
-          ? "The vehicle reports accelerometer calibration complete. Dedicated step-by-step controls land later in Setup."
+          ? "The vehicle reports that all six accelerometer positions calibrated successfully."
           : lifecycle === "running"
-            ? "Accelerometer calibration is already running on the vehicle. Keep this status open until the next scoped update arrives."
+            ? requestedPosition
+              ? `Rest the vehicle ${accelPositionLabel(requestedPosition).toLowerCase()} on a stable surface, keep it completely still, then capture this position.`
+              : "Calibration started. Waiting for the vehicle to request the next position."
             : lifecycle === "failed"
-              ? "Accelerometer calibration failed. Review status text before retrying it elsewhere."
-              : "Dedicated accelerometer workflow lands later in Setup, and the current lifecycle remains available here.";
+              ? "Accelerometer calibration failed. Review vehicle status text, stabilize the vehicle, and retry."
+              : input.vehicleArmed
+                ? "Disarm the vehicle before starting accelerometer calibration."
+                : input.checkpoint.blocksActions
+                  ? "Accelerometer calibration is blocked until the reboot/reconnect checkpoint is resolved."
+                  : "Run the guided six-position calibration with the vehicle disarmed on a stable surface.";
+  const requestedStep = requestedPosition
+    ? ACCEL_CALIBRATION_POSITIONS.indexOf(requestedPosition) + 1
+    : null;
 
   return createCalibrationCard({
     id: "accel",
     title: "Accelerometer",
     lifecycle,
-    statusText: preserve
+    statusText: lifecycle === "running" && requestedPosition && requestedStep
+      ? `Step ${requestedStep} of ${ACCEL_CALIBRATION_POSITIONS.length} · ${accelPositionLabel(requestedPosition)}`
+      : preserve
       ? input.previous?.statusText ?? statusTextFromLifecycle(lifecycle, normalized.progressPct)
       : statusTextFromLifecycle(lifecycle, normalized.progressPct),
     detailText,
+    requestedPosition,
+    actionLabel,
+    actionAvailability,
   });
 }
 
-function buildGyroCard(checkpoint: SetupWorkspaceCheckpointState): SetupWorkspaceCalibrationCard {
+function buildGyroCard(input: {
+  supported: boolean | null;
+  liveSessionConnected: boolean;
+  vehicleArmed: boolean;
+  checkpoint: SetupWorkspaceCheckpointState;
+}): SetupWorkspaceCalibrationCard {
+  const actionAvailability: CalibrationActionAvailability = input.supported === false
+    ? "unsupported"
+    : input.checkpoint.blocksActions || !input.liveSessionConnected || input.vehicleArmed
+      ? "blocked"
+      : "available";
+
   return createCalibrationCard({
     id: "gyro",
     title: "Gyroscope",
-    lifecycle: "not_started",
-    statusText: "Not started",
-    detailText: checkpoint.blocksActions
-      ? "Gyroscope quick calibration remains blocked while the reboot/reconnect checkpoint is unresolved."
-      : "Gyroscope quick calibration stays outside this slice. Keep the vehicle still and level when you run it elsewhere.",
+    lifecycle: input.supported === false ? "unavailable" : "not_started",
+    statusText: input.supported === false ? "Unavailable" : "Not started",
+    detailText: input.supported === false
+      ? "This vehicle does not expose inertial-sensor calibration on the active shell contract."
+      : input.vehicleArmed
+        ? "Disarm the vehicle before calibrating the gyroscope."
+        : input.checkpoint.blocksActions
+          ? "Gyroscope calibration is blocked until the reboot/reconnect checkpoint is resolved."
+          : "Place the vehicle on a stable, level surface and do not move it during the quick calibration.",
+    actionLabel: input.supported === false ? null : "Calibrate gyroscope",
+    actionAvailability,
   });
 }
 
@@ -752,6 +852,7 @@ function deriveCalibrationSummary(input: {
 }): SetupWorkspaceCalibrationSummary {
   const support = input.sessionState.support.value;
   const calibration = input.sessionState.calibration.value;
+  const vehicleArmed = input.sessionState.sessionDomain.value?.vehicle_state?.armed === true;
   const previousById = new Map(input.previous?.cards.map((card) => [card.id, card]) ?? []);
 
   return {
@@ -761,8 +862,16 @@ function deriveCalibrationSummary(input: {
         step: calibration?.accel ?? null,
         previous: previousById.get("accel") ?? null,
         sameScope: input.sameScope,
+        liveSessionConnected: input.liveSessionConnected,
+        vehicleArmed,
+        checkpoint: input.checkpoint,
       }),
-      buildGyroCard(input.checkpoint),
+      buildGyroCard({
+        supported: typeof support?.can_calibrate_accel === "boolean" ? support.can_calibrate_accel : null,
+        liveSessionConnected: input.liveSessionConnected,
+        vehicleArmed,
+        checkpoint: input.checkpoint,
+      }),
       buildCompassCard({
         supported: typeof support?.can_calibrate_compass === "boolean" ? support.can_calibrate_compass : null,
         step: calibration?.compass ?? null,

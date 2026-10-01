@@ -569,6 +569,18 @@ pub(crate) async fn calibrate_accel(state: tauri::State<'_, AppState>) -> Result
 }
 
 #[tauri::command]
+pub(crate) async fn calibrate_accel_confirm(
+    state: tauri::State<'_, AppState>,
+    position: crate::ipc::AccelCalibrationPosition,
+) -> Result<(), String> {
+    ensure_live_write_allowed(state.inner(), OperationId::CalibrateAccel).await?;
+    let vehicle = with_vehicle(&state).await?;
+    live_commands::calibrate_accel_confirm(&vehicle, position)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub(crate) async fn calibrate_gyro(state: tauri::State<'_, AppState>) -> Result<(), String> {
     ensure_live_write_allowed(state.inner(), OperationId::CalibrateGyro).await?;
     let vehicle = with_vehicle(&state).await?;

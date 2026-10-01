@@ -77,6 +77,7 @@ type ContractCalibrationReport = {
 
 type ContractCalibrationStep = {
   lifecycle: "not_started" | "running" | "complete" | "failed";
+  requested_position: "level" | "left" | "right" | "nose_down" | "nose_up" | "back" | null;
   progress: ContractCalibrationProgress | null;
   report: ContractCalibrationReport | null;
 };
@@ -525,13 +526,19 @@ function expectCalibrationReport(value: unknown, label: string): ContractCalibra
 
 function expectCalibrationStep(value: unknown, label: string): ContractCalibrationStep {
   const object = expectRecord(value, label);
-  expectExactKeys(object, label, ["lifecycle", "progress", "report"]);
+  expectExactKeys(object, label, ["lifecycle", "requested_position", "progress", "report"]);
   const lifecycle = expectString(object.lifecycle, `${label}.lifecycle`);
   expect(["not_started", "running", "complete", "failed"]).toContain(lifecycle);
+  const requestedPosition = object.requested_position === null
+    ? null
+    : expectString(object.requested_position, `${label}.requested_position`);
+  expect([null, "level", "left", "right", "nose_down", "nose_up", "back"]).toContain(requestedPosition);
+  expect(object).toHaveProperty("requested_position");
   expect(object).toHaveProperty("progress");
   expect(object).toHaveProperty("report");
   return {
     lifecycle: lifecycle as ContractCalibrationStep["lifecycle"],
+    requested_position: requestedPosition as ContractCalibrationStep["requested_position"],
     progress: expectNullable(object.progress ?? null, `${label}.progress`, expectCalibrationProgress),
     report: expectNullable(object.report ?? null, `${label}.report`, expectCalibrationReport),
   };

@@ -1,6 +1,6 @@
 import { emitWebEvent } from "./event";
 import type { EventPayload, EventPayloadMap } from "../../lib/ipc/event-types";
-import type { RcOverrideChannel } from "../../calibration";
+import type { AccelCalibrationPosition, RcOverrideChannel } from "../../calibration";
 import type { BootloaderInstallationResult, BootloaderInstallationSource, DfuDeviceInfo, FirmwareBootloaderBoardInfo, FirmwareInstallOptions, FirmwareInstallResult, FirmwareInstallSource } from "../../firmware";
 import type { StartGuidedSessionRequest, UpdateGuidedSessionRequest, GuidedCommandResult } from "../../guided";
 import type { ChartSeriesPage, ChartSeriesRequest, FlightSummary, LogDataPoint, LogExportRequest, LogExportResult, LogFormat, LogSummary, RawMessagePage, RawMessageQuery } from "../../logs";
@@ -350,6 +350,11 @@ export async function wasmStopGuidedSession(): Promise<GuidedCommandResult> {
 export async function wasmCalibrateAccel(): Promise<void> {
   const runtime = await ensureWasmRuntime();
   return wasmFacade.wasmCalibrateAccel(runtime);
+}
+
+export async function wasmCalibrateAccelConfirm(position: AccelCalibrationPosition): Promise<void> {
+  const runtime = await ensureWasmRuntime();
+  return wasmFacade.wasmCalibrateAccelConfirm(runtime, { position });
 }
 
 export async function wasmCalibrateGyro(): Promise<void> {

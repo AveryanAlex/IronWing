@@ -262,6 +262,7 @@ fn generated_ironwing() -> Result<String, Box<dyn Error>> {
         .register_mut::<ipc::RcOverrideChannelValueWire>()
         .register_mut::<ipc::RcOverrideChannelWire>()
         .register_mut::<calibration::CalibrationLifecycle>()
+        .register_mut::<calibration::AccelCalibrationPosition>()
         .register_mut::<calibration::CalibrationStep>()
         .register_mut::<calibration::CalibrationState>()
         .register_mut::<ipc::PlaybackSnapshot>()

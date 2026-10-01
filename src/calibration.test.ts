@@ -57,6 +57,7 @@ describe("calibration bridge actuation wrappers", () => {
     invoke.mockResolvedValue(undefined);
     const {
       calibrateAccel,
+      calibrateAccelConfirm,
       calibrateGyro,
       calibrateCompassStart,
       calibrateCompassAccept,
@@ -64,12 +65,14 @@ describe("calibration bridge actuation wrappers", () => {
     } = await import("./calibration");
 
     await calibrateAccel();
+    await calibrateAccelConfirm("nose_down");
     await calibrateGyro();
     await calibrateCompassStart(5);
     await calibrateCompassAccept(5);
     await calibrateCompassCancel(5);
 
     expect(invoke).toHaveBeenCalledWith("calibrate_accel");
+    expect(invoke).toHaveBeenCalledWith("calibrate_accel_confirm", { position: "nose_down" });
     expect(invoke).toHaveBeenCalledWith("calibrate_gyro");
     expect(invoke).toHaveBeenCalledWith("calibrate_compass_start", { compassMask: 5 });
     expect(invoke).toHaveBeenCalledWith("calibrate_compass_accept", { compassMask: 5 });

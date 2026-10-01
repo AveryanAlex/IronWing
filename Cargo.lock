@@ -2388,6 +2388,7 @@ name = "ironwing-core"
 version = "0.1.0"
 dependencies = [
  "ardupilot-binlog",
+ "futures",
  "ironwing-firmware",
  "mavkit",
  "mavlink",

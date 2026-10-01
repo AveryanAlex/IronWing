@@ -18,7 +18,10 @@ pub mod support;
 pub mod telemetry;
 
 pub use analytics::{AnalyticsProperties, AnalyticsProperty};
-pub use calibration::{CalibrationSources, calibration_snapshot_from_sources};
+pub use calibration::{
+    AccelCalibrationPosition, AccelCalibrationUpdate, CalibrationSources,
+    calibration_snapshot_from_sources,
+};
 pub use connection::{ConnectRequest, ConnectTransport, DemoVehiclePreset, DisconnectRequest};
 pub use domain::{DomainProvenance, DomainValue};
 pub use envelope::{

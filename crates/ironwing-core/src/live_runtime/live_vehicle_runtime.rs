@@ -4,19 +4,23 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use futures::{Stream, StreamExt, pin_mut};
 use mavkit::ardupilot::{MagCalProgress, MagCalReport};
+use mavkit::dialect::{MavCmd, MavMessage};
 use mavkit::{
-    FirmwareInfo, HomePosition, ObservationSubscription, ParamStore, SensorHealthSummary, Vehicle,
+    FirmwareInfo, HomePosition, ObservationSubscription, ParamStore, RawMessage,
+    SensorHealthSummary, Vehicle,
 };
+use mavlink::{MavlinkVersion, Message};
 use web_time::Instant;
 
 use crate::event_names;
 use crate::ipc::calibration::CalibrationSnapshot;
 use crate::ipc::{
-    AckSessionSnapshotResult, CalibrationSources, DomainProvenance, DomainValue,
-    OpenSessionSnapshot, ScopedEvent, SessionConnection, SessionEnvelope, SessionSnapshot,
-    SourceKind, StatusTextEntry, TelemetrySnapshot, calibration_snapshot_from_sources,
-    push_status_text_entry, sensor_health_snapshot_from_summary,
+    AccelCalibrationUpdate, AckSessionSnapshotResult, CalibrationSources, DomainProvenance,
+    DomainValue, OpenSessionSnapshot, ScopedEvent, SessionConnection, SessionEnvelope,
+    SessionSnapshot, SourceKind, StatusTextEntry, TelemetrySnapshot,
+    calibration_snapshot_from_sources, push_status_text_entry, sensor_health_snapshot_from_summary,
     session_connection_from_link_state, status_text_entry_from_value,
     status_text_snapshot_from_entries, support_snapshot,
 };
@@ -583,7 +587,17 @@ fn snapshot_after_mag_report_update(
     sources.snapshot(DomainProvenance::Stream)
 }
 
+fn snapshot_after_accel_update(
+    sources: &mut CalibrationSources,
+    update: AccelCalibrationUpdate,
+) -> CalibrationSnapshot {
+    sources.update_accel(update);
+    sources.snapshot(DomainProvenance::Stream)
+}
+
 trait CalibrationSourcesState: Clone + 'static {
+    fn snapshot_after_accel(&self, update: AccelCalibrationUpdate) -> CalibrationSnapshot;
+
     fn snapshot_after_progress(&self, value: Option<MagCalProgress>) -> CalibrationSnapshot;
 
     fn snapshot_after_report(&self, value: Option<MagCalReport>) -> CalibrationSnapshot;
@@ -603,6 +617,11 @@ impl LocalCalibrationSources {
 }
 
 impl CalibrationSourcesState for LocalCalibrationSources {
+    fn snapshot_after_accel(&self, update: AccelCalibrationUpdate) -> CalibrationSnapshot {
+        let mut sources = self.inner.borrow_mut();
+        snapshot_after_accel_update(&mut sources, update)
+    }
+
     fn snapshot_after_progress(&self, value: Option<MagCalProgress>) -> CalibrationSnapshot {
         let mut sources = self.inner.borrow_mut();
         snapshot_after_mag_progress_update(&mut sources, value)
@@ -628,6 +647,14 @@ impl SendCalibrationSources {
 }
 
 impl CalibrationSourcesState for SendCalibrationSources {
+    fn snapshot_after_accel(&self, update: AccelCalibrationUpdate) -> CalibrationSnapshot {
+        let mut sources = self
+            .inner
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        snapshot_after_accel_update(&mut sources, update)
+    }
+
     fn snapshot_after_progress(&self, value: Option<MagCalProgress>) -> CalibrationSnapshot {
         let mut sources = self
             .inner
@@ -642,6 +669,39 @@ impl CalibrationSourcesState for SendCalibrationSources {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         snapshot_after_mag_report_update(&mut sources, value)
+    }
+}
+
+fn accel_calibration_update_from_raw(raw: &RawMessage) -> Option<AccelCalibrationUpdate> {
+    let message = MavMessage::parse(MavlinkVersion::V2, raw.message_id, &raw.payload).ok()?;
+    let MavMessage::COMMAND_LONG(data) = message else {
+        return None;
+    };
+    if data.command != MavCmd::MAV_CMD_ACCELCAL_VEHICLE_POS || !data.param1.is_finite() {
+        return None;
+    }
+
+    let wire_value = data.param1.round();
+    if (data.param1 - wire_value).abs() > f32::EPSILON || wire_value < 0.0 {
+        return None;
+    }
+
+    AccelCalibrationUpdate::from_wire_value(wire_value as u32)
+}
+
+async fn accel_calibration_bridge<H, C, R>(handle: H, calibration_sources: C, raw_stream: R)
+where
+    H: LiveRuntimeHandle,
+    C: CalibrationSourcesState,
+    R: Stream<Item = RawMessage>,
+{
+    pin_mut!(raw_stream);
+    while let Some(raw) = raw_stream.next().await {
+        let Some(update) = accel_calibration_update_from_raw(&raw) else {
+            continue;
+        };
+        let calibration = calibration_sources.snapshot_after_accel(update);
+        emit_scoped(&handle, event_names::CALIBRATION_STATE, calibration);
     }
 }
 
@@ -814,6 +874,11 @@ where
 {
     let calibration_sources = LocalCalibrationSources::new();
 
+    spawner.spawn_local(accel_calibration_bridge(
+        handle.clone(),
+        calibration_sources.clone(),
+        vehicle.raw().subscribe_filtered(76),
+    ));
     spawner.spawn_local(mag_progress_bridge(
         handle.clone(),
         calibration_sources.clone(),
@@ -870,6 +935,11 @@ where
 {
     let calibration_sources = SendCalibrationSources::new();
 
+    spawner.spawn_send(accel_calibration_bridge(
+        handle.clone(),
+        calibration_sources.clone(),
+        vehicle.raw().subscribe_filtered(76),
+    ));
     spawner.spawn_send(mag_progress_bridge(
         handle.clone(),
         calibration_sources.clone(),
@@ -887,6 +957,49 @@ mod tests {
     use super::*;
     use crate::ipc::telemetry::telemetry_snapshot_from_value;
     use crate::live_runtime::{EventSink, NoopEventSink};
+
+    fn accel_position_message(value: f32) -> RawMessage {
+        let message = MavMessage::COMMAND_LONG(mavkit::dialect::COMMAND_LONG_DATA {
+            target_system: 255,
+            target_component: 0,
+            command: MavCmd::MAV_CMD_ACCELCAL_VEHICLE_POS,
+            confirmation: 0,
+            param1: value,
+            param2: 0.0,
+            param3: 0.0,
+            param4: 0.0,
+            param5: 0.0,
+            param6: 0.0,
+            param7: 0.0,
+        });
+        let mut payload = [0_u8; 255];
+        let payload_len = message.ser(MavlinkVersion::V2, &mut payload);
+        RawMessage {
+            message_id: 76,
+            system_id: 1,
+            component_id: 1,
+            payload: payload[..payload_len].to_vec(),
+            received_at: Instant::now().into(),
+        }
+    }
+
+    #[test]
+    fn parses_accel_position_protocol_updates() {
+        assert_eq!(
+            accel_calibration_update_from_raw(&accel_position_message(5.0)),
+            Some(AccelCalibrationUpdate::Position(
+                crate::ipc::AccelCalibrationPosition::NoseUp
+            ))
+        );
+        assert_eq!(
+            accel_calibration_update_from_raw(&accel_position_message(16_777_215.0)),
+            Some(AccelCalibrationUpdate::Complete)
+        );
+        assert_eq!(
+            accel_calibration_update_from_raw(&accel_position_message(16_777_216.0)),
+            Some(AccelCalibrationUpdate::Failed)
+        );
+    }
 
     #[derive(Clone, Default)]
     struct RecordingEventSink {

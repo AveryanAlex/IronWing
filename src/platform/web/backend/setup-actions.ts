@@ -1,5 +1,6 @@
 import {
   wasmCalibrateAccel,
+  wasmCalibrateAccelConfirm,
   wasmCalibrateCompassAccept,
   wasmCalibrateCompassCancel,
   wasmCalibrateCompassStart,
@@ -14,6 +15,7 @@ import { definePlatformCommandHandlers } from "./command-handler";
 
 export const setupActionCommandHandlers = definePlatformCommandHandlers({
   calibrate_accel: async () => wasmCalibrateAccel(),
+  calibrate_accel_confirm: async ({ position }) => wasmCalibrateAccelConfirm(position),
   calibrate_gyro: async () => wasmCalibrateGyro(),
   calibrate_compass_start: async ({ compassMask }) => wasmCalibrateCompassStart(compassMask),
   calibrate_compass_accept: async ({ compassMask }) => wasmCalibrateCompassAccept(compassMask),

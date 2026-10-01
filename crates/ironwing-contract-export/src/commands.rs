@@ -70,6 +70,7 @@ const fn wasm_facade_command(
 
 const WASM_FACADE_COMMANDS: &[WasmFacadeSpec] = &[
     wasm_facade_command("calibrate_accel", &[]),
+    wasm_facade_command("calibrate_accel_confirm", &["position"]),
     wasm_facade_command("calibrate_compass_accept", &["compassMask"]),
     wasm_facade_command("calibrate_compass_cancel", &["compassMask"]),
     wasm_facade_command("calibrate_compass_start", &["compassMask"]),
@@ -117,6 +118,7 @@ pub const COMMAND_NAMES: &[&str] = &[
     "bt_scan_ble",
     "bt_stop_scan_ble",
     "calibrate_accel",
+    "calibrate_accel_confirm",
     "calibrate_compass_accept",
     "calibrate_compass_cancel",
     "calibrate_compass_start",
@@ -238,6 +240,12 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
     ),
     command("bt_stop_scan_ble", "NoArgs", "void", ALL_PLATFORMS),
     command("calibrate_accel", "NoArgs", "void", ALL_PLATFORMS),
+    command(
+        "calibrate_accel_confirm",
+        "{ position: AccelCalibrationPosition }",
+        "void",
+        ALL_PLATFORMS,
+    ),
     command(
         "calibrate_compass_accept",
         "{ compassMask: number }",
@@ -791,7 +799,7 @@ fn command_map_ts() -> Result<String, Box<dyn Error>> {
 
 fn imports_ts() -> &'static str {
     r#"import type { SourceKind, McpSettings, McpSettingsResult } from "./ironwing";
-import type { RcOverrideChannel } from "../../calibration";
+import type { AccelCalibrationPosition, RcOverrideChannel } from "../../calibration";
 import type {
   BootloaderInstallationResult,
   BootloaderInstallationSource,

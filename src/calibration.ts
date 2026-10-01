@@ -1,5 +1,5 @@
 import { EVENT_NAMES } from "./lib/generated/events";
-import type { CalibrationLifecycle, CalibrationState, CalibrationStep } from "./lib/generated/ironwing";
+import type { AccelCalibrationPosition, CalibrationLifecycle, CalibrationState, CalibrationStep } from "./lib/generated/ironwing";
 import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
 import { createLatestScopedValueHandler } from "./lib/scoped-session-events";
 import type { DomainValue } from "./lib/domain-status";
@@ -16,7 +16,7 @@ export type RcOverrideChannel = {
   value: RcOverrideChannelValue;
 };
 
-export type { CalibrationLifecycle, CalibrationState, CalibrationStep };
+export type { AccelCalibrationPosition, CalibrationLifecycle, CalibrationState, CalibrationStep };
 
 export type CalibrationDomain = DomainValue<CalibrationState>;
 
@@ -35,6 +35,10 @@ export async function subscribeCalibrationStateEvent(
 
 export async function calibrateAccel(): Promise<void> {
   return typedInvoke("calibrate_accel");
+}
+
+export async function calibrateAccelConfirm(position: AccelCalibrationPosition): Promise<void> {
+  return typedInvoke("calibrate_accel_confirm", { position });
 }
 
 export async function calibrateGyro(): Promise<void> {

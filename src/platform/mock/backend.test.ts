@@ -1194,6 +1194,50 @@ describe("mock setup/calibration/arming backend parity", () => {
         await expect(invokeMockCommand("calibrate_accel")).resolves.toBeUndefined();
     });
 
+    it("walks the mock accelerometer calibration through all six vehicle poses", async () => {
+        await invokeMockCommand("connect_link", {
+            request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },
+        });
+        const snapshot = await invokeMockCommand<any>("open_session_snapshot", { sourceKind: "live" });
+        await invokeMockCommand("ack_session_snapshot", {
+            sessionId: snapshot.envelope.session_id,
+            seekEpoch: snapshot.envelope.seek_epoch,
+            resetRevision: snapshot.envelope.reset_revision,
+        });
+        const updates: Array<{ lifecycle: string; requested_position: string | null }> = [];
+        const unlisten = listenMockEvent("calibration://state", (event: any) => {
+            updates.push(event.value.value.accel);
+        });
+
+        await invokeMockCommand("calibrate_accel");
+        for (const position of ["level", "left", "right", "nose_down", "nose_up", "back"] as const) {
+            await invokeMockCommand("calibrate_accel_confirm", { position });
+        }
+        unlisten();
+
+        expect(updates.map((step) => step.requested_position)).toEqual([
+            "level",
+            "left",
+            "right",
+            "nose_down",
+            "nose_up",
+            "back",
+            null,
+        ]);
+        expect(updates.at(-1)?.lifecycle).toBe("complete");
+    });
+
+    it("rejects mock inertial calibration while armed", async () => {
+        await invokeMockCommand("connect_link", {
+            request: {
+                transport: { kind: "udp", bind_addr: "0.0.0.0:14550" },
+                mockVehicleState: { armed: true },
+            },
+        });
+
+        await expect(invokeMockCommand("calibrate_accel")).rejects.toThrow("requires a disarmed vehicle");
+    });
+
     it("starts gyro calibration when connected", async () => {
         await invokeMockCommand("connect_link", {
             request: { transport: { kind: "udp", bind_addr: "0.0.0.0:14550" } },

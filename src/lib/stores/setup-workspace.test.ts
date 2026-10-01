@@ -298,6 +298,84 @@ describe("setup workspace store", () => {
     expect(tuningGroup?.implementedCount).toBe(2);
   });
 
+  it("exposes live accelerometer and gyroscope calibration actions while disarmed", () => {
+    const store = createSetupWorkspaceStore(
+      writable(createSessionState()),
+      writable(createParamsState()),
+    );
+
+    const cards = new Map(get(store).calibrationSummary.cards.map((card) => [card.id, card]));
+    expect(cards.get("accel")).toMatchObject({
+      lifecycle: "not_started",
+      actionLabel: "Start accelerometer calibration",
+      actionAvailability: "available",
+      requestedPosition: null,
+    });
+    expect(cards.get("gyro")).toMatchObject({
+      lifecycle: "not_started",
+      actionLabel: "Calibrate gyroscope",
+      actionAvailability: "available",
+    });
+  });
+
+  it("maps the vehicle accelerometer pose request into the guided setup step", () => {
+    const store = createSetupWorkspaceStore(
+      writable(createSessionState({
+        calibration: {
+          available: true,
+          complete: false,
+          provenance: "stream",
+          value: {
+            accel: {
+              lifecycle: "running",
+              requested_position: "nose_down",
+              progress: null,
+              report: null,
+            },
+            compass: null,
+            radio: null,
+          },
+        },
+      })),
+      writable(createParamsState()),
+    );
+
+    const accel = get(store).calibrationSummary.cards.find((card) => card.id === "accel");
+    expect(accel).toMatchObject({
+      lifecycle: "running",
+      statusText: "Step 4 of 6 · Nose down",
+      requestedPosition: "nose_down",
+      actionLabel: "Capture nose down",
+      actionAvailability: "available",
+    });
+  });
+
+  it("blocks inertial calibration actions while the vehicle is armed", () => {
+    const base = createSessionState();
+    const store = createSetupWorkspaceStore(
+      writable(createSessionState({
+        sessionDomain: {
+          ...base.sessionDomain,
+          value: base.sessionDomain.value
+            ? {
+                ...base.sessionDomain.value,
+                vehicle_state: base.sessionDomain.value.vehicle_state
+                  ? { ...base.sessionDomain.value.vehicle_state, armed: true }
+                  : null,
+              }
+            : null,
+        },
+      })),
+      writable(createParamsState()),
+    );
+
+    const cards = new Map(get(store).calibrationSummary.cards.map((card) => [card.id, card]));
+    expect(cards.get("accel")?.actionAvailability).toBe("blocked");
+    expect(cards.get("gyro")?.actionAvailability).toBe("blocked");
+    expect(cards.get("accel")?.detailText).toContain("Disarm");
+    expect(cards.get("gyro")?.detailText).toContain("Disarm");
+  });
+
   it("keeps catalog sections routable while the global gate waits for parameter values", () => {
     const sessionStore = writable(createSessionState());
     const paramsStore = writable(createParamsState({

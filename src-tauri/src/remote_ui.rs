@@ -406,6 +406,10 @@ async fn dispatch_invoke(
             commands::calibrate_accel(state).await?;
             ok(())
         }
+        "calibrate_accel_confirm" => {
+            commands::calibrate_accel_confirm(state, arg(&args, "position")?).await?;
+            ok(())
+        }
         "calibrate_gyro" => {
             commands::calibrate_gyro(state).await?;
             ok(())

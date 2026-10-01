@@ -145,6 +145,7 @@
       "accel": null,
       "compass": {
         "lifecycle": "running",
+        "requested_position": null,
         "progress": {
           "compass_id": 1,
           "completion_pct": 42,

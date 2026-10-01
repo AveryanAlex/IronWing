@@ -223,6 +223,72 @@ class MissionTransferCancelledError extends Error {}
 
 class CompassCalibrationCancelledError extends Error {}
 
+const accelCalibrationPositions = [
+  "level",
+  "left",
+  "right",
+  "nose_down",
+  "nose_up",
+  "back",
+] as const;
+
+let pendingAccelCalibrationIndex: number | null = null;
+
+function emitAccelCalibrationState(
+  lifecycle: "running" | "complete" | "failed",
+  requestedPosition: typeof accelCalibrationPositions[number] | null,
+) {
+  if (!mockState.liveEnvelope) {
+    return;
+  }
+  emitEvent(EVENT_NAMES.CALIBRATION_STATE, {
+    envelope: requireLiveEnvelope(),
+    value: {
+      available: true,
+      complete: lifecycle === "complete",
+      provenance: "stream",
+      value: {
+        accel: {
+          lifecycle,
+          requested_position: requestedPosition,
+          progress: null,
+          report: null,
+        },
+        compass: null,
+        radio: null,
+      },
+    },
+  });
+}
+
+function startAccelCalibration() {
+  if (mockState.liveVehicleArmed) {
+    throw new Error("accelerometer calibration requires a disarmed vehicle");
+  }
+  pendingAccelCalibrationIndex = 0;
+  emitAccelCalibrationState("running", accelCalibrationPositions[0]);
+}
+
+function confirmAccelCalibration(position: typeof accelCalibrationPositions[number]) {
+  if (pendingAccelCalibrationIndex === null) {
+    throw new Error("accelerometer calibration is not running");
+  }
+  const expectedPosition = accelCalibrationPositions[pendingAccelCalibrationIndex];
+  if (position !== expectedPosition) {
+    throw new Error(`accelerometer calibration expected ${expectedPosition}`);
+  }
+
+  pendingAccelCalibrationIndex += 1;
+  const nextPosition = accelCalibrationPositions[pendingAccelCalibrationIndex] ?? null;
+  if (nextPosition) {
+    emitAccelCalibrationState("running", nextPosition);
+    return;
+  }
+
+  pendingAccelCalibrationIndex = null;
+  emitAccelCalibrationState("complete", null);
+}
+
 type PendingMissionOperation = {
   kind: "download" | "upload" | "clear";
   direction: "download" | "upload";
@@ -747,10 +813,19 @@ const mockSetupActionCommandHandlers = definePlatformCommandHandlers({
   calibrate_accel: () => {
     ensureMockLiveWriteAllowed("calibrate_accel");
     requireConnectedVehicle();
+    startAccelCalibration();
+  },
+  calibrate_accel_confirm: (args) => {
+    ensureMockLiveWriteAllowed("calibrate_accel");
+    requireConnectedVehicle();
+    confirmAccelCalibration(args.position);
   },
   calibrate_gyro: () => {
     ensureMockLiveWriteAllowed("calibrate_gyro");
     requireConnectedVehicle();
+    if (mockState.liveVehicleArmed) {
+      throw new Error("gyroscope calibration requires a disarmed vehicle");
+    }
   },
   calibrate_compass_accept: () => {
     ensureMockLiveWriteAllowed("calibrate_compass_accept");
@@ -1018,6 +1093,7 @@ function createController(): MockPlatformController {
       cancelPendingMissionOperation();
       cancelParamOperation();
       cancelCompassCalibration();
+      pendingAccelCalibrationIndex = null;
       rejectAllDeferred("Mock platform reset");
       resetMockState();
       resetLogsMockState();

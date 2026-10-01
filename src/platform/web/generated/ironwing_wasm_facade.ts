@@ -10,6 +10,10 @@ export async function wasmCalibrateAccel(runtime: IronwingWasmRuntime): Promise<
   return await runtime.calibrateAccel() as CommandResult<"calibrate_accel">;
 }
 
+export async function wasmCalibrateAccelConfirm(runtime: IronwingWasmRuntime, args: CommandArgs<"calibrate_accel_confirm">): Promise<CommandResult<"calibrate_accel_confirm">> {
+  return await runtime.calibrateAccelConfirm(args.position) as CommandResult<"calibrate_accel_confirm">;
+}
+
 export async function wasmCalibrateCompassAccept(runtime: IronwingWasmRuntime, args: CommandArgs<"calibrate_compass_accept">): Promise<CommandResult<"calibrate_compass_accept">> {
   return await runtime.calibrateCompassAccept(args.compassMask) as CommandResult<"calibrate_compass_accept">;
 }

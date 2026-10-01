@@ -2,16 +2,17 @@ use analytics::{analytics_status, analytics_track_event};
 use bluetooth::{bt_get_bonded_devices, bt_request_permissions, bt_scan_ble, bt_stop_scan_ble};
 use commands::{
     ack_session_snapshot, arm_vehicle, available_transports, calibrate_accel,
-    calibrate_compass_accept, calibrate_compass_cancel, calibrate_compass_start, calibrate_gyro,
-    disarm_vehicle, fence_clear, fence_download, fence_upload, get_available_message_rates,
-    get_available_modes, mission_cancel, mission_clear, mission_download, mission_set_current,
-    mission_upload, mission_validate, motor_test, open_session_snapshot, param_apply_staged,
-    param_cancel, param_clear_staged, param_discard_staged, param_download_all, param_format_file,
-    param_parse_file, param_reset_reboot_checkpoint, param_stage, param_staging_snapshot,
-    param_write, param_write_batch, rally_clear, rally_download, rally_upload, rc_override,
-    reboot_vehicle, request_prearm_checks, runtime_capabilities, set_flight_mode, set_message_rate,
-    set_servo, set_telemetry_rate, start_guided_session, stop_guided_session,
-    update_guided_session, vehicle_takeoff,
+    calibrate_accel_confirm, calibrate_compass_accept, calibrate_compass_cancel,
+    calibrate_compass_start, calibrate_gyro, disarm_vehicle, fence_clear, fence_download,
+    fence_upload, get_available_message_rates, get_available_modes, mission_cancel, mission_clear,
+    mission_download, mission_set_current, mission_upload, mission_validate, motor_test,
+    open_session_snapshot, param_apply_staged, param_cancel, param_clear_staged,
+    param_discard_staged, param_download_all, param_format_file, param_parse_file,
+    param_reset_reboot_checkpoint, param_stage, param_staging_snapshot, param_write,
+    param_write_batch, rally_clear, rally_download, rally_upload, rc_override, reboot_vehicle,
+    request_prearm_checks, runtime_capabilities, set_flight_mode, set_message_rate, set_servo,
+    set_telemetry_rate, start_guided_session, stop_guided_session, update_guided_session,
+    vehicle_takeoff,
 };
 use connection::{ActiveLinkTarget, connect_link, disconnect_link};
 use firmware::commands::{
@@ -226,6 +227,7 @@ pub fn run() {
         param_format_file,
         param_cancel,
         calibrate_accel,
+        calibrate_accel_confirm,
         calibrate_gyro,
         calibrate_compass_start,
         calibrate_compass_accept,
