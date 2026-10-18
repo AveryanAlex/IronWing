@@ -1,56 +1,34 @@
 import { fetch } from "@platform/http";
-import { gunzipSync, strFromU8 } from "fflate";
 
 import { readStorageRaw, writeStorageRaw } from "./local-storage";
-import { ardupilotAutotestUrl } from "./ardupilot-urls";
 
 const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
-const KNOWN_GENERIC_SLUGS = [
-  "SITL",
-  "AP_Periph",
-  "ArduSub",
-  "Rover",
-  "ArduCopter",
-  "ArduPlane",
-  "AntennaTracker",
-  "Blimp",
-  "Heli",
-] as const;
-const GENERIC_FALLBACK_SLUGS = ["SITL", "AP_Periph"] as const;
+const REPOSITORY_RAW_URL = "https://raw.githubusercontent.com/ArduPilot/ParameterRepository/main";
+const REPOSITORY_INDEX_URL = "https://api.github.com/repos/ArduPilot/ParameterRepository/git/trees/main";
+const INDEX_CACHE_KEY = "param_meta_github_folders";
+const FOLDER_PATTERN = /^(AP_Periph|Blimp|Copter|Plane|Rover|Sub|Tracker)-\d+\.\d+$/;
 
-const VERSIONED_SHORT_BY_SLUG: Record<string, string> = {
+const REPOSITORY_VEHICLE_BY_SLUG: Record<string, string> = {
   ArduCopter: "Copter",
+  Heli: "Copter",
+  SITL: "Copter",
   ArduPlane: "Plane",
   Rover: "Rover",
   ArduSub: "Sub",
   AntennaTracker: "Tracker",
+  AP_Periph: "AP_Periph",
+  Blimp: "Blimp",
 };
 
 type CacheEntry = {
-  xml: string;
+  value: string;
   fresh: boolean;
 };
 
-function genericMetadataCacheKey(slug: string): string {
-  return `param_meta_${slug}`;
-}
-
-function genericMetadataTimestampKey(slug: string): string {
-  return `param_meta_${slug}_ts`;
-}
-
-function versionedMetadataCacheKey(short: string, version: string): string {
-  return `param_meta_versioned_${short}_${version}`;
-}
-
-function versionedMetadataTimestampKey(short: string, version: string): string {
-  return `param_meta_versioned_${short}_${version}_ts`;
-}
-
-function readCachedMetadataXml(cacheKey: string, tsKey: string, nowMs: number): CacheEntry | null {
-  const cachedXml = readStorageRaw(cacheKey);
-  const cachedTs = readStorageRaw(tsKey);
-  if (!cachedXml || !cachedTs) {
+function readCachedValue(cacheKey: string, nowMs: number): CacheEntry | null {
+  const value = readStorageRaw(cacheKey);
+  const cachedTs = readStorageRaw(`${cacheKey}_ts`);
+  if (!value || !cachedTs) {
     return null;
   }
 
@@ -62,50 +40,22 @@ function readCachedMetadataXml(cacheKey: string, tsKey: string, nowMs: number): 
   const ageMs = nowMs - timestampMs;
   const fresh = ageMs >= 0 && ageMs < CACHE_MAX_AGE_MS;
 
-  return { xml: cachedXml, fresh };
+  return { value, fresh };
 }
 
-function writeCachedMetadataXml(cacheKey: string, tsKey: string, xml: string, nowMs: number): void {
-  writeStorageRaw(cacheKey, xml);
-  writeStorageRaw(tsKey, String(nowMs));
+function writeCachedValue(cacheKey: string, value: string): void {
+  writeStorageRaw(cacheKey, value);
+  writeStorageRaw(`${cacheKey}_ts`, String(Date.now()));
 }
 
-function normalizeFirmwareVersion(firmwareVersion: string | null | undefined): string | null {
-  const trimmed = firmwareVersion?.trim();
-  return trimmed && /^\d+\.\d+\.\d+$/.test(trimmed) ? trimmed : null;
+function firmwareSeries(firmwareVersion: string | null | undefined): string | null {
+  return /^(\d+\.\d+)\.\d+$/.exec(firmwareVersion?.trim() ?? "")?.[1] ?? null;
 }
 
-function versionedShortForSlug(slug: string): string | null {
-  return VERSIONED_SHORT_BY_SLUG[slug] ?? null;
-}
-
-function isKnownGenericSlug(slug: string): boolean {
-  return KNOWN_GENERIC_SLUGS.includes(slug as (typeof KNOWN_GENERIC_SLUGS)[number]);
-}
-
-function genericUrl(slug: string): string {
-  return ardupilotAutotestUrl(`Parameters/${slug}/apm.pdef.xml.gz`);
-}
-
-function versionedUrl(short: string, version: string): string {
-  return ardupilotAutotestUrl(`Parameters/versioned/${short}/stable-${version}/apm.pdef.xml`);
-}
-
-async function fetchDecompressedXml(url: string): Promise<string | null> {
+async function fetchPlainText(url: string): Promise<string | null> {
   const response = await fetch(url);
   if (!response.ok) {
-    console.warn(`[param-metadata] fetch failed: ${response.status}`);
-    return null;
-  }
-
-  const compressedBytes = new Uint8Array(await response.arrayBuffer());
-  return strFromU8(gunzipSync(compressedBytes));
-}
-
-async function fetchPlainXml(url: string): Promise<string | null> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    console.warn(`[param-metadata] fetch failed: ${response.status}`);
+    console.warn(`[param-metadata] fetch failed: ${response.status} (${url})`);
     return null;
   }
 
@@ -114,53 +64,77 @@ async function fetchPlainXml(url: string): Promise<string | null> {
 
 async function fetchWithCache(
   cacheKey: string,
-  tsKey: string,
-  fetchRemoteXml: () => Promise<string | null>,
+  fetchRemoteValue: () => Promise<string | null>,
 ): Promise<string | null> {
-  const nowMs = Date.now();
-  const cached = readCachedMetadataXml(cacheKey, tsKey, nowMs);
+  const cached = readCachedValue(cacheKey, Date.now());
   if (cached?.fresh) {
-    return cached.xml;
+    return cached.value;
   }
 
   try {
-    const xml = await fetchRemoteXml();
-    if (xml) {
-      writeCachedMetadataXml(cacheKey, tsKey, xml, Date.now());
-      return xml;
+    const value = await fetchRemoteValue();
+    if (value) {
+      writeCachedValue(cacheKey, value);
+      return value;
     }
   } catch (error) {
     console.warn("[param-metadata] fetch error:", error);
   }
 
-  return cached?.xml ?? null;
+  return cached?.value ?? null;
 }
 
-async function fetchGenericParamMetadataXml(slug: string): Promise<string | null> {
-  const cacheKey = genericMetadataCacheKey(slug);
-  const tsKey = genericMetadataTimestampKey(slug);
-  return fetchWithCache(cacheKey, tsKey, () => fetchDecompressedXml(genericUrl(slug)));
-}
+async function fetchRepositoryFolders(): Promise<string[]> {
+  const foldersJson = await fetchWithCache(INDEX_CACHE_KEY, async () => {
+    const text = await fetchPlainText(REPOSITORY_INDEX_URL);
+    if (!text) return null;
 
-async function fetchVersionedParamMetadataXml(short: string, version: string): Promise<string | null> {
-  const cacheKey = versionedMetadataCacheKey(short, version);
-  const tsKey = versionedMetadataTimestampKey(short, version);
-  return fetchWithCache(cacheKey, tsKey, () => fetchPlainXml(versionedUrl(short, version)));
-}
+    const index = JSON.parse(text);
+    if (!Array.isArray(index.tree) || index.truncated) {
+      throw new Error("Invalid parameter metadata repository index");
+    }
 
-function genericSlugOrder(slug: string): string[] {
-  if (!isKnownGenericSlug(slug)) {
-    return [];
+    const folders = index.tree.flatMap((entry: { type?: string; path?: string } | null) =>
+      entry?.type === "tree" && typeof entry.path === "string" && FOLDER_PATTERN.test(entry.path)
+        ? [entry.path]
+        : [],
+    );
+    if (folders.length === 0) {
+      throw new Error("Parameter metadata repository index has no vehicle folders");
+    }
+    return JSON.stringify(folders);
+  });
+
+  if (!foldersJson) return [];
+  try {
+    const folders: unknown = JSON.parse(foldersJson);
+    if (Array.isArray(folders) && folders.every((folder) => typeof folder === "string" && FOLDER_PATTERN.test(folder))) {
+      return folders;
+    }
+  } catch (error) {
+    console.warn("[param-metadata] invalid cached repository index:", error);
   }
+  return [];
+}
 
-  return [slug, ...GENERIC_FALLBACK_SLUGS].filter(
-    (candidate, index, candidates) => candidates.indexOf(candidate) === index,
+function latestFolder(folders: string[], vehicle: string): string | undefined {
+  return folders.filter((folder) => folder.startsWith(`${vehicle}-`)).sort((a, b) => {
+    const [aMajor, aMinor] = a.slice(vehicle.length + 1).split(".").map(Number);
+    const [bMajor, bMinor] = b.slice(vehicle.length + 1).split(".").map(Number);
+    return bMajor - aMajor || bMinor - aMinor;
+  })[0];
+}
+
+async function fetchFolderXml(folder: string): Promise<string | null> {
+  return fetchWithCache(`param_meta_github_${folder}`, () =>
+    fetchPlainText(`${REPOSITORY_RAW_URL}/${folder}/apm.pdef.xml`),
   );
 }
 
 function paramfileInnerXml(xml: string): string {
   return xml
     .replace(/^\s*<\?xml[^>]*>\s*/i, "")
+    .replace(/^(?:\s*<!--[\s\S]*?-->)+\s*/, "")
     .replace(/^\s*<paramfile\b[^>]*>/i, "")
     .replace(/<\/paramfile>\s*$/i, "")
     .trim();
@@ -181,25 +155,26 @@ export async function fetchParamMetadataXml(
   slug: string,
   firmwareVersion?: string | null,
 ): Promise<string | null> {
-  if (!isKnownGenericSlug(slug)) {
-    return null;
-  }
+  const vehicle = Object.prototype.hasOwnProperty.call(REPOSITORY_VEHICLE_BY_SLUG, slug)
+    ? REPOSITORY_VEHICLE_BY_SLUG[slug]
+    : null;
+  if (!vehicle) return null;
 
   const xmls: string[] = [];
-  const version = normalizeFirmwareVersion(firmwareVersion);
-  const versionedShort = version ? versionedShortForSlug(slug) : null;
-  if (version && versionedShort) {
-    const versionedXml = await fetchVersionedParamMetadataXml(versionedShort, version);
-    if (versionedXml) {
-      xmls.push(versionedXml);
-    }
+  const requestedSeries = firmwareSeries(firmwareVersion);
+  const requestedFolder = requestedSeries ? `${vehicle}-${requestedSeries}` : null;
+  if (requestedFolder) {
+    const xml = await fetchFolderXml(requestedFolder);
+    if (xml) xmls.push(xml);
   }
 
-  for (const genericSlug of genericSlugOrder(slug)) {
-    const xml = await fetchGenericParamMetadataXml(genericSlug);
-    if (xml) {
-      xmls.push(xml);
-    }
+  const folders = await fetchRepositoryFolders();
+  // Vehicle XML includes SITL and helicopter definitions. AP_Periph supplements shared parameters.
+  const genericFolders = new Set([latestFolder(folders, vehicle), latestFolder(folders, "AP_Periph")]);
+  for (const folder of genericFolders) {
+    if (!folder || folder === requestedFolder) continue;
+    const xml = await fetchFolderXml(folder);
+    if (xml) xmls.push(xml);
   }
 
   return mergeMetadataXmlDocuments(xmls);

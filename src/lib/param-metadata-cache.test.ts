@@ -1,4 +1,3 @@
-import { gzipSync, strToU8 } from "fflate";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { fetchMock, readStorageRawMock, writeStorageRawMock } = vi.hoisted(() => ({
@@ -7,10 +6,7 @@ const { fetchMock, readStorageRawMock, writeStorageRawMock } = vi.hoisted(() => 
   writeStorageRawMock: vi.fn(),
 }));
 
-vi.mock("@platform/http", () => ({
-  fetch: fetchMock,
-}));
-
+vi.mock("@platform/http", () => ({ fetch: fetchMock }));
 vi.mock("./local-storage", () => ({
   readStorageRaw: readStorageRawMock,
   writeStorageRaw: writeStorageRawMock,
@@ -18,24 +14,23 @@ vi.mock("./local-storage", () => ({
 
 import { fetchParamMetadataXml } from "./param-metadata-cache";
 
-function compressedResponse(xml: string): Response {
-  const bytes = gzipSync(strToU8(xml));
-  const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
-  return {
-    ok: true,
-    arrayBuffer: vi.fn().mockResolvedValue(buffer),
-  } as unknown as Response;
+const RAW_URL = "https://raw.githubusercontent.com/ArduPilot/ParameterRepository/main";
+const INDEX_URL = "https://api.github.com/repos/ArduPilot/ParameterRepository/git/trees/main";
+const INDEX_KEY = "param_meta_github_folders";
+const folders = ["Copter-4.8", "Plane-4.8", "Rover-4.8", "Sub-4.8", "Tracker-4.8", "AP_Periph-4.8", "Blimp-4.8"];
+let storage: Map<string, string>;
+
+function response(text: string): Response {
+  return { ok: true, text: vi.fn().mockResolvedValue(text) } as unknown as Response;
 }
 
-function plainResponse(xml: string): Response {
-  return {
-    ok: true,
-    text: vi.fn().mockResolvedValue(xml),
-  } as unknown as Response;
+function indexResponse(paths = folders): Response {
+  return response(JSON.stringify({ tree: paths.map((path) => ({ type: "tree", path })), truncated: false }));
 }
 
-function failedResponse(status: number): Response {
-  return { ok: false, status } as Response;
+function cache(key: string, value: string, timestamp = "9000"): void {
+  storage.set(key, value);
+  storage.set(`${key}_ts`, timestamp);
 }
 
 function mergedXml(...parts: string[]): string {
@@ -45,229 +40,162 @@ function mergedXml(...parts: string[]): string {
 describe("fetchParamMetadataXml", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    vi.spyOn(Date, "now").mockReturnValue(10_000);
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    storage = new Map();
     fetchMock.mockReset();
+    fetchMock.mockImplementation(async (url: string) =>
+      url === INDEX_URL ? indexResponse() : response(`<xml>${url.slice(RAW_URL.length + 1).split("/")[0]}</xml>`),
+    );
     readStorageRawMock.mockReset();
-    readStorageRawMock.mockReturnValue(null);
+    readStorageRawMock.mockImplementation((key: string) => storage.get(key) ?? null);
     writeStorageRawMock.mockReset();
+    writeStorageRawMock.mockImplementation((key: string, value: string) => storage.set(key, value));
   });
 
-  it("returns cached generic metadata when its decompressed XML cache is fresh", async () => {
-    vi.spyOn(Date, "now").mockReturnValue(10_000);
-    readStorageRawMock.mockImplementation((key: string) => {
-      if (["param_meta_ArduCopter", "param_meta_SITL", "param_meta_AP_Periph"].includes(key)) {
-        return `<xml>${key}</xml>`;
-      }
-      if (["param_meta_ArduCopter_ts", "param_meta_SITL_ts", "param_meta_AP_Periph_ts"].includes(key)) {
-        return "9000";
-      }
-      return null;
-    });
+  it("loads Plane 4.8.0 directly from the matching GitHub series and supplements AP_Periph", async () => {
+    await expect(fetchParamMetadataXml("ArduPlane", " 4.8.0 ")).resolves.toBe(
+      mergedXml("<xml>Plane-4.8</xml>", "<xml>AP_Periph-4.8</xml>"),
+    );
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      `${RAW_URL}/Plane-4.8/apm.pdef.xml`, INDEX_URL, `${RAW_URL}/AP_Periph-4.8/apm.pdef.xml`,
+    ]);
+    expect(storage.get("param_meta_github_Plane-4.8")).toBe("<xml>Plane-4.8</xml>");
+    expect(storage.get("param_meta_github_Plane-4.8_ts")).toBe("10000");
+  });
 
-    const xml = await fetchParamMetadataXml("ArduCopter");
+  it("shares cached XML between firmware patches in the same series", async () => {
+    await fetchParamMetadataXml("ArduCopter", "4.8.0");
+    fetchMock.mockClear();
+    writeStorageRawMock.mockClear();
 
-    expect(xml).toBe(mergedXml("<xml>param_meta_ArduCopter</xml>", "<xml>param_meta_SITL</xml>", "<xml>param_meta_AP_Periph</xml>"));
+    await expect(fetchParamMetadataXml("ArduCopter", "4.8.1")).resolves.toBe(
+      mergedXml("<xml>Copter-4.8</xml>", "<xml>AP_Periph-4.8</xml>"),
+    );
     expect(fetchMock).not.toHaveBeenCalled();
     expect(writeStorageRawMock).not.toHaveBeenCalled();
   });
 
-  it("fetches compressed generic metadata, decompresses it, and caches XML for seven days", async () => {
-    vi.spyOn(Date, "now").mockReturnValue(1_000_000_000);
-    fetchMock.mockResolvedValue(compressedResponse("<xml>fresh</xml>"));
-
-    const xml = await fetchParamMetadataXml("ArduCopter");
-
-    expect(xml).toBe(mergedXml("<xml>fresh</xml>", "<xml>fresh</xml>", "<xml>fresh</xml>"));
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://autotest.ardupilot.org/Parameters/ArduCopter/apm.pdef.xml.gz",
+  it("puts the requested series before the latest generic definitions", async () => {
+    await expect(fetchParamMetadataXml("ArduCopter", "4.5.7")).resolves.toBe(
+      mergedXml("<xml>Copter-4.5</xml>", "<xml>Copter-4.8</xml>", "<xml>AP_Periph-4.8</xml>"),
     );
-    expect(writeStorageRawMock).toHaveBeenNthCalledWith(1, "param_meta_ArduCopter", "<xml>fresh</xml>");
-    expect(writeStorageRawMock).toHaveBeenNthCalledWith(2, "param_meta_ArduCopter_ts", "1000000000");
+    expect(fetchMock).toHaveBeenNthCalledWith(1, `${RAW_URL}/Copter-4.5/apm.pdef.xml`);
   });
 
-  it("refreshes generic metadata once the seven-day cache lifetime is reached", async () => {
-    vi.spyOn(Date, "now").mockReturnValue(604_801_000);
-    readStorageRawMock.mockImplementation((key: string) => {
-      if (key === "param_meta_ArduCopter") return "<xml>stale</xml>";
-      if (key === "param_meta_ArduCopter_ts") return "1000";
-      return null;
-    });
-    fetchMock.mockResolvedValue(compressedResponse("<xml>fresh</xml>"));
-
-    await expect(fetchParamMetadataXml("ArduCopter")).resolves.toBe(mergedXml("<xml>fresh</xml>", "<xml>fresh</xml>", "<xml>fresh</xml>"));
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+  it("merges XML documents with the declaration and generated comment used by GitHub metadata", async () => {
+    const definition = '<vehicles><parameters name="ArduPlane"><param name="ArduPlane:TEST" /></parameters></vehicles>';
+    fetchMock.mockImplementation(async (url: string) => url === INDEX_URL ? indexResponse() : response(
+      `<?xml version="1.0" encoding="utf-8"?>\n<!-- Dynamically generated parameters -->\n<paramfile>\n${definition}\n</paramfile>`,
+    ));
+    await expect(fetchParamMetadataXml("ArduPlane", "4.8.0")).resolves.toBe(mergedXml(definition, definition));
   });
 
-  it("falls back to stale cached XML when the generic request fails", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    vi.spyOn(Date, "now").mockReturnValue(604_801_000);
-    readStorageRawMock.mockImplementation((key: string) => {
-      if (key === "param_meta_ArduCopter") return "<xml>stale</xml>";
-      if (key === "param_meta_ArduCopter_ts") return "1000";
-      return null;
-    });
-    fetchMock.mockRejectedValue(new Error("network down"));
+  it("discovers the latest generic series numerically instead of hardcoding a version", async () => {
+    fetchMock.mockResolvedValueOnce(indexResponse(["Plane-4.9", "Plane-4.10", "Plane-3.99", "AP_Periph-4.8"]));
 
-    const xml = await fetchParamMetadataXml("ArduCopter");
-
-    expect(xml).toBe("<xml>stale</xml>");
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(warn).toHaveBeenCalled();
-    expect(writeStorageRawMock).not.toHaveBeenCalled();
-  });
-
-  it("falls back to stale cached XML when generic decompression fails", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    vi.spyOn(Date, "now").mockReturnValue(604_801_000);
-    readStorageRawMock.mockImplementation((key: string) => {
-      if (key === "param_meta_ArduCopter") return "<xml>stale</xml>";
-      if (key === "param_meta_ArduCopter_ts") return "1000";
-      return null;
-    });
-    fetchMock.mockResolvedValue({
-      ok: true,
-      arrayBuffer: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3]).buffer),
-    } as unknown as Response);
-
-    await expect(fetchParamMetadataXml("ArduCopter")).resolves.toBe("<xml>stale</xml>");
-    expect(warn).toHaveBeenCalled();
-    expect(writeStorageRawMock).not.toHaveBeenCalled();
-  });
-
-  it("falls back from an unavailable requested generic source to SITL", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    fetchMock
-      .mockResolvedValueOnce(failedResponse(404))
-      .mockResolvedValueOnce(compressedResponse("<xml>sitl</xml>"));
-
-    const xml = await fetchParamMetadataXml("ArduCopter");
-
-    expect(xml).toBe("<xml>sitl</xml>");
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      "https://autotest.ardupilot.org/Parameters/ArduCopter/apm.pdef.xml.gz",
+    await expect(fetchParamMetadataXml("ArduPlane")).resolves.toBe(
+      mergedXml("<xml>Plane-4.10</xml>", "<xml>AP_Periph-4.8</xml>"),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      "https://autotest.ardupilot.org/Parameters/SITL/apm.pdef.xml.gz",
-    );
-    expect(warn).toHaveBeenCalled();
-  });
-
-  it("falls back from unavailable requested and SITL definitions to AP_Periph", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    fetchMock
-      .mockResolvedValueOnce(failedResponse(404))
-      .mockResolvedValueOnce(failedResponse(404))
-      .mockResolvedValueOnce(compressedResponse("<xml>periph</xml>"));
-
-    const xml = await fetchParamMetadataXml("ArduCopter");
-
-    expect(xml).toBe("<xml>periph</xml>");
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
-      "https://autotest.ardupilot.org/Parameters/AP_Periph/apm.pdef.xml.gz",
-    );
-    expect(warn).toHaveBeenCalledTimes(2);
-  });
-
-  it("merges a separately cached versioned XML definition before generic metadata", async () => {
-    vi.spyOn(Date, "now").mockReturnValue(10_000);
-    readStorageRawMock.mockImplementation((key: string) => {
-      if (key === "param_meta_versioned_Copter_4.5.7") return "<xml>versioned cached</xml>";
-      if (key === "param_meta_versioned_Copter_4.5.7_ts") return "9000";
-      if (["param_meta_ArduCopter", "param_meta_SITL", "param_meta_AP_Periph"].includes(key)) return `<xml>${key}</xml>`;
-      if (["param_meta_ArduCopter_ts", "param_meta_SITL_ts", "param_meta_AP_Periph_ts"].includes(key)) return "9000";
-      return null;
-    });
-
-    const xml = await fetchParamMetadataXml("ArduCopter", "4.5.7");
-
-    expect(xml).toBe(mergedXml("<xml>versioned cached</xml>", "<xml>param_meta_ArduCopter</xml>", "<xml>param_meta_SITL</xml>", "<xml>param_meta_AP_Periph</xml>"));
-    expect(fetchMock).not.toHaveBeenCalled();
-  });
-
-  it("fetches and separately caches plain versioned XML before trying generic metadata", async () => {
-    vi.spyOn(Date, "now").mockReturnValue(10_000);
-    fetchMock
-      .mockResolvedValueOnce(plainResponse("<xml>versioned fresh</xml>"))
-      .mockResolvedValue(compressedResponse("<xml>generic fresh</xml>"));
-
-    const xml = await fetchParamMetadataXml("ArduCopter", " 4.5.7 ");
-
-    expect(xml).toBe(mergedXml("<xml>versioned fresh</xml>", "<xml>generic fresh</xml>", "<xml>generic fresh</xml>", "<xml>generic fresh</xml>"));
-    expect(fetchMock).toHaveBeenCalledTimes(4);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://autotest.ardupilot.org/Parameters/versioned/Copter/stable-4.5.7/apm.pdef.xml",
-    );
-    expect(writeStorageRawMock).toHaveBeenNthCalledWith(
-      1,
-      "param_meta_versioned_Copter_4.5.7",
-      "<xml>versioned fresh</xml>",
-    );
-    expect(writeStorageRawMock).toHaveBeenNthCalledWith(2, "param_meta_versioned_Copter_4.5.7_ts", "10000");
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `${RAW_URL}/Plane-4.10/apm.pdef.xml`);
   });
 
   it.each([
-    ["ArduCopter", "Copter"],
-    ["ArduPlane", "Plane"],
-    ["Rover", "Rover"],
-    ["ArduSub", "Sub"],
-    ["AntennaTracker", "Tracker"],
-  ])("maps versioned %s metadata to its %s short URL segment", async (slug, short) => {
-    fetchMock.mockImplementation((url: string) => Promise.resolve(
-      url.includes("/versioned/") ? plainResponse("<xml>versioned</xml>") : compressedResponse("<xml>generic</xml>"),
-    ));
-
-    await expect(fetchParamMetadataXml(slug, "1.2.3")).resolves.toContain("<xml>versioned</xml>");
-    expect(fetchMock).toHaveBeenCalledWith(
-      `https://autotest.ardupilot.org/Parameters/versioned/${short}/stable-1.2.3/apm.pdef.xml`,
-    );
+    ["ArduCopter", "Copter"], ["Heli", "Copter"], ["SITL", "Copter"],
+    ["ArduPlane", "Plane"], ["Rover", "Rover"], ["ArduSub", "Sub"],
+    ["AntennaTracker", "Tracker"], ["AP_Periph", "AP_Periph"], ["Blimp", "Blimp"],
+  ])("loads %s generic metadata from the %s repository folders", async (slug, vehicle) => {
+    await expect(fetchParamMetadataXml(slug)).resolves.toContain(`<xml>${vehicle}-4.8</xml>`);
+    expect(fetchMock).toHaveBeenCalledWith(`${RAW_URL}/${vehicle}-4.8/apm.pdef.xml`);
   });
 
-  it("rejects unknown generic slugs before URL construction", async () => {
-    await expect(fetchParamMetadataXml("../../evil")).resolves.toBeNull();
+  it("fetches AP_Periph only once when it is the requested vehicle", async () => {
+    await expect(fetchParamMetadataXml("AP_Periph", "4.8.0")).resolves.toBe("<xml>AP_Periph-4.8</xml>");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("uses generic GitHub metadata when the requested series returns 404", async () => {
+    fetchMock.mockResolvedValueOnce({ ok: false, status: 404 } as Response);
+
+    await expect(fetchParamMetadataXml("ArduPlane", "4.9.0")).resolves.toBe(
+      mergedXml("<xml>Plane-4.8</xml>", "<xml>AP_Periph-4.8</xml>"),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(`${RAW_URL}/Plane-4.8/apm.pdef.xml`);
+    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining("404"));
+  });
+
+  it("uses generic GitHub metadata when the versioned request throws", async () => {
+    fetchMock.mockRejectedValueOnce(new Error("network down"));
+    await expect(fetchParamMetadataXml("ArduPlane", "4.5.7")).resolves.toContain("<xml>Plane-4.8</xml>");
+  });
+
+  it.each([undefined, null, "   ", "4.8", "4.8.0-dev", "../../evil"])(
+    "skips version lookup for invalid or absent firmware version %s", async (version) => {
+      await fetchParamMetadataXml("ArduPlane", version);
+      expect(fetchMock).toHaveBeenNthCalledWith(1, INDEX_URL);
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    },
+  );
+
+  it.each(["../../evil", "toString", "__proto__", "unknown"])("rejects unknown slug %s", async (slug) => {
+    await expect(fetchParamMetadataXml(slug, "4.8.0")).resolves.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it("tries generic metadata when versioned XML is unavailable", async () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
-    fetchMock
-      .mockResolvedValueOnce(failedResponse(404))
-      .mockResolvedValueOnce(compressedResponse("<xml>generic</xml>"));
+  it("refreshes both index and XML after seven days", async () => {
+    cache(INDEX_KEY, JSON.stringify(["Plane-4.7"]), "1000");
+    cache("param_meta_github_Plane-4.8", "<xml>stale</xml>", "1000");
+    vi.spyOn(Date, "now").mockReturnValue(604_801_000);
 
-    const xml = await fetchParamMetadataXml("ArduCopter", "4.5.7");
-
-    expect(xml).toBe("<xml>generic</xml>");
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      "https://autotest.ardupilot.org/Parameters/versioned/Copter/stable-4.5.7/apm.pdef.xml",
-    );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      2,
-      "https://autotest.ardupilot.org/Parameters/ArduCopter/apm.pdef.xml.gz",
-    );
-    expect(warn).toHaveBeenCalled();
+    await expect(fetchParamMetadataXml("ArduPlane")).resolves.toContain("<xml>Plane-4.8</xml>");
+    expect(fetchMock).toHaveBeenCalledWith(INDEX_URL);
+    expect(storage.get("param_meta_github_Plane-4.8_ts")).toBe("604801000");
   });
 
-  it("skips versioned lookup for blank versions and slugs without version support", async () => {
-    fetchMock
-      .mockResolvedValueOnce(compressedResponse("<xml>blank generic</xml>"))
-      .mockResolvedValueOnce(compressedResponse("<xml>blank sitl</xml>"))
-      .mockResolvedValueOnce(compressedResponse("<xml>blank periph</xml>"))
-      .mockResolvedValueOnce(compressedResponse("<xml>blimp generic</xml>"))
-      .mockResolvedValueOnce(compressedResponse("<xml>blimp sitl</xml>"))
-      .mockResolvedValueOnce(compressedResponse("<xml>blimp periph</xml>"));
+  it("uses stale cached index and XML when offline", async () => {
+    cache(INDEX_KEY, JSON.stringify(["Plane-4.8", "AP_Periph-4.8"]), "1000");
+    cache("param_meta_github_Plane-4.8", "<xml>cached plane</xml>", "1000");
+    cache("param_meta_github_AP_Periph-4.8", "<xml>cached periph</xml>", "1000");
+    vi.spyOn(Date, "now").mockReturnValue(604_801_000);
+    fetchMock.mockRejectedValue(new Error("offline"));
 
-    await expect(fetchParamMetadataXml("ArduCopter", "   ")).resolves.toBe(mergedXml("<xml>blank generic</xml>", "<xml>blank sitl</xml>", "<xml>blank periph</xml>"));
-    await expect(fetchParamMetadataXml("Blimp", "1.2.3")).resolves.toBe(mergedXml("<xml>blimp generic</xml>", "<xml>blimp sitl</xml>", "<xml>blimp periph</xml>"));
+    await expect(fetchParamMetadataXml("ArduPlane")).resolves.toBe(
+      mergedXml("<xml>cached plane</xml>", "<xml>cached periph</xml>"),
+    );
+    expect(writeStorageRawMock).not.toHaveBeenCalled();
+  });
 
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      1,
-      "https://autotest.ardupilot.org/Parameters/ArduCopter/apm.pdef.xml.gz",
+  it.each([
+    response("not JSON"),
+    response(JSON.stringify({ tree: [] })),
+    response(JSON.stringify({ tree: [{ path: "Plane-4.8", type: "tree" }], truncated: true })),
+    { ok: false, status: 403 } as Response,
+  ])("retains a stale index when GitHub returns an invalid or unavailable index", async (invalidResponse) => {
+    cache(INDEX_KEY, JSON.stringify(["Plane-4.8"]), "1000");
+    vi.spyOn(Date, "now").mockReturnValue(604_801_000);
+    fetchMock.mockResolvedValueOnce(invalidResponse);
+    await expect(fetchParamMetadataXml("ArduPlane")).resolves.toBe("<xml>Plane-4.8</xml>");
+    expect(storage.get(`${INDEX_KEY}_ts`)).toBe("1000");
+  });
+
+  it("keeps requested metadata if the generic index is unavailable", async () => {
+    fetchMock.mockImplementation(async (url: string) =>
+      url === INDEX_URL ? { ok: false, status: 403 } as Response : response("<xml>requested</xml>"),
     );
-    expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
-      "https://autotest.ardupilot.org/Parameters/Blimp/apm.pdef.xml.gz",
-    );
+    await expect(fetchParamMetadataXml("ArduPlane", "4.8.0")).resolves.toBe("<xml>requested</xml>");
+  });
+
+  it("returns null when no source or cache is available", async () => {
+    fetchMock.mockRejectedValue(new Error("offline"));
+    await expect(fetchParamMetadataXml("ArduPlane", "4.8.0")).resolves.toBeNull();
+  });
+
+  it("ignores unrelated repository entries", async () => {
+    fetchMock.mockResolvedValueOnce(response(JSON.stringify({ tree: [
+      null, { path: "README.md", type: "blob" }, { path: "../evil-4.8", type: "tree" },
+      { path: "Plane-4.8", type: "blob" }, { path: "Plane-4.7", type: "tree" },
+    ] })));
+    await expect(fetchParamMetadataXml("ArduPlane")).resolves.toBe("<xml>Plane-4.7</xml>");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

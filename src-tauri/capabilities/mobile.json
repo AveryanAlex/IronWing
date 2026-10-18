@@ -13,7 +13,8 @@
     {
       "identifier": "http:default",
       "allow": [
-        { "url": "https://autotest.ardupilot.org/Parameters/*" },
+        { "url": "https://raw.githubusercontent.com/ArduPilot/ParameterRepository/main/*" },
+        { "url": "https://api.github.com/repos/ArduPilot/ParameterRepository/git/trees/main" },
         { "url": "https://s3.amazonaws.com/elevation-tiles-prod/*" }
       ]
     }
