@@ -286,6 +286,19 @@ export class SetupWorkspacePage {
     const servo = this.page.getByTestId("setup-workspace-output-settings-1");
     await expect(servo).toBeVisible();
     const edits: ParameterEdit[] = [];
+    const rate = this.page.getByRole("spinbutton", { name: "Servo rate", exact: true });
+    await expect(rate).toBeVisible();
+    const currentRate = Number(await rate.inputValue());
+    const minRate = Number(await rate.getAttribute("min"));
+    await rate.fill(String(minRate - 1));
+    await expect(rate).toHaveAttribute("aria-invalid", "true");
+    await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-SERVO_RATE`)).toHaveCount(0);
+    const nextRate = currentRate === 50 ? 100 : 50;
+    await fillAndBlur(rate, String(nextRate));
+    await expect(rate).toHaveValue(String(nextRate));
+    await expect(rate).not.toHaveAttribute("aria-invalid", "true");
+    edits.push({ name: "SERVO_RATE", current: currentRate, next: nextRate });
+
     const mid = servo.getByTestId("setup-workspace-output-mid-1");
     const appliedMid = Number(await mid.inputValue());
     const min = servo.getByTestId("setup-workspace-output-min-1");

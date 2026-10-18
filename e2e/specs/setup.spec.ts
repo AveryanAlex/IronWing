@@ -19,7 +19,7 @@ test("setup workspace opens every section and persists a safe parameter edit", a
   });
 
   let servoEdits: Awaited<ReturnType<typeof app.setup.stageServoOutputEdits>>;
-  await test.step("Tune each servo PWM point and reverse direction from the expanded output list", async () => {
+  await test.step("Set the shared servo rate, tune each PWM point, and reverse direction", async () => {
     servoEdits = await app.setup.stageServoOutputEdits();
   });
 

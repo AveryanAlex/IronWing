@@ -11,7 +11,7 @@ import {
 } from "../../../../features/setup/components/setup-workspace-route-context";
 import SetupSectionShell from "../../../../features/setup/components/SetupSectionShell.svelte";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
-import { SetupNotice, SetupSectionCard } from "../../../../features/setup/shared";
+import { SetupNotice, SetupParamEditCard, SetupSectionCard } from "../../../../features/setup/shared";
 import { stageSetupParameterEdit } from "../../../../features/setup/shared/parameter-editing";
 import { motorNumberForServoFunction } from "../../../../lib/setup/motor-functions";
 import {
@@ -40,6 +40,7 @@ let assignmentPickerOpen = $state(false);
 let selectedFunctionValue = $state<number | null>(null);
 let confirmationOpen = $state(false);
 let pendingPlan = $state<OutputAssignmentPlan | null>(null);
+let servoRateError = $state<string | null>(null);
 
 let view = $derived(viewStore.current);
 let section = $derived(setupRouteSection(view, "outputs"));
@@ -47,6 +48,9 @@ let params = $derived(paramsState.current);
 let session = $derived(sessionState.current);
 let vehicleType = $derived(params.vehicleType ?? session.sessionDomain.value?.vehicle_state?.vehicle_type ?? null);
 let itemIndex = $derived(buildParameterItemIndex(params.paramStore, params.metadata));
+let servoRateItem = $derived(itemIndex.get("SERVO_RATE"));
+let servoRateMin = $derived(servoRateItem?.range?.min ?? 25);
+let servoRateMax = $derived(servoRateItem?.range?.max ?? 400);
 let model = $derived(
   buildOutputMappingModel({
     paramStore: params.paramStore,
@@ -148,6 +152,23 @@ function stagePlan(plan: OutputAssignmentPlan) {
 
 function stageServoSetting(item: ParameterItemModel, value: number) {
   stageSetupParameterEdit(paramsStore, item, value, { actionsBlocked });
+}
+
+function stageServoRate(value: string | number | boolean) {
+  if (!servoRateItem || servoRateItem.readOnly || actionsBlocked) return;
+  const nextValue = Number(value);
+  servoRateError = !Number.isInteger(nextValue)
+    ? "Enter a whole servo rate in Hz."
+    : nextValue < servoRateMin || nextValue > servoRateMax
+      ? `Use ${servoRateMin}–${servoRateMax} Hz.`
+      : null;
+  if (!servoRateError) stageServoSetting(servoRateItem, nextValue);
+}
+
+function unstageServoRate(name: string) {
+  if (actionsBlocked) return;
+  servoRateError = null;
+  paramsStore.discardStagedEdit(name);
 }
 
 function canAddOutput(row: OutputFunctionRow): boolean {
@@ -327,6 +348,39 @@ function verificationHref(row: OutputFunctionRow): string | null {
     {:else if model.topologyMappingLocked}
       <SetupNotice tone="warning">Pending frame or VTOL topology changes lock only their required rows. Independent surfaces and auxiliary functions remain editable.</SetupNotice>
     {/if}
+
+    <SetupSectionCard
+      icon={Cable}
+      title="Output timing"
+      description="Default PWM frequency shared across outputs. Choose a rate supported by the connected servos."
+      surface="elevated"
+    >
+      {#if servoRateItem}
+        <SetupParamEditCard
+          item={servoRateItem}
+          label="Servo rate"
+          value={params.stagedEdits.SERVO_RATE?.nextValue ?? servoRateItem.value}
+          min={servoRateMin}
+          max={servoRateMax}
+          step={1}
+          unit="Hz"
+          disabled={actionsBlocked}
+          invalid={Boolean(servoRateError)}
+          stagedName={params.stagedEdits.SERVO_RATE ? "SERVO_RATE" : undefined}
+          onUnstage={unstageServoRate}
+          inputTestId="setup-workspace-output-servo-rate"
+          onValueChange={stageServoRate}
+        >
+          {#snippet footer()}
+            {#if servoRateError}
+              <p class="text-xs text-danger" role="alert">{servoRateError}</p>
+            {/if}
+          {/snippet}
+        </SetupParamEditCard>
+      {:else}
+        <HelperText>Servo rate · SERVO_RATE parameter unavailable</HelperText>
+      {/if}
+    </SetupSectionCard>
 
     <SetupSectionCard
       id="motor-assignments"
