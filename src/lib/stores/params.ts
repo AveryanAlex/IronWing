@@ -100,6 +100,11 @@ export type ParamsStoreState = {
 
 type SessionReadable = Pick<SessionStore, "subscribe">;
 
+type StagingMutation =
+  | { kind: "stage"; item: ParameterItemModel; nextValue: number }
+  | { kind: "discard"; name: string }
+  | { kind: "clear" };
+
 const APPLY_BATCH_TIMEOUT_MS = 15_000;
 const APPLY_TIMEOUT_MESSAGE = "Parameter apply timed out. Review the retained rows and retry.";
 
@@ -157,6 +162,9 @@ export function createParamsStore(
   let metadataRequestId = 0;
   let applyRequestId = 0;
   let mutationQueue: Promise<void> = Promise.resolve();
+  let pendingMutations: StagingMutation[] = [];
+  let stagingScopeVersion = 0;
+  let stagingSync: Promise<void> | null = null;
 
   function invalidateInFlightApply() {
     applyRequestId += 1;
@@ -177,6 +185,10 @@ export function createParamsStore(
 
     if (envelopeChanged) {
       invalidateInFlightApply();
+      stagingScopeVersion += 1;
+      stagingSync = null;
+      pendingMutations = [];
+      mutationQueue = Promise.resolve();
     }
 
     store.update((state) => {
@@ -220,6 +232,7 @@ export function createParamsStore(
         scopeChangedFromActive ? emptyStagingState() : state.stagingState,
         resolvedStore,
         metadataReload.shouldReload ? null : state.metadata,
+        pendingMutations,
       );
       const nextStagedEdits = projection.stagedEdits;
       const nextRetainedFailures = projection.retainedFailures;
@@ -260,6 +273,14 @@ export function createParamsStore(
     if (metadataReload.shouldReload) {
       void ensureMetadata(vehicleType, firmwareVersion, true);
     }
+    if (envelopeChanged && stopStreams) {
+      const version = stagingScopeVersion;
+      void synchronizeStaging().catch((error) => {
+        if (version === stagingScopeVersion) {
+          store.update((state) => ({ ...state, applyError: service.formatError(error) }));
+        }
+      });
+    }
   }
 
   async function ensureMetadata(vehicleType: string | null, firmwareVersion: string | null = null, forceReload = false) {
@@ -296,7 +317,7 @@ export function createParamsStore(
       }
 
       store.update((state) => {
-        const projection = projectStagingState(state.stagingState, state.paramStore, metadata);
+        const projection = projectStagingState(state.stagingState, state.paramStore, metadata, pendingMutations);
         return {
           ...state,
           metadata,
@@ -408,12 +429,32 @@ export function createParamsStore(
         return state;
       }
 
-      return applyBackendStagingState(state, event.value);
+      return applyBackendStagingState(state, event.value, pendingMutations);
     });
   }
 
   function applyStagingSnapshot(staging: ParamStagingState) {
-    store.update((state) => applyBackendStagingState(state, staging));
+    store.update((state) => applyBackendStagingState(state, staging, pendingMutations));
+  }
+
+  function isCurrentStagingScope(version: number, envelope: SessionEnvelope) {
+    const currentEnvelope = get(store).activeEnvelope;
+    return version === stagingScopeVersion && currentEnvelope !== null && isSameEnvelope(envelope, currentEnvelope);
+  }
+
+  function synchronizeStaging(): Promise<void> {
+    if (stagingSync) return stagingSync;
+    const envelope = get(store).activeEnvelope;
+    if (!envelope || envelope.source_kind !== "live") return Promise.resolve();
+    const version = stagingScopeVersion;
+    const sync = service.stagingSnapshot().then((staging) => {
+      if (isCurrentStagingScope(version, envelope)) applyStagingSnapshot(staging);
+    });
+    stagingSync = sync;
+    void sync.catch(() => {
+      if (stagingSync === sync) stagingSync = null;
+    });
+    return sync;
   }
 
   async function initialize() {
@@ -436,12 +477,7 @@ export function createParamsStore(
           onStaging: applyStagingEvent,
         });
 
-        const snapshotEnvelope = get(store).activeEnvelope;
-        const staging = await service.stagingSnapshot();
-        const currentEnvelope = get(store).activeEnvelope;
-        if (snapshotEnvelope && currentEnvelope && isSameEnvelope(snapshotEnvelope, currentEnvelope)) {
-          applyStagingSnapshot(staging);
-        }
+        await synchronizeStaging();
 
         store.update((state) => ({
           ...state,
@@ -468,76 +504,36 @@ export function createParamsStore(
   }
 
   function stageParameterEdit(item: ParameterItemModel, nextValue: number) {
-    if (!Number.isFinite(nextValue)) {
-      return;
-    }
-
-    store.update((state) => {
-      const currentValue = state.paramStore?.params[item.name]?.value ?? item.value;
-      if (!Number.isFinite(currentValue)) {
-        return state;
-      }
-
-      const stagedEdits = stageParameterEditMap(state.stagedEdits, item, currentValue, nextValue);
-      const retainedFailures = discardRetainedFailureMap(state.retainedFailures, item.name);
-      trackAnalytics("params_edit_staged", {
-        source: "parameter_workspace",
-        staged_count_bucket: countBucket(Object.keys(stagedEdits).length),
-      });
-
-      return {
-        ...state,
-        stagedEdits,
-        retainedFailures,
-        applyPhase: state.applyPhase === "applying" ? state.applyPhase : resolveRetainedApplyPhase(retainedFailures, state.applyPhase),
-        applyError: Object.keys(retainedFailures).length === 0 && state.applyPhase !== "applying" ? null : state.applyError,
-        scopeClearWarning: null,
-      };
+    const currentValue = get(store).paramStore?.params[item.name]?.value ?? item.value;
+    if (!Number.isFinite(nextValue) || !Number.isFinite(currentValue)) return;
+    enqueueMutation({ kind: "stage", item, nextValue });
+    trackAnalytics("params_edit_staged", {
+      source: "parameter_workspace",
+      staged_count_bucket: countBucket(Object.keys(get(store).stagedEdits).length),
     });
-
-    enqueueMutation((revision) => service.stage([{
-        name: item.name,
-        value: nextValue,
-        reboot_required: item.rebootRequired,
-      }], revision));
   }
 
   function discardStagedEdit(name: string) {
-    store.update((state) => {
-      const stagedEdits = discardStagedEditMap(state.stagedEdits, name);
-      const retainedFailures = discardRetainedFailureMap(state.retainedFailures, name);
-      const hasRemainingRows = Object.keys(stagedEdits).length > 0;
-
-      return {
-        ...state,
-        stagedEdits,
-        retainedFailures,
-        applyPhase: state.applyPhase === "applying"
-          ? state.applyPhase
-          : hasRemainingRows
-            ? resolveRetainedApplyPhase(retainedFailures, state.applyPhase)
-            : "idle",
-        applyError: hasRemainingRows ? state.applyError : null,
-        applyProgress: hasRemainingRows ? state.applyProgress : null,
-      };
-    });
-    enqueueMutation((revision) => service.discard([name], revision));
+    enqueueMutation({ kind: "discard", name });
   }
 
   function clearStagedEdits() {
-    store.update((state) => ({
-      ...state,
-      stagedEdits: clearStagedEditsMap(state.stagedEdits),
-      retainedFailures: {},
-      applyPhase: "idle",
-      applyError: null,
-      applyProgress: null,
-    }));
-    enqueueMutation((revision) => service.clear(revision));
+    enqueueMutation({ kind: "clear" });
+  }
+
+  async function flushMutations() {
+    // New edits may be queued while an earlier IPC request is still pending.
+    let queued: Promise<void>;
+    do {
+      queued = mutationQueue;
+      await queued;
+    } while (queued !== mutationQueue);
   }
 
   async function applyStagedEdits(targetNames?: string[]) {
-    await mutationQueue;
+    const version = stagingScopeVersion;
+    await flushMutations();
+    if (version !== stagingScopeVersion) return;
     const state = get(store);
     if (!state.activeEnvelope || state.applyPhase === "applying") {
       return;
@@ -605,13 +601,13 @@ export function createParamsStore(
       });
       try {
         const staging = await service.stagingSnapshot();
-        const currentEnvelope = get(store).activeEnvelope;
-        if (currentEnvelope && isSameEnvelope(requestEnvelope, currentEnvelope)) {
+        if (isCurrentApplyRequest(requestId, requestEnvelope)) {
           applyStagingSnapshot(staging);
         }
       } catch {
         // Preserve the local review rows when the authoritative snapshot is unavailable.
       }
+      if (!isCurrentApplyRequest(requestId, requestEnvelope)) return;
       store.update((current) => {
         if (!current.activeEnvelope || !isSameEnvelope(current.activeEnvelope, requestEnvelope)) {
           return current;
@@ -642,49 +638,72 @@ export function createParamsStore(
     }
   }
 
-  function enqueueMutation(operation: (revision: number) => Promise<ParamStagingState>) {
+  function sendMutation(mutation: StagingMutation, revision: number): Promise<ParamStagingState> {
+    switch (mutation.kind) {
+      case "stage":
+        return service.stage([{
+          name: mutation.item.name,
+          value: mutation.nextValue,
+          reboot_required: mutation.item.rebootRequired,
+        }], revision);
+      case "discard":
+        return service.discard([mutation.name], revision);
+      case "clear":
+        return service.clear(revision);
+    }
+  }
+
+  function enqueueMutation(mutation: StagingMutation) {
     const requestEnvelope = get(store).activeEnvelope;
+    if (!requestEnvelope) return;
+    const version = stagingScopeVersion;
+    pendingMutations = [...pendingMutations, mutation];
+    store.update((state) => applyBackendStagingState(state, state.stagingState, pendingMutations));
+
     mutationQueue = mutationQueue.then(async () => {
-      const state = get(store);
-      if (!requestEnvelope || !state.activeEnvelope || !isSameEnvelope(requestEnvelope, state.activeEnvelope)) {
-        return;
-      }
+      if (!isCurrentStagingScope(version, requestEnvelope)) return;
       try {
-        const staging = await operation(state.stagingRevision);
-        const currentEnvelope = get(store).activeEnvelope;
-        if (currentEnvelope && isSameEnvelope(requestEnvelope, currentEnvelope)) {
-          applyStagingSnapshot(staging);
-        }
+        // Backend resets advance the revision. Never send an edit against a guessed revision of zero.
+        await synchronizeStaging();
+        if (!isCurrentStagingScope(version, requestEnvelope)) return;
+        const staging = await sendMutation(mutation, get(store).stagingRevision);
+        if (!isCurrentStagingScope(version, requestEnvelope)) return;
+        pendingMutations = pendingMutations.filter((pending) => pending !== mutation);
+        // A newer event may have arrived before this command response.
+        store.update((state) => applyBackendStagingState(
+          state,
+          staging.revision < state.stagingRevision ? state.stagingState : staging,
+          pendingMutations,
+        ));
       } catch (error) {
+        if (!isCurrentStagingScope(version, requestEnvelope)) return;
         const message = service.formatError(error);
+        pendingMutations = pendingMutations.filter((pending) => pending !== mutation);
+        stagingSync = null;
         try {
-          const staging = await service.stagingSnapshot();
-          const currentEnvelope = get(store).activeEnvelope;
-          if (currentEnvelope && isSameEnvelope(requestEnvelope, currentEnvelope)) {
-            applyStagingSnapshot(staging);
-          }
+          await synchronizeStaging();
         } catch {
-          // The mutation failure is still useful even if a resync cannot be loaded.
+          // Keep the last authoritative state and queued UI intents if resynchronization fails.
         }
-        store.update((current) => {
-          if (!current.activeEnvelope || !isSameEnvelope(requestEnvelope, current.activeEnvelope)) {
-            return current;
-          }
-          return { ...current, applyError: message };
-        });
+        if (!isCurrentStagingScope(version, requestEnvelope)) return;
+        store.update((state) => ({
+          ...applyBackendStagingState(state, state.stagingState, pendingMutations),
+          applyError: message,
+        }));
       }
     });
   }
 
   async function resetRebootCheckpoint() {
-    await mutationQueue;
+    const version = stagingScopeVersion;
+    await flushMutations();
+    if (version !== stagingScopeVersion) return;
     const requestEnvelope = get(store).activeEnvelope;
     if (!requestEnvelope) {
       return;
     }
     const staging = await service.resetRebootCheckpoint();
-    const currentEnvelope = get(store).activeEnvelope;
-    if (currentEnvelope && isSameEnvelope(requestEnvelope, currentEnvelope)) {
+    if (isCurrentStagingScope(version, requestEnvelope)) {
       applyStagingSnapshot(staging);
     }
   }
@@ -701,6 +720,9 @@ export function createParamsStore(
     lastBootstrapStoreRef = null;
     lastBootstrapProgressRef = null;
     mutationQueue = Promise.resolve();
+    pendingMutations = [];
+    stagingScopeVersion += 1;
+    stagingSync = null;
     store.set(createInitialState());
   }
 
@@ -754,8 +776,10 @@ export const parameterWorkspaceView = createParameterWorkspaceViewStore(params);
 function applyBackendStagingState(
   state: ParamsStoreState,
   stagingState: ParamStagingState,
+  pendingMutations: readonly StagingMutation[],
 ): ParamsStoreState {
-  const projection = projectStagingState(stagingState, state.paramStore, state.metadata);
+  if (stagingState.revision < state.stagingRevision) return state;
+  const projection = projectStagingState(stagingState, state.paramStore, state.metadata, pendingMutations);
   return {
     ...state,
     stagingState,
@@ -774,7 +798,7 @@ function applyBackendStagingState(
         activeName: null,
       }
       : null,
-    scopeClearWarning: null,
+    scopeClearWarning: stagingState.edits.length > 0 || pendingMutations.length > 0 ? null : state.scopeClearWarning,
   };
 }
 
@@ -782,14 +806,15 @@ function projectStagingState(
   stagingState: ParamStagingState,
   paramStore: ParamStore | null,
   metadata: ParamMetadataMap | null,
+  pendingMutations: readonly StagingMutation[],
 ): {
   stagedEdits: Record<string, StagedParameterEdit>;
   retainedFailures: Record<string, RetainedParameterFailure>;
   applyPhase: ParamsApplyPhase;
 } {
   const items = buildParameterItemIndex(paramStore, metadata);
-  const stagedEdits: Record<string, StagedParameterEdit> = {};
-  const retainedFailures: Record<string, RetainedParameterFailure> = {};
+  let stagedEdits: Record<string, StagedParameterEdit> = {};
+  let retainedFailures: Record<string, RetainedParameterFailure> = {};
 
   for (const edit of stagingState.edits) {
     if (
@@ -826,9 +851,30 @@ function projectStagingState(
     }
   }
 
-  const applyPhase: ParamsApplyPhase = stagingState.apply_phase === "partial_failure"
+  let applyPhase: ParamsApplyPhase = stagingState.apply_phase === "partial_failure"
     ? "partial-failure"
     : stagingState.apply_phase;
+  // The backend owns confirmed staging; unacknowledged UI intents remain layered on top.
+  for (const mutation of pendingMutations) {
+    switch (mutation.kind) {
+      case "stage": {
+        const item = items.get(mutation.item.name) ?? mutation.item;
+        const currentValue = paramStore?.params[item.name]?.value ?? item.value;
+        stagedEdits = stageParameterEditMap(stagedEdits, item, currentValue, mutation.nextValue);
+        retainedFailures = discardRetainedFailureMap(retainedFailures, item.name);
+        break;
+      }
+      case "discard":
+        stagedEdits = discardStagedEditMap(stagedEdits, mutation.name);
+        retainedFailures = discardRetainedFailureMap(retainedFailures, mutation.name);
+        break;
+      case "clear":
+        stagedEdits = clearStagedEditsMap(stagedEdits);
+        retainedFailures = {};
+        break;
+    }
+    if (applyPhase !== "applying") applyPhase = resolveRetainedApplyPhase(retainedFailures, applyPhase);
+  }
   return { stagedEdits, retainedFailures, applyPhase };
 }
 

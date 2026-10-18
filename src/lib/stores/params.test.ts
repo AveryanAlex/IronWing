@@ -67,6 +67,17 @@ function createParamStore(overrides: Partial<ParamStore> = {}): ParamStore {
   };
 }
 
+function createStagingState(revision: number, edits: Record<string, number> = {}): ParamStagingState {
+  return {
+    revision,
+    edits: Object.entries(edits).map(([name, value]) => ({
+      name, base_value: 1, staged_value: value, reboot_required: false, origin: "agent", failure: null,
+    })),
+    apply_phase: "idle",
+    pending_reboot_ids: [],
+  };
+}
+
 function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessionSnapshot {
   return {
     envelope: createEnvelope("session-1"),
@@ -239,6 +250,12 @@ function createParamsService(
     pending_reboot_ids: [],
   };
   const { writeBatch, ...serviceOverrides } = overrides;
+  const confirmedValues = new Map(Object.values(createParamStore().params).map((param) => [param.name, param.value]));
+  function guardRevision(expectedRevision: number | null) {
+    if (expectedRevision !== null && expectedRevision !== stagingState.revision) {
+      throw new Error(`staging revision conflict: expected ${expectedRevision}, current ${stagingState.revision}`);
+    }
+  }
 
   const service = {
     subscribeAll: vi.fn(async (nextHandlers: ParamsServiceEventHandlers) => {
@@ -251,11 +268,12 @@ function createParamsService(
     downloadAll: vi.fn(async () => undefined),
     cancelDownload: vi.fn(async () => undefined),
     stagingSnapshot: vi.fn(async () => structuredClone(stagingState)),
-    stage: vi.fn(async (changes: ParamStageChange[]) => {
+    stage: vi.fn(async (changes: ParamStageChange[], expectedRevision: number | null) => {
+      guardRevision(expectedRevision);
       const edits = new Map(stagingState.edits.map((edit) => [edit.name, edit]));
       for (const change of changes) {
         const existing = edits.get(change.name);
-        const baseValue = existing?.base_value ?? 1;
+        const baseValue = existing?.base_value ?? confirmedValues.get(change.name) ?? 1;
         if (change.value === baseValue) {
           edits.delete(change.name);
         } else {
@@ -272,7 +290,8 @@ function createParamsService(
       stagingState = { ...stagingState, revision: stagingState.revision + 1, edits: [...edits.values()] };
       return structuredClone(stagingState);
     }),
-    discard: vi.fn(async (names: string[]) => {
+    discard: vi.fn(async (names: string[], expectedRevision: number | null) => {
+      guardRevision(expectedRevision);
       const discarded = new Set(names);
       stagingState = {
         ...stagingState,
@@ -281,11 +300,13 @@ function createParamsService(
       };
       return structuredClone(stagingState);
     }),
-    clear: vi.fn(async () => {
+    clear: vi.fn(async (expectedRevision: number | null) => {
+      guardRevision(expectedRevision);
       stagingState = { ...stagingState, revision: stagingState.revision + 1, edits: [] };
       return structuredClone(stagingState);
     }),
-    apply: vi.fn(async (names: string[] | null) => {
+    apply: vi.fn(async (names: string[] | null, expectedRevision: number | null) => {
+      guardRevision(expectedRevision);
       const selected = new Set(names ?? stagingState.edits.map((edit) => edit.name));
       const requested = stagingState.edits.filter((edit) => selected.has(edit.name));
       const results = writeBatch
@@ -297,6 +318,9 @@ function createParamsService(
           success: true,
         }));
       const successful = new Set(results.filter((result) => result.success).map((result) => result.name));
+      for (const result of results) {
+        if (result.success) confirmedValues.set(result.name, result.confirmed_value);
+      }
       const returned = new Set(results.map((result) => result.name));
       const pendingReboot = requested
         .filter((edit) => successful.has(edit.name) && edit.reboot_required === true && edit.name !== "FORMAT_VERSION")
@@ -333,6 +357,13 @@ function createParamsService(
 
   return {
     service,
+    setBackendStaging(value: ParamStagingState) {
+      stagingState = structuredClone(value);
+    },
+    deliverStaging(envelope: SessionEnvelope, value: ParamStagingState) {
+      if (!handlers) throw new Error("param handlers are not registered");
+      handlers.onStaging({ envelope, value });
+    },
     emitStore(envelope: SessionEnvelope, value: ParamStore) {
       if (!handlers) {
         throw new Error("param handlers are not registered");
@@ -566,6 +597,225 @@ describe("createParamsStore", () => {
     const state = get(paramStore);
     expect(state.stagingRevision).toBe(4);
     expect(state.stagedEdits.ARMING_CHECK?.nextValue).toBe(3);
+  });
+
+  it("accepts the first UI edit after connecting and again after apply and reconnect", async () => {
+    const snapshots = ["startup", "connected", "reconnected"].map((id) => createSnapshot({ envelope: createEnvelope(id) }));
+    const { service: sessionService } = createSessionService(snapshots);
+    const harness = createParamsService(null);
+    const sessionStore = createSessionStore(sessionService);
+    const store = createParamsStore(sessionStore, harness.service);
+    await sessionStore.initialize();
+    await store.initialize();
+
+    for (const revision of [1, 5]) {
+      harness.setBackendStaging(createStagingState(revision));
+      await sessionStore.bootstrapSource("live");
+      const item = get(createParameterWorkspaceViewStore(store)).sections[0].items.find((item) => item.name === "ARMING_CHECK")!;
+      store.stageParameterEdit(item, revision + 2);
+      await store.applyStagedEdits();
+
+      expect(harness.service.stage).toHaveBeenLastCalledWith([
+        { name: "ARMING_CHECK", value: revision + 2, reboot_required: false },
+      ], revision);
+      expect(get(store).paramStore?.params.ARMING_CHECK.value).toBe(revision + 2);
+      expect(get(store).applyError).toBeNull();
+      expect(get(store).stagedEdits).toEqual({});
+    }
+  });
+
+  it("ignores delayed pre-apply staging events so the next edit succeeds on the first attempt", async () => {
+    const snapshot = createSnapshot();
+    const { service: sessionService } = createSessionService([snapshot]);
+    const harness = createParamsService(null);
+    const sessionStore = createSessionStore(sessionService);
+    const store = createParamsStore(sessionStore, harness.service);
+    await sessionStore.initialize();
+    await store.initialize();
+    const item = get(createParameterWorkspaceViewStore(store)).sections[0].items.find((item) => item.name === "ARMING_CHECK")!;
+    store.stageParameterEdit(item, 3);
+    await store.applyStagedEdits();
+    const revision = get(store).stagingRevision;
+
+    harness.deliverStaging(snapshot.envelope, createStagingState(revision - 2, { ARMING_CHECK: 3 }));
+    expect(get(store).stagingRevision).toBe(revision);
+    expect(get(store).stagedEdits).toEqual({});
+    store.stageParameterEdit(item, 4);
+    await store.applyStagedEdits();
+    expect(get(store).paramStore?.params.ARMING_CHECK.value).toBe(4);
+    expect(get(store).applyError).toBeNull();
+  });
+
+  it("does not let an older bootstrap staging snapshot replace a newer agent event", async () => {
+    const snapshot = createSnapshot();
+    const pendingSnapshot = deferred<ParamStagingState>();
+    const { service: sessionService } = createSessionService([snapshot]);
+    const harness = createParamsService(null, { stagingSnapshot: vi.fn(() => pendingSnapshot.promise) });
+    const sessionStore = createSessionStore(sessionService);
+    const store = createParamsStore(sessionStore, harness.service);
+    await sessionStore.initialize();
+    const initialize = store.initialize();
+    await flush();
+    harness.emitStaging(snapshot.envelope, createStagingState(4, { ARMING_CHECK: 3 }));
+    pendingSnapshot.resolve(createStagingState(0));
+    await initialize;
+
+    expect(get(store).stagingRevision).toBe(4);
+    expect(get(store).stagedEdits.ARMING_CHECK?.nextValue).toBe(3);
+  });
+
+  it("preserves the newest UI edit while an earlier edit is being acknowledged", async () => {
+    const snapshot = createSnapshot();
+    const pendingStage = deferred<ParamStagingState>();
+    const { service: sessionService } = createSessionService([snapshot]);
+    const harness = createParamsService(null);
+    harness.service.stage.mockImplementationOnce(() => pendingStage.promise);
+    const sessionStore = createSessionStore(sessionService);
+    const store = createParamsStore(sessionStore, harness.service);
+    await sessionStore.initialize();
+    await store.initialize();
+    const item = get(createParameterWorkspaceViewStore(store)).sections[0].items.find((item) => item.name === "ARMING_CHECK")!;
+
+    store.stageParameterEdit(item, 3);
+    await flush();
+    store.stageParameterEdit(item, 4);
+    const observedValues: (number | undefined)[] = [];
+    const stop = store.subscribe((state) => observedValues.push(state.stagedEdits.ARMING_CHECK?.nextValue));
+    const acknowledged = createStagingState(1, { ARMING_CHECK: 3 });
+    harness.emitStaging(snapshot.envelope, acknowledged);
+    pendingStage.resolve(acknowledged);
+    await store.applyStagedEdits();
+    stop();
+
+    // Only successful apply may remove the pending value; the earlier acknowledgement must never restore 3.
+    expect(observedValues).not.toContain(3);
+    expect(get(store).paramStore?.params.ARMING_CHECK.value).toBe(4);
+    expect(get(store).applyError).toBeNull();
+  });
+
+  it("keeps a pending UI edit visible when firmware metadata finishes loading", async () => {
+    const pendingMetadata = deferred<ParamMetadataMap | null>();
+    const pendingStage = deferred<ParamStagingState>();
+    const { service: sessionService } = createSessionService([createSnapshot()]);
+    const harness = createParamsService(null, {
+      fetchMetadata: vi.fn(() => pendingMetadata.promise),
+      stage: vi.fn(() => pendingStage.promise),
+    });
+    const sessionStore = createSessionStore(sessionService);
+    const store = createParamsStore(sessionStore, harness.service);
+    await sessionStore.initialize();
+    await store.initialize();
+    const item = get(createParameterWorkspaceViewStore(store)).sections[0].items.find((item) => item.name === "ARMING_CHECK")!;
+    store.stageParameterEdit(item, 3);
+    pendingMetadata.resolve(new Map([["ARMING_CHECK", { humanName: "Arming checks", description: "" }]]));
+    await waitForMetadata(store);
+    expect(get(store).stagedEdits.ARMING_CHECK?.nextValue).toBe(3);
+    pendingStage.resolve(createStagingState(1, { ARMING_CHECK: 3 }));
+    await flush();
+  });
+
+  it("waits for the new session's staging snapshot before sending a queued first edit", async () => {
+    const pendingSnapshot = deferred<ParamStagingState>();
+    const { service: sessionService } = createSessionService([
+      createSnapshot(), createSnapshot({ envelope: createEnvelope("connected") }),
+    ]);
+    const harness = createParamsService(null);
+    const sessionStore = createSessionStore(sessionService);
+    const store = createParamsStore(sessionStore, harness.service);
+    await sessionStore.initialize();
+    await store.initialize();
+    harness.setBackendStaging(createStagingState(5));
+    harness.service.stagingSnapshot.mockImplementationOnce(() => pendingSnapshot.promise);
+    await sessionStore.bootstrapSource("live");
+    const item = get(createParameterWorkspaceViewStore(store)).sections[0].items.find((item) => item.name === "ARMING_CHECK")!;
+    store.stageParameterEdit(item, 3);
+    const apply = store.applyStagedEdits();
+    await flush();
+    expect(harness.service.stage).not.toHaveBeenCalled();
+    expect(get(store).stagedEdits.ARMING_CHECK?.nextValue).toBe(3);
+
+    pendingSnapshot.resolve(createStagingState(5));
+    await apply;
+    expect(harness.service.stage).toHaveBeenCalledWith(expect.any(Array), 5);
+    expect(get(store).paramStore?.params.ARMING_CHECK.value).toBe(3);
+  });
+
+  it.each(["discard", "clear"] as const)("does not resurrect a queued %s when an earlier stage is acknowledged", async (action) => {
+    const snapshot = createSnapshot();
+    const pendingStage = deferred<ParamStagingState>();
+    const { service: sessionService } = createSessionService([snapshot]);
+    const harness = createParamsService(null);
+    harness.service.stage.mockImplementationOnce(() => pendingStage.promise);
+    const sessionStore = createSessionStore(sessionService);
+    const store = createParamsStore(sessionStore, harness.service);
+    await sessionStore.initialize();
+    await store.initialize();
+    const item = get(createParameterWorkspaceViewStore(store)).sections[0].items.find((item) => item.name === "ARMING_CHECK")!;
+    store.stageParameterEdit(item, 3);
+    await flush();
+    if (action === "discard") store.discardStagedEdit("ARMING_CHECK");
+    else store.clearStagedEdits();
+    const observed: string[][] = [];
+    const stop = store.subscribe((state) => observed.push(Object.keys(state.stagedEdits)));
+    const acknowledged = createStagingState(1, { ARMING_CHECK: 3 });
+    harness.emitStaging(snapshot.envelope, acknowledged);
+    pendingStage.resolve(acknowledged);
+    await store.applyStagedEdits();
+    stop();
+    expect(observed.every((names) => names.length === 0)).toBe(true);
+    expect(harness.service.apply).not.toHaveBeenCalled();
+    expect(get(store).applyError).toBeNull();
+  });
+
+  it("ignores a staging snapshot that finishes after another session has already been synchronized", async () => {
+    const pendingSnapshot = deferred<ParamStagingState>();
+    const snapshots = ["startup", "old", "new"].map((id) => createSnapshot({ envelope: createEnvelope(id) }));
+    const { service: sessionService } = createSessionService(snapshots);
+    const harness = createParamsService(null);
+    const sessionStore = createSessionStore(sessionService);
+    const store = createParamsStore(sessionStore, harness.service);
+    await sessionStore.initialize();
+    await store.initialize();
+    harness.service.stagingSnapshot.mockImplementationOnce(() => pendingSnapshot.promise);
+    await sessionStore.bootstrapSource("live");
+    harness.setBackendStaging(createStagingState(5));
+    await sessionStore.bootstrapSource("live");
+    const item = get(createParameterWorkspaceViewStore(store)).sections[0].items.find((item) => item.name === "ARMING_CHECK")!;
+    store.stageParameterEdit(item, 3);
+    await store.applyStagedEdits();
+    const revision = get(store).stagingRevision;
+
+    pendingSnapshot.resolve(createStagingState(99, { ARMING_CHECK: 8 }));
+    await flush();
+    expect(get(store).stagingRevision).toBe(revision);
+    expect(get(store).stagedEdits).toEqual({});
+    expect(get(store).paramStore?.params.ARMING_CHECK.value).toBe(3);
+  });
+
+  it("reports a real agent revision conflict without retrying over the agent's edit and continues queued UI work", async () => {
+    const { service: sessionService } = createSessionService([createSnapshot()]);
+    const harness = createParamsService(null);
+    const sessionStore = createSessionStore(sessionService);
+    const store = createParamsStore(sessionStore, harness.service);
+    await sessionStore.initialize();
+    await store.initialize();
+    // Agent mutation reaches the backend before its event reaches this UI.
+    harness.setBackendStaging(createStagingState(4, { ARMING_CHECK: 5 }));
+    const items = get(createParameterWorkspaceViewStore(store)).sections.flatMap((section) => section.items);
+    const errors: (string | null)[] = [];
+    const stop = store.subscribe((state) => errors.push(state.applyError));
+    store.stageParameterEdit(items.find((item) => item.name === "ARMING_CHECK")!, 3);
+    store.stageParameterEdit(items.find((item) => item.name === "CRUISE_SPEED")!, 15);
+    await store.applyStagedEdits(["CRUISE_SPEED"]);
+    stop();
+
+    expect(errors).toContain("staging revision conflict: expected 0, current 4");
+    expect(harness.service.stage).toHaveBeenCalledTimes(2);
+    expect(harness.service.stage).toHaveBeenLastCalledWith([
+      { name: "CRUISE_SPEED", value: 15, reboot_required: false },
+    ], 4);
+    expect(get(store).stagedEdits.ARMING_CHECK).toMatchObject({ nextValue: 5, origin: "agent" });
+    expect(get(store).paramStore?.params.CRUISE_SPEED.value).toBe(15);
   });
 
   it("loads metadata when a vehicle type arrives later on the same session envelope", async () => {
@@ -1074,7 +1324,8 @@ describe("createParamsStore", () => {
     paramStore.stageParameterEdit(item!, 3);
 
     const applyPromise = paramStore.applyStagedEdits();
-    await flush();
+    await vi.waitFor(() => expect(paramsHarness.service.apply).toHaveBeenCalledOnce());
+    paramsHarness.setBackendStaging(createStagingState(get(paramStore).stagingRevision + 1));
     await sessionStore.bootstrapSource("live");
     await flush();
 
