@@ -48,7 +48,7 @@ export type Telemetry = {
   height_above_terrain_m?: number;
 
   // BATTERY_STATUS
-  battery_voltage_cells?: PwmChannelSamples;
+  battery_voltage_cells?: number[];
   energy_consumed_wh?: number;
   battery_time_remaining_s?: number;
 

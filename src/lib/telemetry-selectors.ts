@@ -243,7 +243,7 @@ export function selectTelemetryView(domain: DomainValue<TelemetryState> | null |
         battery_pct: state?.power?.battery_pct ?? undefined,
         battery_voltage_v: state?.power?.battery_voltage_v ?? undefined,
         battery_current_a: state?.power?.battery_current_a ?? undefined,
-        battery_voltage_cells: state?.power?.battery_voltage_cells ?? undefined,
+        battery_voltage_cells: state?.power?.battery_voltage_cells?.filter((value): value is number => value !== null) ?? undefined,
         battery_time_remaining_s: state?.power?.battery_time_remaining_s ?? undefined,
         energy_consumed_wh: state?.power?.energy_consumed_wh ?? undefined,
         gps_fix_type: state?.gps?.fix_type ?? undefined,
