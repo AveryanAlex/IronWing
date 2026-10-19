@@ -1,4 +1,5 @@
 <script lang="ts">
+import { sameNumericValue as sameParameterValue } from "../../../lib/params/numeric-editing";
 import { RotateCcw, Search, SlidersHorizontal } from "lucide-svelte";
 
 import { Badge, Button, EmptyState, HelperText, Input, NativeSelect, NumberInput, SelectableCard, StagedBadge } from "../../../components/ui";
@@ -84,10 +85,6 @@ function resolveDraftNumber(value: string): number | null {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function sameParameterValue(left: number, right: number, increment: number | null): boolean {
-  return Math.abs(left - right) <= Math.max(1e-6, (increment ?? 1) * 0.001);
 }
 
 function setDraft(value: string) {

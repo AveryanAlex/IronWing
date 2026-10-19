@@ -1,3 +1,5 @@
+import { normalizeNumericDraft, resolveNumericEditState, type NumericEditState } from "../params/numeric-editing";
+import { resolveParameterValue } from "../params/parameter-values";
 import type { StagedParameterValues } from "../params/parameter-values";
 import type { ParamMeta } from "../../param-metadata";
 import type { ParameterItemModel } from "../params/parameter-item-model";
@@ -20,6 +22,7 @@ export type RcReceiverSettingSpec = {
   kind: "number" | "bitmask";
   fallbackRange?: { min: number; max: number };
   fallbackIncrement: number;
+  specialValues?: readonly number[];
 };
 
 export type RcReceiverSetting = RcReceiverSettingSpec & {
@@ -31,13 +34,7 @@ export type RcReceiverBitmaskOption = {
   label: string;
 };
 
-export type RcReceiverSettingEditState = {
-  draftValue: number;
-  staged: boolean;
-  changed: boolean;
-  locallyEdited: boolean;
-  pendingStage: boolean;
-};
+export type RcReceiverSettingEditState = NumericEditState;
 
 export const RC_RECEIVER_SETTING_SPECS: readonly RcReceiverSettingSpec[] = [
   {
@@ -51,6 +48,7 @@ export const RC_RECEIVER_SETTING_SPECS: readonly RcReceiverSettingSpec[] = [
   },
   {
     name: "RC_OVERRIDE_TIME",
+    specialValues: [-1],
     label: "MAVLink override timeout",
     description: "Seconds before MAVLink RC overrides expire and receiver input resumes. Use 0 to disable overrides; -1 keeps overrides active until disabled.",
     level: "Advanced",
@@ -181,34 +179,10 @@ export function resolveRcReceiverSettingDraftValue(
   stagedEdits: RcReceiverSettingsStagedEdits,
   draftOverrides: Readonly<Record<string, number>>,
 ): number {
-  const draftValue = draftOverrides[item.name];
-  if (typeof draftValue === "number" && Number.isFinite(draftValue)) {
-    return draftValue;
-  }
-
-  const stagedValue = stagedEdits[item.name]?.nextValue;
-  return typeof stagedValue === "number" && Number.isFinite(stagedValue) ? stagedValue : item.value;
+  return resolveParameterValue(item.value, stagedEdits[item.name], draftOverrides[item.name]) ?? item.value;
 }
 
-export function resolveRcReceiverSettingEditState(
-  item: ParameterItemModel,
-  stagedEdits: RcReceiverSettingsStagedEdits,
-  draftOverrides: Readonly<Record<string, number>>,
-): RcReceiverSettingEditState {
-  const draftValue = resolveRcReceiverSettingDraftValue(item, stagedEdits, draftOverrides);
-  const stagedValue = stagedEdits[item.name]?.nextValue;
-  const staged = typeof stagedValue === "number" && Number.isFinite(stagedValue);
-  const locallyEdited = Object.prototype.hasOwnProperty.call(draftOverrides, item.name);
-  const baselineValue = staged ? stagedValue : item.value;
-
-  return {
-    draftValue,
-    staged,
-    changed: !sameRcReceiverSettingValue(draftValue, item.value, item.increment),
-    locallyEdited,
-    pendingStage: locallyEdited && !sameRcReceiverSettingValue(draftValue, baselineValue, item.increment),
-  };
-}
+export const resolveRcReceiverSettingEditState = resolveNumericEditState;
 
 export function resolveRcReceiverNumericConfig(item: ParameterItemModel): {
   range: { min: number; max: number } | null;
@@ -222,37 +196,11 @@ export function resolveRcReceiverNumericConfig(item: ParameterItemModel): {
 }
 
 export function clampRcReceiverSettingDraftValue(item: ParameterItemModel, value: number): number {
-  if (!Number.isFinite(value)) {
-    return item.value;
-  }
-
-  if (item.name === "RC_OVERRIDE_TIME" && value === -1) {
-    return -1;
-  }
-
-  const config = resolveRcReceiverNumericConfig(item);
-  const min = config.range?.min ?? Number.NEGATIVE_INFINITY;
-  const max = config.range?.max ?? Number.POSITIVE_INFINITY;
-  const clamped = clampNumber(value, min, max);
-  const rounded = roundToIncrement(clamped, config.increment);
-  return clampNumber(rounded, min, max);
+  const spec = RC_RECEIVER_SETTING_SPECS.find((entry) => entry.name === item.name);
+  return normalizeNumericDraft({ ...resolveRcReceiverNumericConfig(item), specialValues: spec?.specialValues }, value, item.value);
 }
 
 export function isRcReceiverSettingOutsideRange(item: ParameterItemModel, value: number): boolean {
   const range = resolveRcReceiverNumericConfig(item).range;
   return Boolean(range && (value < range.min || value > range.max));
-}
-
-function sameRcReceiverSettingValue(left: number, right: number, increment: number | null): boolean {
-  return Math.abs(left - right) <= Math.max(1e-6, (increment ?? 1) * 0.001);
-}
-
-function clampNumber(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
-
-function roundToIncrement(value: number, increment: number): number {
-  const rounded = Math.round(value / increment) * increment;
-  const decimals = Math.max(0, Math.min(8, Math.ceil(-Math.log10(increment)) + 2));
-  return Number(rounded.toFixed(decimals));
 }

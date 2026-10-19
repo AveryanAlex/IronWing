@@ -1,3 +1,5 @@
+import { normalizeNumericDraft } from "../params/numeric-editing";
+export { clampParameterDraft as clampParameterDraft } from "../params/numeric-editing";
 import type { ParameterItemModel } from "../params/parameter-item-model";
 import type { RcInputRole, RcNormalizationMode } from "./rc-input-normalization";
 import {
@@ -6,7 +8,6 @@ import {
   cubicRateCurve,
   formatRateValue,
   linearRateCurve,
-  roundToIncrement,
   sampleRateCurve,
   type RateCurvePoint,
 } from "./rate-curves";
@@ -93,11 +94,6 @@ export function discoverRateCurveModels(ctx: RateCurveBuildContext): RateCurveMo
     .map((adapter) => adapter.buildModel(ctx));
 }
 
-export function clampParameterDraft(item: ParameterItemModel, value: number): number {
-  const min = item.range?.min ?? -Number.MAX_SAFE_INTEGER;
-  const max = item.range?.max ?? Number.MAX_SAFE_INTEGER;
-  return roundToIncrement(clampNumber(value, min, max), item.increment);
-}
 
 function hasAll(itemIndex: ReadonlyMap<string, ParameterItemModel>, names: readonly string[]): boolean {
   return names.every((name) => itemIndex.has(name));
@@ -125,7 +121,7 @@ function control(
   const min = item.range?.min ?? input.fallbackMin;
   const max = item.range?.max ?? input.fallbackMax;
   const step = item.increment ?? input.fallbackStep;
-  const draftValue = clampNumber(roundToIncrement(ctx.getDraftValue(name, item), step), min, max);
+  const draftValue = normalizeNumericDraft({ range: { min, max }, increment: step }, ctx.getDraftValue(name, item), item.value);
 
   return {
     name,

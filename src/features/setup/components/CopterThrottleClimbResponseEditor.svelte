@@ -1,4 +1,5 @@
 <script lang="ts">
+import { normalizeNumericDraft } from "../../../lib/params/numeric-editing";
 import { CircleDot, Gauge, RotateCcw } from "lucide-svelte";
 
 import { Button, Card, EmptyState, Eyebrow, HelperText, MonoValue } from "../../../components/ui";
@@ -12,7 +13,7 @@ import {
   sampleCopterThrottleResponse,
   type CopterThrottleResponsePoint,
 } from "../../../lib/setup/copter-throttle-response";
-import { clampNumber, roundToIncrement } from "../../../lib/setup/rate-curves";
+import { clampNumber } from "../../../lib/setup/rate-curves";
 import type { RcChannelSample } from "../../../lib/setup/rc-input-normalization";
 import SetupParamEditCard from "../shared/SetupParamEditCard.svelte";
 import SetupParamEditGrid from "../shared/SetupParamEditGrid.svelte";
@@ -214,7 +215,7 @@ function resetDraft() {
 }
 
 function clampParameterDraft(value: number, min: number, max: number, step: number): number {
-  return clampNumber(roundToIncrement(clampNumber(value, min, max), step), min, max);
+  return normalizeNumericDraft({ range: { min, max }, increment: step }, value, min);
 }
 
 function formatControlValue(control: ThrottleParameterControl, value: number): string {

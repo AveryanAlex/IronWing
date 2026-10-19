@@ -1,5 +1,6 @@
+export { clampParameterDraft as clampRcCalibrationDraftValue } from "../params/numeric-editing";
 import type { ParameterItemModel } from "../params/parameter-item-model";
-import { clampNumber, roundToIncrement } from "./rate-curves";
+import { clampNumber } from "./rate-curves";
 
 export type RcCalibrationParamKey = "min" | "trim" | "max" | "deadZone" | "reversed";
 export type RcCalibrationNumericParamKey = Exclude<RcCalibrationParamKey, "reversed">;
@@ -139,16 +140,6 @@ export function calculateRcCalibrationRange(values: RcCalibrationValues, livePwm
   };
 }
 
-export function clampRcCalibrationDraftValue(item: ParameterItemModel, value: number): number {
-  if (!Number.isFinite(value)) {
-    return item.value;
-  }
-
-  const min = item.range?.min ?? Number.NEGATIVE_INFINITY;
-  const max = item.range?.max ?? Number.POSITIVE_INFINITY;
-  const clamped = Math.min(max, Math.max(min, value));
-  return Math.min(max, Math.max(min, roundToIncrement(clamped, item.increment)));
-}
 
 function resolveMappedRoles(
   itemIndex: ReadonlyMap<string, ParameterItemModel>,

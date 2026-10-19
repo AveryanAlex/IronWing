@@ -1,8 +1,8 @@
+export { clampParameterDraft as clampRcOptionDraftValue } from "../params/numeric-editing";
 import type { StagedParameterValues } from "../params/parameter-values";
 import type { ParamMeta } from "../../param-metadata";
 import { formatParamValue, type ParameterItemModel } from "../params/parameter-item-model";
 import type { RcChannelSample } from "./rc-input-normalization";
-import { roundToIncrement } from "./rate-curves";
 
 export type RcOptionStagedEdits = StagedParameterValues;
 
@@ -140,15 +140,4 @@ export function detectDuplicateEnabledRcOptionAssignments(
 export function resolveRcOptionLiveSample(channel: number, channels: readonly RcChannelSample[]): RcOptionLiveSample | null {
   const sample = channels.find((entry) => entry.channel === channel && Number.isFinite(entry.pwm));
   return sample ? { pwm: sample.pwm, stale: sample.stale === true } : null;
-}
-
-export function clampRcOptionDraftValue(item: ParameterItemModel, value: number): number {
-  if (!Number.isFinite(value)) {
-    return item.value;
-  }
-
-  const min = item.range?.min ?? Number.NEGATIVE_INFINITY;
-  const max = item.range?.max ?? Number.POSITIVE_INFINITY;
-  const clamped = Math.min(max, Math.max(min, value));
-  return Math.min(max, Math.max(min, roundToIncrement(clamped, item.increment)));
 }

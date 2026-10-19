@@ -1,4 +1,6 @@
 <script lang="ts">
+import { resolveParameterValue } from "../../../lib/params/parameter-values";
+import { sameNumericValue as sameParameterValue } from "../../../lib/params/numeric-editing";
 import { Crosshair, RotateCcw } from "lucide-svelte";
 
 import { Badge, Button, Card, EmptyState, Eyebrow, HelperText, NativeSelect } from "../../../components/ui";
@@ -65,8 +67,7 @@ let selectedChannelNumber = $state<number | null>(null);
 let draftOverrides = $state<Record<string, number>>({});
 
 function resolveValue(name: string): number | null {
-  const value = draftOverrides[name] ?? stagedEdits[name]?.nextValue ?? itemIndex.get(name)?.value;
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
+  return resolveParameterValue(itemIndex.get(name)?.value ?? NaN, stagedEdits[name], draftOverrides[name]);
 }
 
 let availableChannels = $derived(discoverRcCalibrationChannels(itemIndex, resolveValue));
@@ -107,10 +108,6 @@ let changedControls = $derived(numericControls.filter((control) => control.chang
 let missingLabels = $derived(NUMERIC_SPECS.filter((spec) => !numericControls.some((control) => control.key === spec.key)).map((spec) => spec.label));
 let rangeMessages = $derived(numericControls.filter((control) => !control.inRange).map((control) => `${control.item.name} must stay within its metadata range.`));
 let stageDisabled = $derived(disabled || !validation.valid || rangeMessages.length > 0 || (changedControls.length === 0 && !reversedChanged));
-
-function sameParameterValue(left: number, right: number, increment: number | null): boolean {
-  return Math.abs(left - right) <= Math.max(1e-6, (increment ?? 1) * 0.001);
-}
 
 function selectChannel(event: Event) {
   const nextValue = Number((event.currentTarget as HTMLSelectElement).value);

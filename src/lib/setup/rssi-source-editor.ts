@@ -1,8 +1,9 @@
+export { clampParameterDraft as clampRssiDraftValue } from "../params/numeric-editing";
 import type { StagedParameterValues } from "../params/parameter-values";
 import type { ParamMeta } from "../../param-metadata";
 import type { ParameterItemModel } from "../params/parameter-item-model";
 import type { RcChannelSample } from "./rc-input-normalization";
-import { clampNumber, roundToIncrement } from "./rate-curves";
+import { clampNumber } from "./rate-curves";
 
 export const RSSI_TYPE_PARAM_NAME = "RSSI_TYPE";
 
@@ -120,14 +121,4 @@ export function resolveRssiChannelPwm(input: {
 
   const sample = input.channels.find((entry) => entry.channel === channelValue && Number.isFinite(entry.pwm));
   return sample ? { channel: channelValue, pwm: sample.pwm, stale: sample.stale === true } : null;
-}
-
-export function clampRssiDraftValue(item: ParameterItemModel, value: number): number {
-  if (!Number.isFinite(value)) {
-    return item.value;
-  }
-
-  const min = item.range?.min ?? Number.NEGATIVE_INFINITY;
-  const max = item.range?.max ?? Number.POSITIVE_INFINITY;
-  return clampNumber(roundToIncrement(clampNumber(value, min, max), item.increment), min, max);
 }

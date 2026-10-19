@@ -1,4 +1,6 @@
 <script lang="ts">
+import { resolveParameterValue } from "../../../lib/params/parameter-values";
+import { sameNumericValue as sameParameterValue } from "../../../lib/params/numeric-editing";
 import { RadioTower, RotateCcw } from "lucide-svelte";
 
 import { Badge, Button, Card, EmptyState, Eyebrow, HelperText } from "../../../components/ui";
@@ -91,12 +93,7 @@ let {
 let draftOverrides = $state<Record<string, number>>({});
 
 function resolveValue(name: string): number | null {
-  const value = draftOverrides[name] ?? stagedEdits[name]?.nextValue ?? itemIndex.get(name)?.value;
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function sameParameterValue(left: number, right: number, increment: number | null): boolean {
-  return Math.abs(left - right) <= Math.max(1e-6, (increment ?? 1) * 0.001);
+  return resolveParameterValue(itemIndex.get(name)?.value ?? NaN, stagedEdits[name], draftOverrides[name]);
 }
 
 function buildSettingControl(name: string): SettingControl | null {
