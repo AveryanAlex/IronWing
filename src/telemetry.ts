@@ -1,3 +1,4 @@
+import type * as Generated from "./lib/generated/ironwing-json";
 import type { GpsFixType } from "./lib/generated/mavkit";
 import type { PwmChannelSamples } from "./lib/telemetry-channels";
 import { EVENT_NAMES } from "./lib/generated/events";
@@ -47,7 +48,7 @@ export type Telemetry = {
   height_above_terrain_m?: number;
 
   // BATTERY_STATUS
-  battery_voltage_cells?: number[];
+  battery_voltage_cells?: PwmChannelSamples;
   energy_consumed_wh?: number;
   battery_time_remaining_s?: number;
 
@@ -59,66 +60,11 @@ export type Telemetry = {
   servo_outputs?: PwmChannelSamples;
 };
 
-export type TelemetryState = {
-  flight?: {
-    altitude_m?: number;
-    speed_mps?: number;
-    climb_rate_mps?: number;
-    throttle_pct?: number;
-    airspeed_mps?: number;
-  };
-  navigation?: {
-    latitude_deg?: number;
-    longitude_deg?: number;
-    heading_deg?: number;
-    wp_dist_m?: number;
-    nav_bearing_deg?: number;
-    target_bearing_deg?: number;
-    xtrack_error_m?: number;
-  };
-  attitude?: {
-    roll_deg?: number;
-    pitch_deg?: number;
-    yaw_deg?: number;
-  };
-  power?: {
-    battery_pct?: number;
-    battery_voltage_v?: number;
-    battery_current_a?: number;
-    battery_voltage_cells?: number[];
-    energy_consumed_wh?: number;
-    battery_time_remaining_s?: number;
-  };
-  gps?: {
-    fix_type?: GpsFixType;
-    satellites?: number;
-    hdop?: number;
-  };
-  terrain?: {
-    terrain_height_m?: number;
-    height_above_terrain_m?: number;
-  };
-  radio?: {
-    rc_channels?: PwmChannelSamples;
-    rc_rssi?: number;
-    servo_outputs?: PwmChannelSamples;
-  };
-};
+export type TelemetryState = Generated.TelemetryState;
 
 export type TelemetryDomain = DomainValue<TelemetryState>;
 
-export type VehicleState = {
-  armed: boolean;
-  custom_mode: number;
-  mode_name: string;
-  system_status: string;
-  vehicle_type: string;
-  autopilot: string;
-  system_id: number;
-  component_id: number;
-  heartbeat_received: boolean;
-  firmware_version: string | null;
-};
+export type VehicleState = Generated.VehicleState;
 
 export type HomePosition = {
   latitude_deg: number;
