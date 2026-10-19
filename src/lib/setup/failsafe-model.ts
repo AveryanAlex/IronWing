@@ -1,3 +1,4 @@
+import { parameterEncoding, resolveRtlParameter } from "./ardupilot-parameters";
 import { FailsafeAction, failsafeDefault } from "../ardupilot/failsafe";
 import { hasBit, normalizeBitmaskOptions } from "../bitmask";
 import type { StagedParameterValues } from "../params/parameter-values";
@@ -252,12 +253,9 @@ function rtlValue(
   return { name, value: readProposedParameter(input, name) };
 }
 
-function isMetersPerSecondUnit(unit: string | undefined): boolean {
-  const normalized = unit?.toLowerCase().replace(/\s+/g, "");
-  return normalized === "m/s"
-    || normalized === "meter/second"
-    || normalized === "meters/second"
-    || normalized === "meterspersecond";
+function rtlValueForRole(input: SafetyModelInput, family: string, role: string) {
+  const encoding = resolveRtlParameter(family, role, Object.keys(input.paramStore?.params ?? {}));
+  return { name: encoding?.name ?? "", value: encoding ? readProposedParameter(input, encoding.name) : null };
 }
 
 function formatRtlValue(value: number | null, factor: number, unit: string): string {
@@ -340,21 +338,21 @@ export function buildRtlReturnModel(input: SafetyModelInput): RtlReturnModel {
   let detailText = "";
 
   if (family === "copter") {
-    const rtlAlt = rtlValue(input, ["RTL_ALT_M", "RTL_ALT"]);
-    const finalAlt = rtlValue(input, ["RTL_ALT_FINAL_M", "RTL_ALT_FINAL"]);
-    summaryText = `Return altitude ${formatRtlValue(rtlAlt.value, rtlAlt.name === "RTL_ALT_M" ? 1 : 100, "m")} · Final altitude ${formatRtlValue(finalAlt.value, finalAlt.name === "RTL_ALT_FINAL_M" ? 1 : 100, "m")}`;
+    const rtlAlt = rtlValueForRole(input, family, "return_altitude");
+    const finalAlt = rtlValueForRole(input, family, "final_altitude");
+    summaryText = `Return altitude ${formatRtlValue(rtlAlt.value, parameterEncoding(family, rtlAlt.name)?.raw_per_unit ?? 1, "m")} · Final altitude ${formatRtlValue(finalAlt.value, parameterEncoding(family, finalAlt.name)?.raw_per_unit ?? 1, "m")}`;
     detailText = "Copter RTL combines climb altitude, return speed, loiter, and final descent settings.";
     if (rtlAlt.value === 0) {
       warningTexts.push(`${rtlAlt.name} is 0, so the vehicle may return at its current altitude instead of climbing above obstacles.`);
     }
   } else if (family === "plane") {
-    const holdAlt = rtlValue(input, ["RTL_ALTITUDE", "ALT_HOLD_RTL"]);
-    summaryText = `Return altitude ${holdAlt.value === -1 ? "current altitude" : formatRtlValue(holdAlt.value, holdAlt.name === "RTL_ALTITUDE" ? 1 : 100, "m")}`;
+    const holdAlt = rtlValueForRole(input, family, "return_altitude");
+    summaryText = `Return altitude ${holdAlt.value === -1 ? "current altitude" : formatRtlValue(holdAlt.value, parameterEncoding(family, holdAlt.name)?.raw_per_unit ?? 1, "m")}`;
     detailText = "Plane RTL keeps return altitude and auto-land intent explicit for fixed-wing recovery.";
   } else {
     const speed = readProposedParameter(input, "RTL_SPEED");
     const radius = readProposedParameter(input, "WP_RADIUS");
-    const speedFactor = isMetersPerSecondUnit(input.metadata?.get("RTL_SPEED")?.units) ? 1 : 100;
+    const speedFactor = parameterEncoding("rover", "RTL_SPEED")!.raw_per_unit;
     summaryText = `Return speed ${formatRtlValue(speed, speedFactor, "m/s")} · Approach radius ${formatRtlValue(radius, 1, "m")}`;
     detailText = "Rover return keeps speed and arrival radius explicit without pretending aircraft-only altitude controls exist.";
   }

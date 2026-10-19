@@ -91,6 +91,7 @@ fn generated_wasm_facade_path() -> Result<PathBuf, Box<dyn Error>> {
 fn generated_files() -> Result<Vec<(&'static str, String)>, Box<dyn Error>> {
     Ok(vec![
         ("mavkit.ts", generated_mavkit()?),
+        ("ardupilot-parameters.ts", generated_parameter_profiles()?),
         ("ironwing.ts", generated_ironwing()?),
         ("events.ts", generated_events()?),
         ("commands.ts", generated_commands()?),
@@ -99,6 +100,32 @@ fn generated_files() -> Result<Vec<(&'static str, String)>, Box<dyn Error>> {
         ("mission-codec-fixtures.json", mission_fixtures::generate()?),
         ("index.ts", generated_index()),
     ])
+}
+
+fn generated_parameter_profiles() -> Result<String, Box<dyn Error>> {
+    use mavkit::ardupilot::parameters as profiles;
+    let mut body = String::new();
+    for (name, value) in [
+        (
+            "RTL_PARAMETER_ENCODINGS",
+            serde_json::to_string_pretty(profiles::RTL_PARAMETER_ENCODINGS)?,
+        ),
+        (
+            "GPS_SOURCES",
+            serde_json::to_string_pretty(profiles::GPS_SOURCES)?,
+        ),
+        (
+            "PRIMARY_GPS_TYPE_NAMES",
+            serde_json::to_string_pretty(profiles::PRIMARY_GPS_TYPE_NAMES)?,
+        ),
+        (
+            "PRIMARY_GNSS_MODE_NAMES",
+            serde_json::to_string_pretty(profiles::PRIMARY_GNSS_MODE_NAMES)?,
+        ),
+    ] {
+        body.push_str(&format!("export const {name} = {value} as const;\n\n"));
+    }
+    Ok(with_header(body))
 }
 
 fn generated_mavkit() -> Result<String, Box<dyn Error>> {

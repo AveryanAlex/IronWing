@@ -1,5 +1,6 @@
 <script lang="ts">
 import { Home, Route } from "lucide-svelte";
+import { parameterEncoding } from "../../../../lib/setup/ardupilot-parameters";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/shell/runtime-context";
@@ -54,12 +55,9 @@ type RtlFieldConfig = {
   name: string;
   label: string;
   description: string;
-  factor: number;
   decimals: number;
-  unit: string;
   min?: number;
   step?: number;
-  sentinel?: number;
 };
 
 type RtlLegacyCardConfig = {
@@ -119,7 +117,7 @@ function buildParamSections(family: SafetyVehicleFamily): RtlParamSectionConfig[
       {
         id: "plane-return",
         title: "Plane return profile",
-        summary: `${currentDisplayText("RTL_ALTITUDE", 1, 1, "m")} · ${currentDisplayText("RTL_AUTOLAND", 1, 0, "mode")}`,
+        summary: `${currentDisplayText("RTL_ALTITUDE", 1)} · ${currentDisplayText("RTL_AUTOLAND", 0)}`,
         params: planeReturnParams,
       },
     ];
@@ -130,8 +128,8 @@ function buildParamSections(family: SafetyVehicleFamily): RtlParamSectionConfig[
       {
         id: "rover-return",
         title: "Rover return profile",
-        summary: `${currentDisplayText("RTL_SPEED", roverSpeedIsDirectUnit() ? 1 : 100, 1, "m/s")} · ${currentDisplayText("WP_RADIUS", 1, 1, "m")}`,
-        params: roverSpeedIsDirectUnit() ? [{ id: "RTL_SPEED" }, { id: "WP_RADIUS" }] : [{ id: "WP_RADIUS" }],
+        summary: `${currentDisplayText("RTL_SPEED", 1)} · ${currentDisplayText("WP_RADIUS", 1)}`,
+        params: [{ id: "RTL_SPEED" }, { id: "WP_RADIUS" }],
       },
     ];
   }
@@ -140,13 +138,13 @@ function buildParamSections(family: SafetyVehicleFamily): RtlParamSectionConfig[
     {
       id: "altitude-current",
       title: "Altitude profile",
-      summary: `${currentDisplayText("RTL_ALT_M", 1, 1, "m")} · ${currentDisplayText("RTL_ALT_FINAL_M", 1, 1, "m")}`,
+      summary: `${currentDisplayText("RTL_ALT_M", 1)} · ${currentDisplayText("RTL_ALT_FINAL_M", 1)}`,
       params: copterAltitudeParams,
     },
     {
       id: "speed-current",
       title: "Return speed",
-      summary: currentDisplayText("RTL_SPEED_MS", 1, 1, "m/s"),
+      summary: currentDisplayText("RTL_SPEED_MS", 1),
       params: copterSpeedParams,
     },
   ];
@@ -160,47 +158,24 @@ function buildLegacyCards(family: SafetyVehicleFamily): RtlLegacyCardConfig[] {
           {
             id: "plane-altitude-legacy",
             title: "Plane return altitude",
-            summary: currentDisplayText("ALT_HOLD_RTL", 100, 1, "m", -1),
+            summary: currentDisplayText("ALT_HOLD_RTL", 1),
             fields: [
               {
                 name: "ALT_HOLD_RTL",
                 label: "Return altitude",
                 description: "Altitude used during plane RTL. Set to -1 to hold the current altitude.",
-                factor: 100,
+
                 decimals: 1,
-                unit: "m",
+
                 min: -1,
                 step: 1,
-                sentinel: -1,
               },
             ],
           },
         ];
   }
 
-  if (family === "rover") {
-    return roverSpeedIsDirectUnit()
-      ? []
-      : [
-          {
-            id: "rover-speed-legacy",
-            title: "Rover return speed",
-            summary: currentDisplayText("RTL_SPEED", 100, 1, "m/s"),
-            fields: [
-              {
-                name: "RTL_SPEED",
-                label: "Return speed",
-                description: "Ground speed during the rover return-to-home behavior.",
-                factor: 100,
-                decimals: 1,
-                unit: "m/s",
-                min: 0,
-                step: 0.5,
-              },
-            ],
-          },
-        ];
-  }
+  if (family === "rover") return [];
 
   const altitudeFieldCandidates: (RtlFieldConfig | null)[] = [
     !item("RTL_ALT_M")
@@ -208,9 +183,9 @@ function buildLegacyCards(family: SafetyVehicleFamily): RtlLegacyCardConfig[] {
           name: "RTL_ALT",
           label: "Return altitude",
           description: "Minimum altitude the copter climbs to before returning. 0 keeps the current altitude.",
-          factor: 100,
+
           decimals: 1,
-          unit: "m",
+
           min: 0,
           step: 1,
         }
@@ -220,9 +195,9 @@ function buildLegacyCards(family: SafetyVehicleFamily): RtlLegacyCardConfig[] {
           name: "RTL_ALT_FINAL",
           label: "Final altitude",
           description: "Final hover altitude after reaching home. 0 triggers an automatic landing.",
-          factor: 100,
+
           decimals: 1,
-          unit: "m",
+
           min: 0,
           step: 1,
         }
@@ -232,9 +207,9 @@ function buildLegacyCards(family: SafetyVehicleFamily): RtlLegacyCardConfig[] {
           name: "RTL_CLIMB_MIN",
           label: "Minimum climb",
           description: "Minimum additional climb before the return leg starts.",
-          factor: 1,
+
           decimals: 0,
-          unit: "m",
+
           min: 0,
           step: 1,
         }
@@ -248,9 +223,9 @@ function buildLegacyCards(family: SafetyVehicleFamily): RtlLegacyCardConfig[] {
           name: "RTL_SPEED",
           label: "Return speed",
           description: "Horizontal speed during the RTL leg. 0 defers to the default waypoint speed.",
-          factor: 100,
+
           decimals: 1,
-          unit: "m/s",
+
           min: 0,
           step: 0.5,
         }
@@ -259,9 +234,9 @@ function buildLegacyCards(family: SafetyVehicleFamily): RtlLegacyCardConfig[] {
       name: "RTL_LOIT_TIME",
       label: "Loiter time",
       description: "Hover time above home before the final descent or landing step begins.",
-      factor: 1000,
+
       decimals: 1,
-      unit: "s",
+
       min: 0,
       step: 1,
     },
@@ -272,13 +247,13 @@ function buildLegacyCards(family: SafetyVehicleFamily): RtlLegacyCardConfig[] {
     {
       id: "altitude-legacy",
       title: "Altitude profile",
-      summary: `${currentDisplayText("RTL_ALT", 100, 1, "m")} · ${currentDisplayText("RTL_ALT_FINAL", 100, 1, "m")}`,
+      summary: `${currentDisplayText("RTL_ALT", 1)} · ${currentDisplayText("RTL_ALT_FINAL", 1)}`,
       fields: altitudeFields,
     },
     {
       id: "timing-legacy",
       title: "Speed and loiter timing",
-      summary: `${currentDisplayText("RTL_SPEED", 100, 1, "m/s")} · ${currentDisplayText("RTL_LOIT_TIME", 1000, 1, "s")}`,
+      summary: `${currentDisplayText("RTL_SPEED", 1)} · ${currentDisplayText("RTL_LOIT_TIME", 1)}`,
       fields: timingFields,
     },
   ];
@@ -288,27 +263,25 @@ function isRtlField(field: RtlFieldConfig | null): field is RtlFieldConfig {
   return field !== null;
 }
 
-function roverSpeedIsDirectUnit(): boolean {
-  const speed = item("RTL_SPEED");
-  return speed ? isMetersPerSecondUnit(speed.units) : false;
-}
-
-function isMetersPerSecondUnit(unit: string | null | undefined): boolean {
-  const normalized = unit?.toLowerCase().replace(/\s+/g, "");
-  return (
-    normalized === "m/s" ||
-    normalized === "meter/second" ||
-    normalized === "meters/second" ||
-    normalized === "meterspersecond"
-  );
-}
-
 function item(name: string): ParameterItemModel | null {
   return itemIndex.get(name) ?? null;
 }
 
-function visibleFields(fields: RtlFieldConfig[]): RtlFieldConfig[] {
-  return fields.filter((field) => item(field.name));
+type ResolvedRtlFieldConfig = RtlFieldConfig & { factor: number; unit: string; sentinel?: number };
+function visibleFields(fields: RtlFieldConfig[]): ResolvedRtlFieldConfig[] {
+  return fields.flatMap((field) => {
+    const encoding = parameterEncoding(model.family, field.name);
+    return item(field.name) && encoding
+      ? [
+          {
+            ...field,
+            factor: encoding.raw_per_unit,
+            unit: encoding.unit,
+            sentinel: encoding.sentinels.find((value) => value < 0),
+          },
+        ]
+      : [];
+  });
 }
 
 function formatDisplayValue(rawValue: number | null, factor: number, decimals: number, sentinel?: number): string {
@@ -323,7 +296,11 @@ function formatDisplayValue(rawValue: number | null, factor: number, decimals: n
   return (rawValue / factor).toFixed(decimals);
 }
 
-function currentDisplayText(name: string, factor: number, decimals: number, unit: string, sentinel?: number): string {
+function currentDisplayText(name: string, decimals: number): string {
+  const encoding = parameterEncoding(model.family, name);
+  const factor = encoding?.raw_per_unit ?? 1;
+  const unit = encoding?.unit ?? "";
+  const sentinel = encoding?.sentinels.find((value) => value < 0);
   const current = item(name)?.value ?? null;
   const label = item(name)?.valueLabel;
   if (label) {
@@ -393,7 +370,7 @@ function displayMax(target: ParameterItemModel, factor: number): number | undefi
   return target.range?.max === undefined ? undefined : target.range.max / factor;
 }
 
-function numericFieldMetadata(field: RtlFieldConfig, target: ParameterItemModel): string {
+function numericFieldMetadata(field: ResolvedRtlFieldConfig, target: ParameterItemModel): string {
   const max = displayMax(target, field.factor);
   const range = field.min !== undefined && max !== undefined ? `${field.min}–${max} ${field.unit}` : undefined;
   const step = field.step === undefined ? undefined : `step ${field.step} ${field.unit}`;
@@ -408,7 +385,7 @@ function canAutostage(target: ParameterItemModel | null, nextValue: number | nul
   return true;
 }
 
-function stageDraftValue(field: RtlFieldConfig, value: string) {
+function stageDraftValue(field: ResolvedRtlFieldConfig, value: string) {
   setDraft(field.name, value);
   const target = item(field.name);
   const nextValue = resolveDraftRawValue(
