@@ -1,4 +1,5 @@
 <script lang="ts">
+import { rssiSourceDescriptor } from "../../../lib/ardupilot/rssi";
 import { resolveParameterValue } from "../../../lib/params/parameter-values";
 import { sameNumericValue as sameParameterValue } from "../../../lib/params/numeric-editing";
 import { RadioTower, RotateCcw } from "lucide-svelte";
@@ -117,6 +118,7 @@ function buildSettingControl(name: string): SettingControl | null {
 let typeItem = $derived(itemIndex.get(RSSI_TYPE_PARAM_NAME) ?? null);
 let sourceValue = $derived(resolveValue(RSSI_TYPE_PARAM_NAME));
 let sourceType = $derived(resolveRssiSourceType(sourceValue));
+let sourceProfile = $derived(rssiSourceDescriptor(sourceType));
 let sourceOptions = $derived(resolveRssiSourceOptions(metadata?.get(RSSI_TYPE_PARAM_NAME)?.values, sourceValue));
 let requiredSettingNames = $derived(requiredRssiSourceParameterNames(sourceType));
 let settingControls = $derived(requiredSettingNames.map(buildSettingControl).filter((control): control is SettingControl => control != null));
@@ -134,7 +136,7 @@ let calibrationPreview = $derived.by(() => {
   const high = resolveValue(calibrationNames.high);
   return low === null || high === null ? null : { low, high, equalRange: low === high, inverted: low > high };
 });
-let liveChannelPwm = $derived(sourceType === 2
+let liveChannelPwm = $derived(sourceProfile?.livePreview === "rc_channel"
   ? resolveRssiChannelPwm({ channelValue: resolveValue("RSSI_CHANNEL"), channels })
   : null);
 let liveScalePreview = $derived(liveChannelPwm && calibrationPreview
@@ -189,18 +191,7 @@ function formatMetadata(control: SettingControl): string {
   return `${control.item.name} · ${range} · step ${formatParamValue(control.step, control.step)}${control.unit ? ` ${control.unit}` : ""}`;
 }
 
-function sourceDescription(): string {
-  switch (sourceType) {
-    case 0:
-      return "RSSI reporting is disabled. The vehicle may still expose a retained live RSSI status value.";
-    case 2:
-      return "This source uses a receiver-channel PWM sample, so the selected channel can be previewed from the live RC monitor when available.";
-    case null:
-      return "This firmware value is not one of the known AP_RSSI sources. No source-specific settings are assumed.";
-    default:
-      return "Raw samples for this RSSI source may not be available in the RC channel monitor. Use the live RSSI status value to confirm vehicle reporting.";
-  }
-}
+let sourceDescription = $derived(sourceProfile?.description ?? "This firmware value is not one of the known AP_RSSI sources. No source-specific settings are assumed.");
 </script>
 
 {#snippet settingControl(control: SettingControl)}
@@ -235,7 +226,7 @@ function sourceDescription(): string {
           <RadioTower size={16} class="text-accent" aria-hidden="true" />
           <p class="text-sm font-semibold text-text-primary">RSSI source and calibration</p>
         </div>
-        <HelperText class="mt-2">{sourceDescription()}</HelperText>
+        <HelperText class="mt-2">{sourceDescription}</HelperText>
       </div>
 
       <SetupParamEditCard
@@ -257,7 +248,7 @@ function sourceDescription(): string {
         <Eyebrow>Vehicle live RSSI</Eyebrow>
         <p class="mt-1 text-sm font-semibold text-text-primary">{rssiText}</p>
       </div>
-      {#if sourceType === 2}
+      {#if sourceProfile?.livePreview === "rc_channel"}
         <div class="rounded-lg border border-border bg-bg-secondary p-3" data-testid={setupWorkspaceTestIds.rcRssiSourcePwm}>
           <Eyebrow>RC channel PWM preview</Eyebrow>
           {#if liveChannelPwm}

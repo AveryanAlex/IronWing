@@ -1,3 +1,6 @@
+import { RSSI_SOURCE_DESCRIPTORS, rssiSourceDescriptor } from "../ardupilot/rssi";
+export { resolveRssiSourceType } from "../ardupilot/rssi";
+export type { ArduPilotRssiSource as RssiSourceType } from "../ardupilot/rssi";
 export { clampParameterDraft as clampRssiDraftValue } from "../params/numeric-editing";
 import type { StagedParameterValues } from "../params/parameter-values";
 import type { ParamMeta } from "../../param-metadata";
@@ -7,7 +10,6 @@ import { clampNumber } from "./rate-curves";
 
 export const RSSI_TYPE_PARAM_NAME = "RSSI_TYPE";
 
-export type RssiSourceType = 0 | 1 | 2 | 3 | 4 | 5;
 export type RssiStagedEdits = StagedParameterValues;
 
 export type RssiSourceOption = {
@@ -28,47 +30,13 @@ export type RssiScalePreview = {
   clipped: boolean;
 };
 
-const FALLBACK_SOURCE_OPTIONS: readonly RssiSourceOption[] = [
-  { code: 0, label: "Disabled" },
-  { code: 1, label: "Analog pin" },
-  { code: 2, label: "RC channel PWM value" },
-  { code: 3, label: "Receiver protocol" },
-  { code: 4, label: "PWM input pin" },
-  { code: 5, label: "Telemetry radio RSSI" },
-];
-
-const SOURCE_SETTING_NAMES: Record<RssiSourceType, readonly string[]> = {
-  0: [],
-  1: ["RSSI_ANA_PIN", "RSSI_PIN_LOW", "RSSI_PIN_HIGH"],
-  2: ["RSSI_CHANNEL", "RSSI_CHAN_LOW", "RSSI_CHAN_HIGH"],
-  3: [],
-  4: ["RSSI_ANA_PIN", "RSSI_CHAN_LOW", "RSSI_CHAN_HIGH"],
-  5: [],
-};
-
-export function resolveRssiSourceType(value: number | null | undefined): RssiSourceType | null {
-  if (!Number.isInteger(value) || value == null || value < 0 || value > 5) {
-    return null;
-  }
-
-  return value as RssiSourceType;
-}
+const FALLBACK_SOURCE_OPTIONS: readonly RssiSourceOption[] = Object.entries(RSSI_SOURCE_DESCRIPTORS).map(([code, source]) => ({ code: Number(code), label: source.label }));
 
 export function requiredRssiSourceParameterNames(sourceType: number | null | undefined): string[] {
-  const resolvedType = resolveRssiSourceType(sourceType);
-  return resolvedType == null ? [] : [...SOURCE_SETTING_NAMES[resolvedType]];
+  return [...(rssiSourceDescriptor(sourceType)?.parameters ?? [])];
 }
-
 export function rssiCalibrationParameterNames(sourceType: number | null | undefined): { low: string; high: string } | null {
-  switch (resolveRssiSourceType(sourceType)) {
-    case 1:
-      return { low: "RSSI_PIN_LOW", high: "RSSI_PIN_HIGH" };
-    case 2:
-    case 4:
-      return { low: "RSSI_CHAN_LOW", high: "RSSI_CHAN_HIGH" };
-    default:
-      return null;
-  }
+  return rssiSourceDescriptor(sourceType)?.calibration ?? null;
 }
 
 export function resolveRssiSourceOptions(

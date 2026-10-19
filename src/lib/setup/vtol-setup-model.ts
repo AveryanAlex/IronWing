@@ -1,3 +1,4 @@
+import { isQuadPlaneFlightMode } from "../ardupilot/flight-modes";
 import type { StagedParameterValues } from "../params/parameter-values";
 import { readProposedParameter } from "../params/parameter-values";
 import type { ParamStore } from "../../params";
@@ -46,8 +47,6 @@ type VtolSetupModelInput = {
   paramStore: ParamStore | null;
   stagedEdits: StagedParameterValues;
 };
-
-const VTOL_FLIGHT_MODE_VALUES = new Set([17, 18, 19, 20, 21, 23, 25]);
 
 function hasAnyParam(input: VtolSetupModelInput, ...names: string[]): boolean {
   return names.some((name) => input.paramStore?.params[name] !== undefined);
@@ -132,7 +131,7 @@ function hasConfiguredVtolFlightMode(input: VtolSetupModelInput): boolean {
   return Object.values(input.paramStore?.params ?? {}).some((param) =>
     /^FLTMODE\d+$/.test(param.name)
     && typeof param.value === "number"
-    && VTOL_FLIGHT_MODE_VALUES.has(param.value),
+    && isQuadPlaneFlightMode(param.value),
   );
 }
 

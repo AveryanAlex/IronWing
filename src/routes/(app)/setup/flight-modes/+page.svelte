@@ -427,7 +427,7 @@ function stagePreset() {
   const recommended = RECOMMENDED_FLIGHT_MODE_PRESETS[model.preset];
   for (const [index, paramName] of model.slots.map((slot) => slot.paramName).entries()) {
     const target = item(paramName);
-    const nextValue = recommended.modes[index];
+    const nextValue = recommended[index]?.value;
     if (!target || typeof nextValue !== "number") {
       continue;
     }

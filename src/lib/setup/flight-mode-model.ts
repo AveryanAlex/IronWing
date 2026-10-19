@@ -1,3 +1,5 @@
+import { RECOMMENDED_FLIGHT_MODE_PRESETS, type FlightModePreset } from "../ardupilot/flight-modes";
+export { RECOMMENDED_FLIGHT_MODE_PRESETS, type FlightModePreset } from "../ardupilot/flight-modes";
 import { hasBit, toggleBit, toBitmask32 } from "../bitmask";
 import type { StagedParameterValues } from "../params/parameter-values";
 import { readAppliedParameter, hasParameter, readProposedParameter, hasPendingParameterEdit } from "../params/parameter-values";
@@ -43,7 +45,6 @@ export function getFlightModePwmDisplayBounds(slot: number): { low: number; high
     : { low: FLIGHT_MODE_PWM_DISPLAY_MIN, high: FLIGHT_MODE_PWM_DISPLAY_MAX };
 }
 
-export type FlightModePreset = "copter" | "plane" | "rover";
 export type FlightModeAvailabilityState = "live" | "stale" | "unavailable";
 
 export type FlightModeOption = {
@@ -110,24 +111,6 @@ export type FlightModeModel = {
   canStagePreset: boolean;
   canConfirm: boolean;
   currentModeName: string | null;
-};
-
-export const RECOMMENDED_FLIGHT_MODE_PRESETS: Record<
-  FlightModePreset,
-  { modes: number[]; labels: string[] }
-> = {
-  copter: {
-    modes: [0, 2, 5, 6, 9, 3],
-    labels: ["Stabilize", "AltHold", "Loiter", "RTL", "Land", "Auto"],
-  },
-  plane: {
-    modes: [0, 5, 6, 11, 12, 10],
-    labels: ["Manual", "FBW-A", "FBW-B", "RTL", "Loiter", "Auto"],
-  },
-  rover: {
-    modes: [0, 4, 11, 5, 10, 15],
-    labels: ["Manual", "Hold", "RTL", "Loiter", "Auto", "Guided"],
-  },
 };
 
 function normalizeModeName(value: unknown): string | null {
@@ -263,9 +246,9 @@ export function buildFlightModePresetPreviewRows(
   const recommended = RECOMMENDED_FLIGHT_MODE_PRESETS[preset];
 
   return FLIGHT_MODE_PARAM_NAMES.map((paramName, index) => {
-    const nextValue = recommended.modes[index] ?? null;
+    const nextValue = recommended[index]?.value ?? null;
     const current = readProposedParameter({ paramStore, stagedEdits }, paramName);
-    const proposedName = modeNameForValue(nextValue, options, recommended.labels[index]);
+    const proposedName = modeNameForValue(nextValue, options, recommended[index]?.label);
     const currentName = current === null ? null : modeNameForValue(current, options);
     const willChange = current !== nextValue;
 
@@ -313,7 +296,7 @@ export function buildFlightModeModel(input: FlightModeModelInput): FlightModeMod
     const current = readAppliedParameter(input.paramStore, paramName);
     const effective = readProposedParameter(input, paramName);
     const recommendedFallback = preset
-      ? RECOMMENDED_FLIGHT_MODE_PRESETS[preset].labels[index]
+      ? RECOMMENDED_FLIGHT_MODE_PRESETS[preset][index]?.label
       : undefined;
     const effectiveResolved = effective !== null && !options.some((option) => option.customMode === effective);
 

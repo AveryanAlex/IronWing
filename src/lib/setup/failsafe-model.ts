@@ -1,3 +1,4 @@
+import { FailsafeAction, failsafeDefault } from "../ardupilot/failsafe";
 import { hasBit, normalizeBitmaskOptions } from "../bitmask";
 import type { StagedParameterValues } from "../params/parameter-values";
 import { readAppliedParameter, hasParameter, readProposedParameter, hasPendingParameterEdit } from "../params/parameter-values";
@@ -66,66 +67,23 @@ export type GeofenceModel = {
   vehicleSlug: ReturnType<typeof getVehicleSlug>;
 };
 
-export const COPTER_RADIO_FS_OPTIONS = [
-  { value: 0, label: "Disabled" },
-  { value: 1, label: "RTL" },
-  { value: 2, label: "Continue Mission (Auto)" },
-  { value: 3, label: "Land" },
-  { value: 4, label: "SmartRTL → RTL" },
-  { value: 5, label: "SmartRTL → Land" },
-  { value: 6, label: "Auto DO_LAND_START → RTL" },
-  { value: 7, label: "Brake → Land" },
-] as const;
-
-export const COPTER_BATTERY_FS_OPTIONS = [
-  { value: 0, label: "Warn Only" },
-  { value: 1, label: "Land" },
-  { value: 2, label: "RTL" },
-  { value: 3, label: "SmartRTL → RTL" },
-  { value: 4, label: "SmartRTL → Land" },
-  { value: 5, label: "Terminate (dangerous)" },
-  { value: 6, label: "Auto DO_LAND_START → RTL" },
-  { value: 7, label: "Brake → Land" },
-] as const;
-
-export const COPTER_GCS_FS_OPTIONS = [
-  { value: 0, label: "Disabled" },
-  { value: 1, label: "RTL" },
-  { value: 2, label: "Continue Mission (Auto)" },
-  { value: 3, label: "SmartRTL → RTL" },
-  { value: 4, label: "SmartRTL → Land" },
-  { value: 5, label: "Land" },
-  { value: 6, label: "Auto DO_LAND_START → RTL" },
-  { value: 7, label: "Brake → Land" },
-] as const;
-
-export const ROVER_FS_ACTION_OPTIONS = [
-  { value: 0, label: "Disabled" },
-  { value: 1, label: "RTL" },
-  { value: 2, label: "Hold" },
-  { value: 3, label: "SmartRTL → RTL" },
-  { value: 4, label: "SmartRTL → Hold" },
-] as const;
-
 export const FAILSAFE_DEFAULTS_COPTER: SafetyDefaultsEntry[] = [
-  { paramName: "FS_THR_ENABLE", value: 1, label: "Radio → RTL" },
-  { paramName: "FS_EKF_ACTION", value: 1, label: "EKF → Land" },
-  { paramName: "BATT_FS_LOW_ACT", value: 2, label: "Low Battery → RTL" },
-  { paramName: "BATT_FS_CRT_ACT", value: 1, label: "Critical Battery → Land" },
-  { paramName: "FS_CRASH_CHECK", value: 1, label: "Crash Detection → Enabled" },
+  failsafeDefault("copter.FS_THR_ENABLE", FailsafeAction.Rtl, "Radio"),
+  failsafeDefault("copter.FS_EKF_ACTION", FailsafeAction.Land, "EKF"),
+  failsafeDefault("copter.BATT_FS_LOW_ACT", FailsafeAction.Rtl, "Low Battery"),
+  failsafeDefault("copter.BATT_FS_CRT_ACT", FailsafeAction.Land, "Critical Battery"),
+  failsafeDefault("copter.FS_CRASH_CHECK", FailsafeAction.Enabled, "Crash Detection"),
 ];
-
 export const FAILSAFE_DEFAULTS_PLANE: SafetyDefaultsEntry[] = [
-  { paramName: "THR_FAILSAFE", value: 1, label: "Radio → Enabled" },
-  { paramName: "BATT_FS_LOW_ACT", value: 2, label: "Low Battery → RTL" },
-  { paramName: "BATT_FS_CRT_ACT", value: 1, label: "Critical Battery → Land" },
+  failsafeDefault("plane.THR_FAILSAFE", FailsafeAction.Enabled, "Radio"),
+  failsafeDefault("plane.BATT_FS_LOW_ACT", FailsafeAction.Rtl, "Low Battery"),
+  failsafeDefault("plane.BATT_FS_CRT_ACT", FailsafeAction.Land, "Critical Battery"),
 ];
-
 export const FAILSAFE_DEFAULTS_ROVER: SafetyDefaultsEntry[] = [
-  { paramName: "FS_ACTION", value: 1, label: "Radio / GCS → RTL" },
+  failsafeDefault("rover.FS_ACTION", FailsafeAction.Rtl, "Radio / GCS"),
   { paramName: "FS_TIMEOUT", value: 5, label: "GCS Timeout → 5 s" },
-  { paramName: "BATT_FS_LOW_ACT", value: 2, label: "Low Battery → RTL" },
-  { paramName: "BATT_FS_CRT_ACT", value: 1, label: "Critical Battery → Land" },
+  failsafeDefault("rover.BATT_FS_LOW_ACT", FailsafeAction.Rtl, "Low Battery"),
+  failsafeDefault("rover.BATT_FS_CRT_ACT", FailsafeAction.Hold, "Critical Battery"),
 ];
 
 const FAILSAFE_REQUIRED_ROWS: Record<

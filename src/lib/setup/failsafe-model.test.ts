@@ -3,13 +3,9 @@ import { describe, expect, it } from "vitest";
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
 import {
-  COPTER_BATTERY_FS_OPTIONS,
-  COPTER_GCS_FS_OPTIONS,
-  COPTER_RADIO_FS_OPTIONS,
   FAILSAFE_DEFAULTS_COPTER,
   FAILSAFE_DEFAULTS_PLANE,
   FAILSAFE_DEFAULTS_ROVER,
-  ROVER_FS_ACTION_OPTIONS,
   buildFailsafeDefaultsPreview,
   buildFailsafeSectionModel,
   buildGeofenceModel,
@@ -42,16 +38,16 @@ function toMetadataValues(options: readonly { value: number; label: string }[]) 
 
 function createMetadata(): ParamMetadataMap {
   return new Map([
-    ["FS_THR_ENABLE", { humanName: "Radio failsafe", description: "", values: toMetadataValues(COPTER_RADIO_FS_OPTIONS) }],
-    ["FS_GCS_ENABLE", { humanName: "GCS failsafe", description: "", values: toMetadataValues(COPTER_GCS_FS_OPTIONS) }],
-    ["BATT_FS_LOW_ACT", { humanName: "Low battery", description: "", values: toMetadataValues(COPTER_BATTERY_FS_OPTIONS) }],
-    ["BATT_FS_CRT_ACT", { humanName: "Critical battery", description: "", values: toMetadataValues(COPTER_BATTERY_FS_OPTIONS) }],
+    ["FS_THR_ENABLE", { humanName: "Radio failsafe", description: "", values: toMetadataValues([{ value: 0, label: "Disabled" }, { value: 1, label: "RTL" }, { value: 3, label: "Land" }]) }],
+    ["FS_GCS_ENABLE", { humanName: "GCS failsafe", description: "", values: toMetadataValues([{ value: 0, label: "Disabled" }, { value: 1, label: "RTL" }, { value: 5, label: "Land" }]) }],
+    ["BATT_FS_LOW_ACT", { humanName: "Low battery", description: "", values: toMetadataValues([{ value: 0, label: "Warn Only" }, { value: 1, label: "Land" }, { value: 2, label: "RTL" }]) }],
+    ["BATT_FS_CRT_ACT", { humanName: "Critical battery", description: "", values: toMetadataValues([{ value: 0, label: "Warn Only" }, { value: 1, label: "Land" }, { value: 2, label: "RTL" }]) }],
     ["FS_EKF_ACTION", { humanName: "EKF failsafe", description: "", values: [{ code: 0, label: "Disabled" }, { code: 1, label: "Land" }] }],
     ["FS_CRASH_CHECK", { humanName: "Crash check", description: "", values: [{ code: 0, label: "Disabled" }, { code: 1, label: "Enabled" }] }],
     ["THR_FAILSAFE", { humanName: "Throttle failsafe", description: "", values: [{ code: 0, label: "Disabled" }, { code: 1, label: "Enabled" }] }],
     ["FS_LONG_ACTN", { humanName: "Long failsafe", description: "", values: [{ code: 0, label: "Disabled" }, { code: 1, label: "RTL" }] }],
     ["FS_SHORT_ACTN", { humanName: "Short failsafe", description: "", values: [{ code: 0, label: "Disabled" }, { code: 1, label: "Circle" }] }],
-    ["FS_ACTION", { humanName: "Rover failsafe", description: "", values: toMetadataValues(ROVER_FS_ACTION_OPTIONS) }],
+    ["FS_ACTION", { humanName: "Rover failsafe", description: "", values: toMetadataValues([{ value: 0, label: "Disabled" }, { value: 1, label: "RTL" }, { value: 2, label: "Hold" }]) }],
     ["RTL_AUTOLAND", { humanName: "Auto land", description: "", values: [{ code: 0, label: "Loiter at home" }, { code: 2, label: "Always land at home" }] }],
     ["FENCE_ENABLE", { humanName: "Fence enable", description: "", values: [{ code: 0, label: "Disabled" }, { code: 1, label: "Enabled" }] }],
     ["FENCE_ACTION", { humanName: "Fence action", description: "", values: [{ code: 0, label: "Report only" }, { code: 1, label: "RTL / Hold" }] }],
@@ -79,7 +75,7 @@ describe("failsafe-model", () => {
     expect(resolveSafetyVehicleFamily("submarine")).toBe("unknown");
   });
 
-  it("keeps the audited defaults tables intact", () => {
+  it("uses family-specific default actions", () => {
     expect(FAILSAFE_DEFAULTS_COPTER.map((entry) => entry.paramName)).toEqual([
       "FS_THR_ENABLE",
       "FS_EKF_ACTION",
@@ -95,8 +91,8 @@ describe("failsafe-model", () => {
     expect(FAILSAFE_DEFAULTS_ROVER).toEqual([
       { paramName: "FS_ACTION", value: 1, label: "Radio / GCS → RTL" },
       { paramName: "FS_TIMEOUT", value: 5, label: "GCS Timeout → 5 s" },
-      { paramName: "BATT_FS_LOW_ACT", value: 2, label: "Low Battery → RTL" },
-      { paramName: "BATT_FS_CRT_ACT", value: 1, label: "Critical Battery → Land" },
+      { paramName: "BATT_FS_LOW_ACT", value: 1, label: "Low Battery → RTL" },
+      { paramName: "BATT_FS_CRT_ACT", value: 2, label: "Critical Battery → Hold" },
     ]);
   });
 
@@ -118,8 +114,8 @@ describe("failsafe-model", () => {
     expect(preview).toEqual([
       expect.objectContaining({ paramName: "FS_ACTION", currentValue: 0, willChange: true }),
       expect.objectContaining({ paramName: "FS_TIMEOUT", currentValue: 5, willChange: false }),
-      expect.objectContaining({ paramName: "BATT_FS_LOW_ACT", currentValue: 2, willChange: false }),
-      expect.objectContaining({ paramName: "BATT_FS_CRT_ACT", currentValue: 1, willChange: false }),
+      expect.objectContaining({ paramName: "BATT_FS_LOW_ACT", currentValue: 2, newValue: 1, willChange: true }),
+      expect.objectContaining({ paramName: "BATT_FS_CRT_ACT", currentValue: 1, newValue: 2, willChange: true }),
     ]);
   });
 
