@@ -1,3 +1,4 @@
+import { hasBit } from "../bitmask";
 import { gpsFixProfile } from "../gps-fix";
 import type { ParamStore } from "../../params";
 import type { HomePosition, Telemetry, VehicleState } from "../../telemetry";
@@ -1063,7 +1064,7 @@ function scrollMessage(value: string, nowMs: number): string {
 }
 
 function optionEnabled(context: OsdRenderContext, bit: number): boolean {
-  return (Math.round(param(context, "OSD_OPTIONS", 1)) & (1 << bit)) !== 0;
+  return hasBit(Math.round(param(context, "OSD_OPTIONS", 1)), bit);
 }
 
 function param(context: OsdRenderContext, name: string, fallback: number): number {

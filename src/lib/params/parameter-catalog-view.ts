@@ -1,3 +1,4 @@
+import { hasBit, normalizeBitmaskOptions as normalizeMaskOptions, toBitmask32 } from "../bitmask";
 import type { ParamMeta, ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
 import type { StagedParameterEdit } from "../stores/params-staged-edits";
@@ -286,34 +287,9 @@ function normalizeBitmaskOptions(
   values: ParamMeta["bitmask"] | undefined,
   currentValue: number,
 ): ParameterCatalogBitmaskOption[] {
-  if (!Array.isArray(values) || !Number.isInteger(currentValue) || currentValue < 0) {
-    return [];
-  }
-
-  const normalized: ParameterCatalogBitmaskOption[] = [];
-  for (const value of values) {
-    if (
-      typeof value?.bit !== "number"
-      || !Number.isInteger(value.bit)
-      || value.bit < 0
-      || value.bit > 31
-    ) {
-      continue;
-    }
-
-    const label = normalizeOptionalText(value.label);
-    if (!label) {
-      continue;
-    }
-
-    normalized.push({
-      bit: value.bit,
-      label,
-      enabled: (currentValue & (1 << value.bit)) !== 0,
-    });
-  }
-
-  return normalized;
+  return toBitmask32(currentValue) === null ? [] : normalizeMaskOptions(values).map((option) => ({
+    ...option, enabled: hasBit(currentValue, option.bit),
+  }));
 }
 
 function normalizeOptionalText(value: string | undefined): string | null {

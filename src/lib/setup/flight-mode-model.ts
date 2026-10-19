@@ -1,3 +1,4 @@
+import { hasBit, toggleBit, toBitmask32 } from "../bitmask";
 import type { StagedParameterValues } from "../params/parameter-values";
 import { readAppliedParameter, hasParameter, readProposedParameter, hasPendingParameterEdit } from "../params/parameter-values";
 import type { PwmChannelSamples } from "../telemetry-channels";
@@ -230,13 +231,12 @@ function buildBitmaskSlots(value: number | null): FlightModeBitmaskSlot[] {
     key: String(index),
     slot: index + 1,
     label: `Slot ${index + 1}`,
-    checked: (resolved & (1 << index)) !== 0,
+    checked: hasBit(resolved, index),
   }));
 }
 
 export function toggleFlightModeBitmaskValue(currentValue: number | null, bit: number): number {
-  const resolved = Number.isInteger(currentValue) && currentValue !== null && currentValue >= 0 ? currentValue : 0;
-  return resolved ^ (1 << bit);
+  return toggleBit(toBitmask32(currentValue) ?? 0, bit);
 }
 
 export function canReorderFlightModeSlots(

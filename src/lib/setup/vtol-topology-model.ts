@@ -1,3 +1,4 @@
+import { hasBit, hasBitsOutside, setBit, toggleBit, toBitmask32 } from "../bitmask";
 import type { StagedParameterValues } from "../params/parameter-values";
 import { readAppliedParameter, readProposedParameter } from "../params/parameter-values";
 import { getAllLayouts, getMotorLayout } from "../../data/motor-layouts";
@@ -379,11 +380,11 @@ function mechanismFor(
 }
 
 function normalizeMask(value: number | null): number {
-  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : 0;
+  return toBitmask32(value) ?? 0;
 }
 
 function maskIncludes(mask: number, motorNumber: number): boolean {
-  return (mask & (1 << (motorNumber - 1))) !== 0;
+  return hasBit(mask, motorNumber - 1);
 }
 
 function propulsorFromLayout(
@@ -668,10 +669,10 @@ function buildIssues(
   }
 
   const validMotorMask = propulsors.reduce(
-    (mask, propulsor) => (propulsor.motorNumber === null ? mask : mask | (1 << (propulsor.motorNumber - 1))),
+    (mask, propulsor) => (propulsor.motorNumber === null ? mask : setBit(mask, propulsor.motorNumber - 1, true)),
     0,
   );
-  if (architecture === "tiltrotor" && (tiltMask & ~validMotorMask) !== 0) {
+  if (architecture === "tiltrotor" && hasBitsOutside(tiltMask, validMotorMask)) {
     issues.push({
       id: "unknown-tilt-mask-bits",
       severity: "danger",
@@ -813,7 +814,7 @@ export function toggleMotorMask(mask: number, motorNumber: number): number {
   if (!Number.isInteger(motorNumber) || motorNumber < 1 || motorNumber > 31) {
     return mask;
   }
-  return mask ^ (1 << (motorNumber - 1));
+  return toggleBit(mask, motorNumber - 1);
 }
 
 export function architectureParameterValues(architecture: VtolArchitecture): Record<string, number> {
@@ -870,7 +871,7 @@ export function planVtolArchitectureChange(
       values.Q_TAILSIT_MOTMX = 0b1111;
     } else if (current.tailsitterMotorMask === 0) {
       values.Q_TAILSIT_MOTMX = current.propulsors.reduce(
-        (mask, motor) => (motor.motorNumber === null ? mask : mask | (1 << (motor.motorNumber - 1))),
+        (mask, motor) => (motor.motorNumber === null ? mask : setBit(mask, motor.motorNumber - 1, true)),
         0,
       );
     }

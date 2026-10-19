@@ -1,3 +1,4 @@
+import { hasBit, normalizeBitmaskOptions, toBitmask32 } from "../bitmask";
 import type { ParamMeta, ParamMetadataMap } from "../../param-metadata";
 import { isNonNullParam, type NonNullParam, type ParamStore } from "../../params";
 import type { SliderScale } from "../slider-scale";
@@ -190,30 +191,7 @@ function resolveBitmaskLabel(
   value: number,
   options: ParamMeta["bitmask"] | undefined,
 ): string | null {
-  if (!Array.isArray(options) || !Number.isInteger(value) || value < 0) {
-    return null;
-  }
-
-  const labels: string[] = [];
-  for (const option of options) {
-    if (
-      typeof option?.bit !== "number"
-      || !Number.isInteger(option.bit)
-      || option.bit < 0
-      || option.bit > 31
-    ) {
-      continue;
-    }
-
-    const label = normalizeOptionalText(option.label);
-    if (!label) {
-      continue;
-    }
-
-    if ((value & (1 << option.bit)) !== 0) {
-      labels.push(label);
-    }
-  }
-
+  if (toBitmask32(value) === null) return null;
+  const labels = normalizeBitmaskOptions(options).filter((option) => hasBit(value, option.bit)).map((option) => option.label);
   return labels.length > 0 ? labels.join(", ") : null;
 }

@@ -1,3 +1,4 @@
+import { hasBit, normalizeBitmaskOptions } from "../bitmask";
 import type { StagedParameterValues } from "../params/parameter-values";
 import { readAppliedParameter, hasParameter, readProposedParameter, hasPendingParameterEdit } from "../params/parameter-values";
 import type { ParamMetadataMap } from "../../param-metadata";
@@ -185,14 +186,7 @@ function hasEnumMetadata(metadata: ParamMetadataMap | null, name: string): boole
 }
 
 function normalizeBitmaskLabels(metadata: ParamMetadataMap | null, name: string): { bit: number; label: string }[] {
-  const bitmask = metadata?.get(name)?.bitmask;
-  if (!Array.isArray(bitmask)) {
-    return [];
-  }
-
-  return bitmask
-    .filter((entry) => Number.isInteger(entry.bit) && entry.bit >= 0 && typeof entry.label === "string" && entry.label.trim().length > 0)
-    .map((entry) => ({ bit: entry.bit, label: entry.label.trim() }));
+  return normalizeBitmaskOptions(metadata?.get(name)?.bitmask);
 }
 
 function hasBitmaskMetadata(metadata: ParamMetadataMap | null, name: string): boolean {
@@ -440,7 +434,7 @@ export function buildGeofenceModel(input: SafetyModelInput): GeofenceModel {
   const fenceEnabled = (readProposedParameter(input, "FENCE_ENABLE") ?? 0) !== 0;
   const fenceMask = readProposedParameter(input, "FENCE_TYPE") ?? 0;
   const selectedTypeLabels = normalizeBitmaskLabels(input.metadata, "FENCE_TYPE")
-    .filter((entry) => (fenceMask & (1 << entry.bit)) !== 0)
+    .filter((entry) => hasBit(fenceMask, entry.bit))
     .map((entry) => entry.label);
   const selectedTypeCount = selectedTypeLabels.length;
   const warningTexts: string[] = [];

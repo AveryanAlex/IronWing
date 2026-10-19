@@ -1,3 +1,5 @@
+import { normalizeBitmaskOptions as normalizeRcReceiverBitmaskOptions } from "../bitmask";
+export { normalizeBitmaskOptions as normalizeRcReceiverBitmaskOptions, hasBit as isRcReceiverBitEnabled, setBit as toggleRcReceiverBit } from "../bitmask";
 import { normalizeNumericDraft, resolveNumericEditState, type NumericEditState } from "../params/numeric-editing";
 import { resolveParameterValue } from "../params/parameter-values";
 import type { StagedParameterValues } from "../params/parameter-values";
@@ -133,45 +135,6 @@ export function resolveRcReceiverBitmaskOptions(
   return name === "RC_OPTIONS" || name === "RC_PROTOCOLS"
     ? FALLBACK_BITMASK_OPTIONS[name].map((option) => ({ ...option }))
     : [];
-}
-
-export function normalizeRcReceiverBitmaskOptions(
-  options: ParamMeta["bitmask"] | null | undefined,
-): RcReceiverBitmaskOption[] {
-  const normalized = new Map<number, RcReceiverBitmaskOption>();
-  for (const option of options ?? []) {
-    const label = typeof option?.label === "string" ? option.label.trim() : "";
-    if (!Number.isInteger(option?.bit) || option.bit < 0 || option.bit > 31 || label.length === 0) {
-      continue;
-    }
-
-    normalized.set(option.bit, { bit: option.bit, label });
-  }
-
-  return [...normalized.values()].sort((left, right) => left.bit - right.bit || left.label.localeCompare(right.label));
-}
-
-export function isRcReceiverBitEnabled(mask: number, bit: number): boolean {
-  if (!Number.isSafeInteger(mask) || mask < 0 || !Number.isInteger(bit) || bit < 0 || bit > 31) {
-    return false;
-  }
-
-  const flag = 2 ** bit;
-  return Math.floor(mask / flag) % 2 === 1;
-}
-
-export function toggleRcReceiverBit(mask: number, bit: number, enabled: boolean): number {
-  if (!Number.isSafeInteger(mask) || mask < 0 || !Number.isInteger(bit) || bit < 0 || bit > 31) {
-    return mask;
-  }
-
-  const flag = 2 ** bit;
-  const currentlyEnabled = isRcReceiverBitEnabled(mask, bit);
-  if (enabled === currentlyEnabled) {
-    return mask;
-  }
-
-  return enabled ? mask + flag : mask - flag;
 }
 
 export function resolveRcReceiverSettingDraftValue(

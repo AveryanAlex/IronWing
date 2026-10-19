@@ -1,4 +1,5 @@
 <script lang="ts">
+import { hasBit, toggleBit as toggleMaskBit, toBitmask32 } from "../../../lib/bitmask";
 import type { Snippet } from "svelte";
 
 import {
@@ -117,13 +118,13 @@ let enumValue = $derived(String(value));
 let numberValue = $derived(typeof value === "number" ? value : Number.isFinite(Number(value)) ? Number(value) : undefined);
 let booleanValue = $derived(typeof value === "boolean" ? value : Number(value) !== 0);
 let bitmaskValue = $derived(
-  typeof numberValue === "number" && Number.isInteger(numberValue) && numberValue >= 0 ? numberValue : 0,
+  toBitmask32(numberValue) ?? 0,
 );
 let bitmaskItems = $derived(
   bitmaskOptions.map((option) => ({
     key: String(option.bit),
     label: `Bit ${option.bit} · ${option.label}`,
-    checked: Math.floor(bitmaskValue / (2 ** option.bit)) % 2 === 1,
+    checked: hasBit(bitmaskValue, option.bit),
   })),
 );
 let resolvedUnitText = $derived(unitText === undefined && unit === item.units ? item.unitText : unitText);
@@ -151,15 +152,13 @@ function formatMetadata(): string {
 
 function updateNumber(event: Event) {
   const nextValue = (event.currentTarget as HTMLInputElement).valueAsNumber;
-  if (Number.isFinite(nextValue) && (type !== "bitmask" || (Number.isInteger(nextValue) && nextValue >= 0))) {
+  if (Number.isFinite(nextValue) && (type !== "bitmask" || toBitmask32(nextValue) !== null)) {
     onValueChange?.(nextValue);
   }
 }
 
 function toggleBit(bit: number) {
-  const mask = 2 ** bit;
-  const enabled = Math.floor(bitmaskValue / mask) % 2 === 1;
-  onValueChange?.(enabled ? bitmaskValue - mask : bitmaskValue + mask);
+  onValueChange?.(toggleMaskBit(bitmaskValue, bit));
 }
 </script>
 

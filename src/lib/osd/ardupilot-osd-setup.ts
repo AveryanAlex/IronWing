@@ -1,3 +1,4 @@
+import { setBit } from "../bitmask";
 import { ArduPilotSerialProtocol, ArduPilotSerialBaud } from "../ardupilot/serial";
 import type { ParamStore } from "../../params";
 import type { SerialPortRow } from "../setup/serial-port-model";
@@ -283,15 +284,6 @@ export function effectiveParamValue(input: OsdSetupValueInput, name: string): nu
 export function liveParamValue(paramStore: ParamStore | null, name: string): number | null {
   const value = paramStore?.params[name]?.value;
   return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-export function setBit(value: number, bit: number, enabled: boolean): number {
-  if (!Number.isInteger(bit) || bit < 0 || bit > 30) {
-    return value;
-  }
-
-  const mask = 1 << bit;
-  return enabled ? value | mask : value & ~mask;
 }
 
 function buildParamTarget(
