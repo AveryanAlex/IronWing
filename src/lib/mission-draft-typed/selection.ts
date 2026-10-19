@@ -17,7 +17,7 @@ export function cloneSelection(selection: DraftSelectionState): DraftSelectionSt
     };
 }
 
-export function firstSelectedUiId(items: TypedDraftItem[], selectedUiIds: Set<number>): number | null {
+export function firstSelectedUiId(items: readonly Pick<TypedDraftItem, "uiId" | "index">[], selectedUiIds: Set<number>): number | null {
     for (const entry of items) {
         if (selectedUiIds.has(entry.uiId)) {
             return entry.uiId;
@@ -26,7 +26,7 @@ export function firstSelectedUiId(items: TypedDraftItem[], selectedUiIds: Set<nu
     return null;
 }
 
-export function nearestSelectedUiId(items: TypedDraftItem[], selectedUiIds: Set<number>, preferredIndex: number): number | null {
+export function nearestSelectedUiId(items: readonly Pick<TypedDraftItem, "uiId" | "index">[], selectedUiIds: Set<number>, preferredIndex: number): number | null {
     if (selectedUiIds.size === 0) return null;
     for (let offset = 0; offset < items.length; offset += 1) {
         const forward = preferredIndex + offset;
@@ -41,7 +41,7 @@ export function nearestSelectedUiId(items: TypedDraftItem[], selectedUiIds: Set<
     return firstSelectedUiId(items, selectedUiIds);
 }
 
-export function normalizeSelection(items: TypedDraftItem[], selection: DraftSelectionState): DraftSelectionState {
+export function normalizeSelection(items: readonly Pick<TypedDraftItem, "uiId" | "index">[], selection: DraftSelectionState): DraftSelectionState {
     const availableUiIds = new Set(items.map((entry) => entry.uiId));
     const selectedUiIds = new Set([...selection.selectedUiIds].filter((uiId) => availableUiIds.has(uiId)));
 
@@ -108,12 +108,12 @@ export function typedDraftSelectedIndex(state: TypedDraftState, domain: MissionD
     return index === -1 ? null : index;
 }
 
-export function typedDraftSelectedItem(state: TypedDraftState, domain: MissionDomain): TypedDraftItem | null {
+export function typedDraftSelectedItem<D extends MissionDomain>(state: TypedDraftState, domain: D): TypedDraftItem<D> | null {
     const index = typedDraftSelectedIndex(state, domain);
     return index === null ? null : state.active[domain].draftItems[index] ?? null;
 }
 
-export function typedDraftPreviousItem(state: TypedDraftState, domain: MissionDomain): TypedDraftItem | null {
+export function typedDraftPreviousItem<D extends MissionDomain>(state: TypedDraftState, domain: D): TypedDraftItem<D> | null {
     const index = typedDraftSelectedIndex(state, domain);
     return index === null || index <= 0 ? null : state.active[domain].draftItems[index - 1] ?? null;
 }

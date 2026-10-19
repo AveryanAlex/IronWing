@@ -1,7 +1,7 @@
-import type { FencePlan, FenceRegion, GeoPoint3d, MissionItem, MissionPlan, RallyPlan } from "../mavkit-types";
-import { commandPosition, defaultGeoPoint3d, geoPoint3dAltitude, geoPoint3dLatLon } from "../mavkit-types";
+import type { FenceRegion, GeoPoint3d, MissionItem } from "../mavkit-types";
+import { commandPosition, withDynamicCommandField, defaultGeoPoint3d, geoPoint3dAltitude, geoPoint3dLatLon } from "../mavkit-types";
 
-import type { DomainPlanMap, MissionDomain, TypedDraftItem, TypedDraftPreview } from "./types";
+import type { DomainPlanMap, DomainItemMap, MissionDomain, TypedDraftItem, TypedDraftPreview } from "./types";
 
 let nextUiId = 1;
 
@@ -9,14 +9,8 @@ export function allocateUiId(): number {
     return nextUiId++;
 }
 
-export function emptyPlan<T extends MissionDomain>(_domain: T): DomainPlanMap[T] {
-    if (_domain === "fence") {
-        return { return_point: null, regions: [] } as unknown as DomainPlanMap[T];
-    }
-    if (_domain === "rally") {
-        return { points: [] } as unknown as DomainPlanMap[T];
-    }
-    return { items: [] } as unknown as DomainPlanMap[T];
+export function emptyPlan<D extends MissionDomain>(domain: D): DomainPlanMap[D] {
+    return DOMAIN_ADAPTERS[domain].emptyPlan();
 }
 
 export function sameDocument<T>(left: T, right: T): boolean {
@@ -59,10 +53,8 @@ export function createDefaultRallyPoint(lat: number, lon: number, alt: number): 
     return defaultGeoPoint3d(lat, lon, alt);
 }
 
-export function defaultItemForDomain(domain: MissionDomain, lat: number, lon: number, alt: number): MissionItem | FenceRegion | GeoPoint3d {
-    if (domain === "mission") return createDefaultMissionItem(lat, lon, alt);
-    if (domain === "fence") return createDefaultFenceRegion(lat, lon);
-    return createDefaultRallyPoint(lat, lon, alt);
+export function defaultItemForDomain<D extends MissionDomain>(domain: D, lat: number, lon: number, alt: number): DomainItemMap[D] {
+    return DOMAIN_ADAPTERS[domain].defaultItem(lat, lon, alt);
 }
 
 export function previewFromMissionItem(item: MissionItem): TypedDraftPreview {
@@ -74,19 +66,14 @@ export function previewFromMissionItem(item: MissionItem): TypedDraftPreview {
 }
 
 export function previewFromFenceRegion(region: FenceRegion): TypedDraftPreview {
-    if ("inclusion_polygon" in region) {
-        const verts = region.inclusion_polygon.vertices;
-        if (verts.length === 0) return { latitude_deg: null, longitude_deg: null, altitude_m: null };
-        const lat = verts.reduce((s, v) => s + v.latitude_deg, 0) / verts.length;
-        const lon = verts.reduce((s, v) => s + v.longitude_deg, 0) / verts.length;
-        return { latitude_deg: lat, longitude_deg: lon, altitude_m: null };
-    }
-    if ("exclusion_polygon" in region) {
-        const verts = region.exclusion_polygon.vertices;
-        if (verts.length === 0) return { latitude_deg: null, longitude_deg: null, altitude_m: null };
-        const lat = verts.reduce((s, v) => s + v.latitude_deg, 0) / verts.length;
-        const lon = verts.reduce((s, v) => s + v.longitude_deg, 0) / verts.length;
-        return { latitude_deg: lat, longitude_deg: lon, altitude_m: null };
+    if ("inclusion_polygon" in region || "exclusion_polygon" in region) {
+        const vertices = "inclusion_polygon" in region ? region.inclusion_polygon.vertices : region.exclusion_polygon.vertices;
+        if (vertices.length === 0) return { latitude_deg: null, longitude_deg: null, altitude_m: null };
+        return {
+            latitude_deg: vertices.reduce((sum, vertex) => sum + vertex.latitude_deg, 0) / vertices.length,
+            longitude_deg: vertices.reduce((sum, vertex) => sum + vertex.longitude_deg, 0) / vertices.length,
+            altitude_m: null,
+        };
     }
     if ("inclusion_circle" in region) {
         return {
@@ -95,7 +82,7 @@ export function previewFromFenceRegion(region: FenceRegion): TypedDraftPreview {
             altitude_m: null,
         };
     }
-    const circle = (region as { exclusion_circle: { center: { latitude_deg: number; longitude_deg: number }; radius_m: number } }).exclusion_circle;
+    const circle = region.exclusion_circle;
     return {
         latitude_deg: circle.center.latitude_deg,
         longitude_deg: circle.center.longitude_deg,
@@ -109,10 +96,8 @@ export function previewFromRallyPoint(pt: GeoPoint3d): TypedDraftPreview {
     return { latitude_deg, longitude_deg, altitude_m };
 }
 
-export function previewForDomain(domain: MissionDomain, doc: MissionItem | FenceRegion | GeoPoint3d): TypedDraftPreview {
-    if (domain === "mission") return previewFromMissionItem(doc as MissionItem);
-    if (domain === "fence") return previewFromFenceRegion(doc as FenceRegion);
-    return previewFromRallyPoint(doc as GeoPoint3d);
+export function previewForDomain<D extends MissionDomain>(domain: D, doc: DomainItemMap[NoInfer<D>]): TypedDraftPreview {
+    return DOMAIN_ADAPTERS[domain].preview(doc);
 }
 
 export function typedPreviewCoordinates(item: TypedDraftItem): { latitude_deg: number; longitude_deg: number } | null {
@@ -125,56 +110,70 @@ export function typedPreviewCoordinates(item: TypedDraftItem): { latitude_deg: n
     };
 }
 
-export function isReadOnly(domain: MissionDomain, doc: MissionItem | FenceRegion | GeoPoint3d): boolean {
-    if (domain !== "mission") return false;
-    const item = doc as MissionItem;
-    return "Other" in item.command;
+export function isReadOnly<D extends MissionDomain>(domain: D, doc: DomainItemMap[NoInfer<D>]): boolean {
+    return DOMAIN_ADAPTERS[domain].isReadOnly(doc);
 }
 
-export function withCurrent(domain: MissionDomain, doc: MissionItem | FenceRegion | GeoPoint3d, current: boolean): MissionItem | FenceRegion | GeoPoint3d {
-    if (domain !== "mission") return doc;
-    return { ...(doc as MissionItem), current };
+export function withCurrent<D extends MissionDomain>(domain: D, doc: DomainItemMap[NoInfer<D>], current: boolean): DomainItemMap[D] {
+    return DOMAIN_ADAPTERS[domain].withCurrent(doc, current);
 }
 
-export function planItems(domain: MissionDomain, plan: DomainPlanMap[MissionDomain]): (MissionItem | FenceRegion | GeoPoint3d)[] {
-    if (domain === "mission") return (plan as MissionPlan).items;
-    if (domain === "fence") return (plan as FencePlan).regions;
-    return (plan as RallyPlan).points;
+export function planItems<D extends MissionDomain>(domain: D, plan: DomainPlanMap[NoInfer<D>]): DomainItemMap[D][] {
+    return DOMAIN_ADAPTERS[domain].items(plan);
 }
 
-export function planFromItems(
-    domain: MissionDomain,
-    items: (MissionItem | FenceRegion | GeoPoint3d)[],
-    existingPlan: DomainPlanMap[MissionDomain],
-): DomainPlanMap[MissionDomain] {
-    if (domain === "mission") {
-        return { items: items as MissionItem[] } as DomainPlanMap[typeof domain];
-    }
-    if (domain === "fence") {
-        return { return_point: (existingPlan as FencePlan).return_point, regions: items as FenceRegion[] } as DomainPlanMap[typeof domain];
-    }
-    return { points: items as GeoPoint3d[] } as DomainPlanMap[typeof domain];
+export function planFromItems<D extends MissionDomain>(domain: D, items: DomainItemMap[NoInfer<D>][], existingPlan: DomainPlanMap[NoInfer<D>]): DomainPlanMap[D] {
+    return DOMAIN_ADAPTERS[domain].planFromItems(items, existingPlan);
 }
 
-export function createDraftItem(domain: MissionDomain, document: MissionItem | FenceRegion | GeoPoint3d, index = 0): TypedDraftItem {
+export function createDraftItem<D extends MissionDomain>(domain: D, document: DomainItemMap[NoInfer<D>], index = 0): TypedDraftItem<D> {
     return {
-        uiId: allocateUiId(),
-        index,
+        uiId: allocateUiId(), index,
         document: withCurrent(domain, document, index === 0),
-        readOnly: isReadOnly(domain, document),
-        preview: previewForDomain(domain, document),
+        readOnly: isReadOnly(domain, document), preview: previewForDomain(domain, document),
     };
 }
 
-export function toDraftItems(domain: MissionDomain, items: (MissionItem | FenceRegion | GeoPoint3d)[]): TypedDraftItem[] {
+export function toDraftItems<D extends MissionDomain>(domain: D, items: DomainItemMap[NoInfer<D>][]): TypedDraftItem<D>[] {
     return items.map((doc, index) => createDraftItem(domain, doc, index));
 }
 
-export function documentFromDraftItems(
-    domain: MissionDomain,
-    draftItems: TypedDraftItem[],
-    existingPlan: DomainPlanMap[MissionDomain],
-): DomainPlanMap[MissionDomain] {
-    const docs = draftItems.map((entry, index) => withCurrent(domain, entry.document, index === 0));
-    return planFromItems(domain, docs, existingPlan);
+export function documentFromDraftItems<D extends MissionDomain>(domain: D, draftItems: TypedDraftItem<NoInfer<D>>[], existingPlan: DomainPlanMap[NoInfer<D>]): DomainPlanMap[D] {
+    return planFromItems(domain, draftItems.map((entry, index) => withCurrent(domain, entry.document, index === 0)), existingPlan);
 }
+
+type DomainAdapter<D extends MissionDomain> = {
+    emptyPlan: () => DomainPlanMap[D];
+    defaultItem: (lat: number, lon: number, alt: number) => DomainItemMap[D];
+    preview: (item: DomainItemMap[D]) => TypedDraftPreview;
+    isReadOnly: (item: DomainItemMap[D]) => boolean;
+    withCurrent: (item: DomainItemMap[D], current: boolean) => DomainItemMap[D];
+    items: (plan: DomainPlanMap[D]) => DomainItemMap[D][];
+    planFromItems: (items: DomainItemMap[D][], existing: DomainPlanMap[D]) => DomainPlanMap[D];
+    updatePosition: (item: DomainItemMap[D], transform: (position: GeoPoint3d) => GeoPoint3d) => DomainItemMap[D];
+};
+
+export const DOMAIN_ADAPTERS: Readonly<{ [D in MissionDomain]: DomainAdapter<D> }> = {
+    mission: {
+        emptyPlan: () => ({ items: [] }), defaultItem: createDefaultMissionItem, preview: previewFromMissionItem,
+        isReadOnly: (item) => "Other" in item.command,
+        withCurrent: (item, current) => ({ ...item, current }),
+        items: (plan) => plan.items, planFromItems: (items) => ({ items }),
+        updatePosition: (item, transform) => {
+            const position = commandPosition(item.command);
+            return position ? { ...item, command: withDynamicCommandField(item.command, "position", transform(position)) } : item;
+        },
+    },
+    fence: {
+        emptyPlan: () => ({ return_point: null, regions: [] }), defaultItem: createDefaultFenceRegion, preview: previewFromFenceRegion,
+        isReadOnly: () => false, withCurrent: (item) => item,
+        items: (plan) => plan.regions, planFromItems: (regions, existing) => ({ ...existing, regions }),
+        updatePosition: (item) => item,
+    },
+    rally: {
+        emptyPlan: () => ({ points: [] }), defaultItem: createDefaultRallyPoint, preview: previewFromRallyPoint,
+        isReadOnly: () => false, withCurrent: (item) => item,
+        items: (plan) => plan.points, planFromItems: (points) => ({ points }),
+        updatePosition: (item, transform) => transform(item),
+    },
+};

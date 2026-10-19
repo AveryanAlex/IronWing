@@ -1,9 +1,9 @@
-import type { FencePlan, FenceRegion, GeoPoint3d, MissionItem } from "../mavkit-types";
+import type { FenceRegion } from "../mavkit-types";
 
 import { activeDraft, replaceActiveDraft, withActiveItems } from "./core";
 import { createDraftItem, defaultItemForDomain, toDraftItems } from "./draft-items";
 import { nearestSelectedUiId, singletonSelection } from "./selection";
-import type { DraftSelectionState, FenceRegionType, MissionDomain, TypedDraftState } from "./types";
+import type { DraftSelectionState, DomainItemMap, FenceRegionType, MissionDomain, TypedDraftState } from "./types";
 
 export function addTypedWaypoint(state: TypedDraftState, domain: MissionDomain): TypedDraftState {
     return withActiveItems(state, domain, (items) => {
@@ -82,10 +82,10 @@ export function addFenceRegionAt(state: TypedDraftState, lat: number, lon: numbe
 /** Set the fence return point. Passing null clears it. */
 export function setFenceReturnPoint(state: TypedDraftState, point: { latitude_deg: number; longitude_deg: number } | null): TypedDraftState {
     const active = activeDraft(state, "fence");
-    const document = { ...(active.document as FencePlan), return_point: point };
+    const document = { ...active.document, return_point: point };
     return replaceActiveDraft(state, "fence", {
         ...active,
-        document: document as typeof active.document,
+        document,
     });
 }
 
@@ -251,16 +251,16 @@ export function reorderTypedItemsByUiIds(state: TypedDraftState, domain: Mission
 }
 
 /** Insert typed items after the given index. Accepts domain-specific items directly. */
-export function insertTypedItemsAfter(
+export function insertTypedItemsAfter<D extends MissionDomain>(
     state: TypedDraftState,
-    domain: MissionDomain,
+    domain: D,
     index: number,
-    newItems: MissionItem[] | FenceRegion[] | GeoPoint3d[],
+    newItems: DomainItemMap[NoInfer<D>][],
 ): TypedDraftState {
-    if ((newItems as unknown[]).length === 0) return state;
+    if (newItems.length === 0) return state;
     return withActiveItems(state, domain, (items) => {
         const insertAt = Math.max(0, index + 1);
-        const inserted = toDraftItems(domain, newItems as (MissionItem | FenceRegion | GeoPoint3d)[]);
+        const inserted = toDraftItems(domain, newItems);
         const nextItems = [...items];
         nextItems.splice(insertAt, 0, ...inserted);
         return { items: nextItems, selection: singletonSelection(inserted[0]?.uiId ?? null) };
@@ -268,14 +268,13 @@ export function insertTypedItemsAfter(
 }
 
 /** Replace all items in the draft. Accepts domain-specific items directly. */
-export function replaceAllTypedItems(
+export function replaceAllTypedItems<D extends MissionDomain>(
     state: TypedDraftState,
-    domain: MissionDomain,
-    newItems: MissionItem[] | FenceRegion[] | GeoPoint3d[],
+    domain: D,
+    newItems: DomainItemMap[NoInfer<D>][],
 ): TypedDraftState {
-    const raw = newItems as (MissionItem | FenceRegion | GeoPoint3d)[];
     return withActiveItems(state, domain, () => ({
-        items: toDraftItems(domain, raw),
+        items: toDraftItems(domain, newItems),
         selection: singletonSelection(null),
     }));
 }

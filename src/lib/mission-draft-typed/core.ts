@@ -1,15 +1,15 @@
 import type { DomainPlanMap, MissionDomain, TypedDraftItem, TypedDraftState, ActiveDraft, DraftSelectionState, SessionScope } from "./types";
-import { documentFromDraftItems, emptyPlan, planItems, previewForDomain, sameDocument, toDraftItems, withCurrent } from "./draft-items";
+import { documentFromDraftItems, emptyPlan, planItems, previewForDomain, sameDocument, toDraftItems, withCurrent, isReadOnly } from "./draft-items";
 import { cloneSelection, emptySelection, normalizeSelection } from "./selection";
 
-export function activeDraft<T extends MissionDomain>(state: TypedDraftState, domain: T): TypedDraftState["active"][T] {
-    return state.active[domain] as TypedDraftState["active"][T];
+export function activeDraft<T extends MissionDomain>(state: TypedDraftState, domain: T): ActiveDraft<T> {
+    return state.active[domain];
 }
 
 export function replaceActiveDraft<T extends MissionDomain>(
     state: TypedDraftState,
     domain: T,
-    next: TypedDraftState["active"][T],
+    next: ActiveDraft<NoInfer<T>>,
 ): TypedDraftState {
     return {
         ...state,
@@ -20,7 +20,7 @@ export function replaceActiveDraft<T extends MissionDomain>(
     };
 }
 
-function scoped<T extends MissionDomain>(domain: T, scope: SessionScope | null): ActiveDraft<DomainPlanMap[T]> {
+function scoped<T extends MissionDomain>(domain: T, scope: SessionScope | null): ActiveDraft<T> {
     return {
         document: emptyPlan(domain),
         snapshot: emptyPlan(domain),
@@ -33,7 +33,7 @@ function scoped<T extends MissionDomain>(domain: T, scope: SessionScope | null):
 export function withActiveItems<T extends MissionDomain>(
     state: TypedDraftState,
     domain: T,
-    update: (items: TypedDraftItem[], selection: DraftSelectionState) => { items: TypedDraftItem[]; selection?: DraftSelectionState },
+    update: (items: TypedDraftItem<T>[], selection: DraftSelectionState) => { items: TypedDraftItem<T>[]; selection?: DraftSelectionState },
 ): TypedDraftState {
     const active = activeDraft(state, domain);
     const currentSelection = normalizeSelection(active.draftItems, {
@@ -47,6 +47,7 @@ export function withActiveItems<T extends MissionDomain>(
         index,
         document: withCurrent(domain, entry.document, index === 0),
         preview: previewForDomain(domain, entry.document),
+        readOnly: isReadOnly(domain, entry.document),
     }));
     const selection = normalizeSelection(draftItems, result.selection ?? currentSelection);
     const document = documentFromDraftItems(domain, draftItems, active.document);
@@ -57,7 +58,7 @@ export function withActiveItems<T extends MissionDomain>(
         selectedUiIds: selection.selectedUiIds,
         primarySelectedUiId: selection.primarySelectedUiId,
         selectionAnchorUiId: selection.selectionAnchorUiId,
-    } as TypedDraftState["active"][T]);
+    });
 }
 
 export function createTypedDraftState(): TypedDraftState {
@@ -74,12 +75,12 @@ export function createTypedDraftState(): TypedDraftState {
 export function replaceTypedDraftFromDownload<T extends MissionDomain>(
     state: TypedDraftState,
     domain: T,
-    plan: DomainPlanMap[T],
+    plan: DomainPlanMap[NoInfer<T>],
     scope: SessionScope,
     options?: { markDirty?: boolean },
 ): TypedDraftState {
     const active = activeDraft(state, domain);
-    const items = planItems(domain, plan as DomainPlanMap[MissionDomain]);
+    const items = planItems(domain, plan);
     return replaceActiveDraft(state, domain, {
         ...active,
         document: plan,
@@ -87,7 +88,7 @@ export function replaceTypedDraftFromDownload<T extends MissionDomain>(
         draftItems: toDraftItems(domain, items),
         ...emptySelection(),
         scope,
-    } as TypedDraftState["active"][T]);
+    });
 }
 
 export function moveDirtyDraftToRecoverable(state: TypedDraftState, scope: SessionScope): TypedDraftState {
@@ -129,7 +130,7 @@ export function recoverTypedDraft<T extends MissionDomain>(state: TypedDraftStat
         return state;
     }
 
-    const items = planItems(domain, recoverable.document as DomainPlanMap[MissionDomain]);
+    const items = planItems(domain, recoverable.document);
     return {
         active: {
             ...state.active,
@@ -148,12 +149,12 @@ export function recoverTypedDraft<T extends MissionDomain>(state: TypedDraftStat
     };
 }
 
-export function typedDraftItems(state: TypedDraftState, domain: MissionDomain): TypedDraftItem[] {
+export function typedDraftItems<D extends MissionDomain>(state: TypedDraftState, domain: D): TypedDraftItem<D>[] {
     return state.active[domain].draftItems;
 }
 
 export function typedDraftPlan<T extends MissionDomain>(state: TypedDraftState, domain: T): DomainPlanMap[T] {
-    return state.active[domain].document as DomainPlanMap[T];
+    return state.active[domain].document;
 }
 
 export function isTypedDraftDirty(state: TypedDraftState, domain: MissionDomain): boolean {

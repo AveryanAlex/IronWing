@@ -29,10 +29,10 @@ export type TypedDraftPreview = {
     altitude_m: number | null;
 };
 
-export type TypedDraftItem = {
+export type TypedDraftItem<D extends MissionDomain = MissionDomain> = {
     readonly uiId: number;
     readonly index: number;
-    readonly document: MissionItem | FenceRegion | GeoPoint3d;
+    readonly document: DomainItemMap[D];
     readonly readOnly: boolean;
     readonly preview: TypedDraftPreview;
 };
@@ -44,25 +44,18 @@ export type RecoverableDraft<T> = {
     scope: SessionScope;
 };
 
-export type ActiveDraft<T> = RecoverableDraft<T> & {
-    snapshot: T;
-    draftItems: TypedDraftItem[];
+export type ActiveDraft<D extends MissionDomain> = RecoverableDraft<DomainPlanMap[D]> & {
+    snapshot: DomainPlanMap[D];
+    draftItems: TypedDraftItem<D>[];
     selectedUiIds: Set<number>;
     primarySelectedUiId: number | null;
     selectionAnchorUiId: number | null;
 };
 
 export type TypedDraftState = {
-    active: {
-        mission: ActiveDraft<MissionPlan>;
-        fence: ActiveDraft<FencePlan>;
-        rally: ActiveDraft<RallyPlan>;
-    };
-    recoverable: {
-        mission: RecoverableDraft<MissionPlan> | null;
-        fence: RecoverableDraft<FencePlan> | null;
-        rally: RecoverableDraft<RallyPlan> | null;
-    };
+    active: { [D in MissionDomain]: ActiveDraft<D> };
+    recoverable: { [D in MissionDomain]: RecoverableDraft<DomainPlanMap[D]> | null };
+
 };
 
 export type DraftSelectionState = {

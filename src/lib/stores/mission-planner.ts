@@ -1708,7 +1708,7 @@ export function createMissionPlannerStore(
     }
 
     const state = get(store);
-    const region = state.draftState.active.fence.draftItems.find((item) => item.uiId === uiId)?.document as FenceRegion | undefined;
+    const region = state.draftState.active.fence.draftItems.find((item) => item.uiId === uiId)?.document;
     if (!region) {
       store.update((current) => withBlockedReason(current, "Ignored a stale fence-vertex drag because that region is no longer present in the active draft."));
       return rejectedFenceMutation("region-not-found", "Ignored a stale fence-vertex drag because that region is no longer present in the active draft.");
@@ -1759,7 +1759,7 @@ export function createMissionPlannerStore(
     }
 
     const state = get(store);
-    const region = state.draftState.active.fence.draftItems.find((item) => item.uiId === uiId)?.document as FenceRegion | undefined;
+    const region = state.draftState.active.fence.draftItems.find((item) => item.uiId === uiId)?.document;
     if (!region) {
       store.update((current) => withBlockedReason(current, "Ignored a stale fence-region drag because that region is no longer present in the active draft."));
       return rejectedFenceMutation("region-not-found", "Ignored a stale fence-region drag because that region is no longer present in the active draft.");
@@ -1794,7 +1794,7 @@ export function createMissionPlannerStore(
     }
 
     const state = get(store);
-    const region = state.draftState.active.fence.draftItems.find((item) => item.uiId === uiId)?.document as FenceRegion | undefined;
+    const region = state.draftState.active.fence.draftItems.find((item) => item.uiId === uiId)?.document;
     if (!region) {
       store.update((current) => withBlockedReason(current, "Ignored a stale fence radius edit because that region is no longer present in the active draft."));
       return rejectedFenceMutation("region-not-found", "Ignored a stale fence radius edit because that region is no longer present in the active draft.");

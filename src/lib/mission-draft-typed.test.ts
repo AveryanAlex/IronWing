@@ -732,3 +732,10 @@ describe("mission-draft-typed: invariants", () => {
         expect(typedDraftItems(deleted, "mission")[0].uiId).toBe(reorderedItems[2].uiId);
     });
 });
+
+it("recomputes read-only state when a mission command becomes raw", () => {
+    const state = replaceAllTypedItems(createTypedDraftState(), "mission", [makeWaypoint(47, 8, 25)]);
+    const updated = updateTypedCommand(state, "mission", 0, makeOtherItem().command);
+    expect(typedDraftItems(updated, "mission")[0].readOnly).toBe(true);
+    expect(updateTypedAltitude(updated, "mission", 0, 100)).toEqual(updated);
+});
