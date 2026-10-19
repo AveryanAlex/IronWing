@@ -1,3 +1,4 @@
+import { subscribeListenerGroup } from "../ipc/listener-group";
 import { get, writable } from "svelte/store";
 
 import { trackAnalytics } from "../analytics/client";
@@ -698,15 +699,10 @@ export function createLogsWorkspaceStore(
       stopSession = sessionStore.subscribe(applySessionState);
 
       try {
-        const disposers = await Promise.all([
-          service.subscribeProgress(applyProgress),
-          service.subscribePlayback(applyPlaybackEvent),
+        stopSubscriptions = await subscribeListenerGroup([
+          () => service.subscribeProgress(applyProgress),
+          () => service.subscribePlayback(applyPlaybackEvent),
         ]);
-        stopSubscriptions = () => {
-          for (const dispose of disposers) {
-            dispose();
-          }
-        };
       } catch (error) {
         updateState((state) => ({
           ...state,

@@ -1,3 +1,4 @@
+import { subscribeListenerGroup } from "../ipc/listener-group";
 import { fetchParamMetadata, type ParamMetadataMap } from "../../param-metadata";
 import {
   cancelParamDownload,
@@ -63,17 +64,11 @@ export function createParamsService(): ParamsService {
 }
 
 export async function subscribeAll(handlers: ParamsServiceEventHandlers): Promise<() => void> {
-  const disposers = await Promise.all([
-    subscribeParamStore(handlers.onStore),
-    subscribeParamProgress(handlers.onProgress),
-    subscribeParamStaging(handlers.onStaging),
+  return subscribeListenerGroup([
+    () => subscribeParamStore(handlers.onStore),
+    () => subscribeParamProgress(handlers.onProgress),
+    () => subscribeParamStaging(handlers.onStaging),
   ]);
-
-  return () => {
-    for (const disposer of disposers) {
-      disposer();
-    }
-  };
 }
 
 export function asErrorMessage(error: unknown): string {

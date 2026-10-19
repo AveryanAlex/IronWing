@@ -1,3 +1,4 @@
+import { subscribeListenerGroup } from "../ipc/listener-group";
 import {
   cancelMissionTransfer,
   clearMission,
@@ -56,16 +57,10 @@ export function createMissionPlannerService(): MissionPlannerService {
 }
 
 export async function subscribeAll(handlers: MissionPlannerServiceEventHandlers): Promise<() => void> {
-  const disposers = await Promise.all([
-    subscribeMissionState(handlers.onMissionState),
-    subscribeMissionProgress(handlers.onMissionProgress),
+  return subscribeListenerGroup([
+    () => subscribeMissionState(handlers.onMissionState),
+    () => subscribeMissionProgress(handlers.onMissionProgress),
   ]);
-
-  return () => {
-    for (const disposer of disposers) {
-      disposer();
-    }
-  };
 }
 
 export async function downloadWorkspace(): Promise<MissionPlannerWorkspaceTransfer> {

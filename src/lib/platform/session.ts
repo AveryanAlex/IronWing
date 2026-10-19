@@ -1,3 +1,4 @@
+import { subscribeListenerGroup } from "../ipc/listener-group";
 import {
   ackSessionSnapshot,
   connectSession,
@@ -143,22 +144,16 @@ export function createSessionService(): SessionService {
 }
 
 export async function subscribeAll(handlers: SessionServiceEventHandlers): Promise<() => void> {
-  const disposers = await Promise.all([
-    subscribeSessionState(handlers.onSession),
-    subscribeTelemetryState(handlers.onTelemetry),
-    subscribePlaybackState(handlers.onPlayback),
-    subscribeSupportState(handlers.onSupport),
-    subscribeSensorHealthStateEvent(handlers.onSensorHealth),
-    subscribeCalibrationStateEvent(handlers.onCalibration),
-    subscribeGuidedState(handlers.onGuided),
-    subscribeStatusTextState(handlers.onStatusText),
+  return subscribeListenerGroup([
+    () => subscribeSessionState(handlers.onSession),
+    () => subscribeTelemetryState(handlers.onTelemetry),
+    () => subscribePlaybackState(handlers.onPlayback),
+    () => subscribeSupportState(handlers.onSupport),
+    () => subscribeSensorHealthStateEvent(handlers.onSensorHealth),
+    () => subscribeCalibrationStateEvent(handlers.onCalibration),
+    () => subscribeGuidedState(handlers.onGuided),
+    () => subscribeStatusTextState(handlers.onStatusText),
   ]);
-
-  return () => {
-    for (const disposer of disposers) {
-      disposer();
-    }
-  };
 }
 
 export function loadConnectionForm(
