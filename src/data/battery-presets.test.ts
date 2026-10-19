@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   BOARD_PRESETS,
+  selectedPreset,
+  batteryPresetValues,
   SENSOR_PRESETS,
   BATTERY_CHEMISTRIES,
   calcBattArmVolt,
@@ -187,5 +189,22 @@ describe("initial parameter calculator formulas", () => {
 
   it("calcAcroYawP derives from accelYMax", () => {
     expect(calcAcroYawP(27900)).toBeCloseTo((0.5 * 27900) / 4500, 4);
+  });
+});
+
+
+describe("preset selection", () => {
+  it("has no implicit preview before selection or after cancellation", () => {
+    for (const id of [null, "", "missing"]) {
+      expect(batteryPresetValues("board", id)).toEqual({});
+      expect(batteryPresetValues("sensor", id)).toEqual({});
+      expect(batteryPresetValues("chemistry", id, 4)).toEqual({});
+    }
+  });
+  it("uses stable identifiers regardless of display order", () => {
+    expect(selectedPreset([...BOARD_PRESETS].reverse(), "cube-orange")?.voltPin).toBe(14);
+    expect(batteryPresetValues("board", "cube-orange")).toEqual({ VOLT_PIN: 14, CURR_PIN: 15 });
+    expect(batteryPresetValues("chemistry", "lipo", 4)).toEqual({ ARM_VOLT: 14.7, LOW_VOLT: 14.4, CRT_VOLT: 14 });
+    expect(batteryPresetValues("chemistry", "lipo", 0)).toEqual({});
   });
 });

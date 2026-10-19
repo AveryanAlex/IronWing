@@ -3,18 +3,21 @@
 // Battery chemistry defaults: ConfigInitialParams.cs:236-260
 
 export type BoardPreset = {
+  id: string;
   label: string;
   voltPin: number;
   currPin: number;
 };
 
 export type SensorPreset = {
+  id: string;
   label: string;
   voltMult: number;
   ampPerVolt: number;
 };
 
 export type BatteryChemistry = {
+  id: string;
   label: string;
   cellVoltMax: number;
   cellVoltMin: number;
@@ -23,17 +26,17 @@ export type BatteryChemistry = {
 // BATT_VOLT_PIN / BATT_CURR_PIN per board
 // Source: ConfigBatteryMonitoring.cs CMB_apmversion_SelectedIndexChanged
 export const BOARD_PRESETS: BoardPreset[] = [
-  { label: "APM 1", voltPin: 0, currPin: 1 },
-  { label: "APM 2", voltPin: 1, currPin: 2 },
-  { label: "APM 2.5", voltPin: 13, currPin: 12 },
-  { label: "PX4", voltPin: 100, currPin: 101 },
-  { label: "Pixhawk / Cube", voltPin: 2, currPin: 3 },
-  { label: "VRBrain 5", voltPin: 10, currPin: 11 },
-  { label: "VR Micro Brain 5", voltPin: 10, currPin: -1 },
-  { label: "VRBrain 4", voltPin: 6, currPin: 7 },
-  { label: "CubeOrange", voltPin: 14, currPin: 15 },
-  { label: "Durandal", voltPin: 16, currPin: 17 },
-  { label: "Pixhawk 6X / 6C", voltPin: 8, currPin: 4 },
+  { id: "apm-1", label: "APM 1", voltPin: 0, currPin: 1 },
+  { id: "apm-2", label: "APM 2", voltPin: 1, currPin: 2 },
+  { id: "apm-2-5", label: "APM 2.5", voltPin: 13, currPin: 12 },
+  { id: "px4", label: "PX4", voltPin: 100, currPin: 101 },
+  { id: "pixhawk-cube", label: "Pixhawk / Cube", voltPin: 2, currPin: 3 },
+  { id: "vrbrain-5", label: "VRBrain 5", voltPin: 10, currPin: 11 },
+  { id: "vr-micro-brain-5", label: "VR Micro Brain 5", voltPin: 10, currPin: -1 },
+  { id: "vrbrain-4", label: "VRBrain 4", voltPin: 6, currPin: 7 },
+  { id: "cube-orange", label: "CubeOrange", voltPin: 14, currPin: 15 },
+  { id: "durandal", label: "Durandal", voltPin: 16, currPin: 17 },
+  { id: "pixhawk-6", label: "Pixhawk 6X / 6C", voltPin: 8, currPin: 4 },
 ];
 
 // BATT_VOLT_MULT / BATT_AMP_PERVLT per power module
@@ -41,22 +44,22 @@ export const BOARD_PRESETS: BoardPreset[] = [
 // AttoPilot values computed: voltMult = maxvolt / (maxvolt * mvpervolt / 1000)
 //                            ampPerVolt = maxamps / (maxamps * mvperamp / 1000)
 export const SENSOR_PRESETS: SensorPreset[] = [
-  { label: "AttoPilot 45A", voltMult: 4.127115, ampPerVolt: 13.6612 },
-  { label: "AttoPilot 90A", voltMult: 15.70105, ampPerVolt: 27.3224 },
-  { label: "AttoPilot 180A", voltMult: 15.70105, ampPerVolt: 54.64481 },
-  { label: "Power Module (3DR IV)", voltMult: 10.10101, ampPerVolt: 18.0018 },
-  { label: "3DR 4-in-1 ESC", voltMult: 12.02, ampPerVolt: 17 },
-  { label: "HV 3DR APM", voltMult: 12.02, ampPerVolt: 24 },
-  { label: "HV 3DR PX4/Cube", voltMult: 12.02, ampPerVolt: 39.877 },
-  { label: "Pixhack", voltMult: 18, ampPerVolt: 24 },
-  { label: "Holybro Pixhawk4", voltMult: 18.182, ampPerVolt: 36.364 },
-  { label: "Power Module (3DR)", voltMult: 10.1, ampPerVolt: 17.0 },
+  { id: "attopilot-45", label: "AttoPilot 45A", voltMult: 4.127115, ampPerVolt: 13.6612 },
+  { id: "attopilot-90", label: "AttoPilot 90A", voltMult: 15.70105, ampPerVolt: 27.3224 },
+  { id: "attopilot-180", label: "AttoPilot 180A", voltMult: 15.70105, ampPerVolt: 54.64481 },
+  { id: "3dr-iv", label: "Power Module (3DR IV)", voltMult: 10.10101, ampPerVolt: 18.0018 },
+  { id: "3dr-4-in-1", label: "3DR 4-in-1 ESC", voltMult: 12.02, ampPerVolt: 17 },
+  { id: "hv-3dr-apm", label: "HV 3DR APM", voltMult: 12.02, ampPerVolt: 24 },
+  { id: "hv-3dr-px4", label: "HV 3DR PX4/Cube", voltMult: 12.02, ampPerVolt: 39.877 },
+  { id: "pixhack", label: "Pixhack", voltMult: 18, ampPerVolt: 24 },
+  { id: "holybro-pixhawk4", label: "Holybro Pixhawk4", voltMult: 18.182, ampPerVolt: 36.364 },
+  { id: "3dr", label: "Power Module (3DR)", voltMult: 10.1, ampPerVolt: 17.0 },
 ];
 
 export const BATTERY_CHEMISTRIES: BatteryChemistry[] = [
-  { label: "LiPo", cellVoltMax: 4.2, cellVoltMin: 3.3 },
-  { label: "LiPo HV", cellVoltMax: 4.35, cellVoltMin: 3.3 },
-  { label: "LiIon", cellVoltMax: 4.1, cellVoltMin: 2.8 },
+  { id: "lipo", label: "LiPo", cellVoltMax: 4.2, cellVoltMin: 3.3 },
+  { id: "lipo-hv", label: "LiPo HV", cellVoltMax: 4.35, cellVoltMin: 3.3 },
+  { id: "liion", label: "LiIon", cellVoltMax: 4.1, cellVoltMin: 2.8 },
 ];
 
 // Battery voltage formulas — ConfigInitialParams.cs:115-119
@@ -146,4 +149,35 @@ export const ATC_THR_MIX_MAN = 0.1;
 function roundTo(value: number, digits: number): number {
   const factor = Math.pow(10, -digits);
   return Math.round(value / factor) * factor;
+}
+
+/** An empty/native-select placeholder never selects the first entry. */
+export function selectedPreset<T extends { id: string }>(presets: readonly T[], id: string | null): T | null {
+  return id === null ? null : presets.find((preset) => preset.id === id) ?? null;
+}
+
+export function batteryPresetValues(
+  kind: "board" | "sensor" | "chemistry",
+  id: string | null,
+  cells = 0,
+): Record<string, number> {
+  if (kind === "board") {
+    const preset = selectedPreset(BOARD_PRESETS, id);
+    return preset ? { VOLT_PIN: preset.voltPin, CURR_PIN: preset.currPin } : {};
+  }
+  if (kind === "sensor") {
+    const preset = selectedPreset(SENSOR_PRESETS, id);
+    return preset ? { VOLT_MULT: round(preset.voltMult, 3), AMP_PERVLT: round(preset.ampPerVolt, 3) } : {};
+  }
+  const chemistry = selectedPreset(BATTERY_CHEMISTRIES, id);
+  return chemistry && Number.isInteger(cells) && cells > 0 ? {
+    ARM_VOLT: round(calcBattArmVolt(cells, chemistry.cellVoltMin), 2),
+    LOW_VOLT: round(calcBattLowVolt(cells, chemistry.cellVoltMin), 2),
+    CRT_VOLT: round(calcBattCrtVolt(cells, chemistry.cellVoltMin), 2),
+  } : {};
+}
+
+function round(value: number, decimals: number): number {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
 }

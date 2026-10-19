@@ -8,9 +8,7 @@ import {
   BATTERY_CHEMISTRIES,
   BOARD_PRESETS,
   SENSOR_PRESETS,
-  calcBattArmVolt,
-  calcBattCrtVolt,
-  calcBattLowVolt,
+  batteryPresetValues,
 } from "../../../../data/battery-presets";
 import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import { SETUP_CONTROL_AVAILABLE, setupCheckpointAvailability } from "../../../../lib/setup/control-availability";
@@ -60,9 +58,9 @@ const sessionStore = getSessionStoreContext();
 const paramsState = fromStore(paramsStore);
 const sessionState = fromStore(sessionStore);
 
-let selectedBoardPreset = $state<string>("");
-let selectedSensorPreset = $state<string>("");
-let selectedChemistry = $state<string>("");
+let selectedBoardPreset = $state<string | null>(null);
+let selectedSensorPreset = $state<string | null>(null);
+let selectedChemistry = $state<string | null>(null);
 let batteryCellCount = $state("4");
 let selectedBattery = $state("1");
 let lastScopedBatteryObservation = $state<BatteryLiveObservation | null>(null);
@@ -124,24 +122,21 @@ let validChemistries = $derived(
 );
 let boardPresetOptions = $derived([
   { value: "", label: "Select board preset" },
-  ...validBoardPresets.map((preset, index) => ({ value: String(index), label: preset.label })),
+  ...validBoardPresets.map((preset) => ({ value: preset.id, label: preset.label })),
 ]);
 let sensorPresetOptions = $derived([
   { value: "", label: "Select sensor preset" },
-  ...validSensorPresets.map((preset, index) => ({ value: String(index), label: preset.label })),
+  ...validSensorPresets.map((preset) => ({ value: preset.id, label: preset.label })),
 ]);
 let chemistryPresetOptions = $derived([
   { value: "", label: "Select chemistry" },
-  ...validChemistries.map((chemistry, index) => ({ value: String(index), label: chemistry.label })),
+  ...validChemistries.map((chemistry) => ({ value: chemistry.id, label: chemistry.label })),
 ]);
 let monitorItem = $derived(itemIndex.get(batteryParamId("MONITOR")) ?? null);
 let voltPinItem = $derived(itemIndex.get(batteryParamId("VOLT_PIN")) ?? null);
 let currPinItem = $derived(itemIndex.get(batteryParamId("CURR_PIN")) ?? null);
 let voltMultItem = $derived(itemIndex.get(batteryParamId("VOLT_MULT")) ?? null);
 let ampPerVoltItem = $derived(itemIndex.get(batteryParamId("AMP_PERVLT")) ?? null);
-let armVoltItem = $derived(itemIndex.get(batteryParamId("ARM_VOLT")) ?? null);
-let lowVoltItem = $derived(itemIndex.get(batteryParamId("LOW_VOLT")) ?? null);
-let crtVoltItem = $derived(itemIndex.get(batteryParamId("CRT_VOLT")) ?? null);
 let monitorValue = $derived(
   resolveSetupDraftNumber(params.stagedEdits[batteryParamId("MONITOR")]?.nextValue ?? monitorItem?.value) ??
     monitorItem?.value ??
@@ -186,58 +181,21 @@ let liveSummary = $derived.by(() => {
     observation: null,
   };
 });
-let chemistryPreviewEntries = $derived.by(() => {
-  const index = Number(selectedChemistry);
-  const cells = Math.max(1, Math.round(resolveSetupDraftNumber(batteryCellCount) ?? 4));
-  const chemistry = validChemistries[index] ?? null;
-
-  if (!chemistry) {
-    return [];
-  }
-
-  return [
-    {
-      item: armVoltItem,
-      name: batteryParamId("ARM_VOLT"),
-      nextValue: round2(calcBattArmVolt(cells, chemistry.cellVoltMin)),
-    },
-    {
-      item: lowVoltItem,
-      name: batteryParamId("LOW_VOLT"),
-      nextValue: round2(calcBattLowVolt(cells, chemistry.cellVoltMin)),
-    },
-    {
-      item: crtVoltItem,
-      name: batteryParamId("CRT_VOLT"),
-      nextValue: round2(calcBattCrtVolt(cells, chemistry.cellVoltMin)),
-    },
-  ];
-});
+let chemistryPreviewEntries = $derived(presetEntries("chemistry", selectedChemistry));
 let chemistryRows = $derived(buildPreviewRows(chemistryPreviewEntries));
-let boardPreviewEntries = $derived.by(() => {
-  const preset = validBoardPresets[Number(selectedBoardPreset)] ?? null;
-  if (!preset) {
-    return [];
-  }
-
-  return [
-    { item: voltPinItem, name: batteryParamId("VOLT_PIN"), nextValue: preset.voltPin },
-    { item: currPinItem, name: batteryParamId("CURR_PIN"), nextValue: preset.currPin },
-  ];
-});
+let boardPreviewEntries = $derived(presetEntries("board", selectedBoardPreset));
 let boardRows = $derived(buildPreviewRows(boardPreviewEntries));
-let sensorPreviewEntries = $derived.by(() => {
-  const preset = validSensorPresets[Number(selectedSensorPreset)] ?? null;
-  if (!preset) {
-    return [];
-  }
-
-  return [
-    { item: voltMultItem, name: batteryParamId("VOLT_MULT"), nextValue: round3(preset.voltMult) },
-    { item: ampPerVoltItem, name: batteryParamId("AMP_PERVLT"), nextValue: round3(preset.ampPerVolt) },
-  ];
-});
+let sensorPreviewEntries = $derived(presetEntries("sensor", selectedSensorPreset));
 let sensorRows = $derived(buildPreviewRows(sensorPreviewEntries));
+
+function presetEntries(kind: "board" | "sensor" | "chemistry", id: string | null): PresetRowInput[] {
+  const values = batteryPresetValues(kind, id, resolveSetupDraftNumber(batteryCellCount) ?? 0);
+  return Object.entries(values).map(([suffix, nextValue]) => {
+    const name = batteryParamId(suffix);
+    return { item: itemIndex.get(name) ?? null, name, nextValue };
+  });
+}
+
 let presetStateText = $derived.by(() => {
   const parts: string[] = [];
   if (activeBoardPresetLabel) {
@@ -437,14 +395,6 @@ function formatCurrent(value: number | null): string {
 function formatRemaining(value: number | null): string {
   return value === null ? "--" : `${Math.round(value)}%`;
 }
-
-function round2(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
-function round3(value: number): number {
-  return Math.round(value * 1000) / 1000;
-}
 </script>
 
 <SetupSectionShell
@@ -498,12 +448,12 @@ function round3(value: number): number {
           <HelperText class="mt-2">Choose a known flight-controller preset to preview {batteryParamId("VOLT_PIN")} and {batteryParamId("CURR_PIN")} before staging.</HelperText>
         </div>
         <div>
-          <NativeSelect bind:value={selectedBoardPreset} disabled={actionsBlocked || validBoardPresets.length === 0} options={boardPresetOptions} testId={`${setupWorkspaceTestIds.batteryPresetSelectPrefix}-board`} />
+          <NativeSelect value={selectedBoardPreset ?? ""} onchange={(event) => { selectedBoardPreset = (event.currentTarget as HTMLSelectElement).value || null; }} disabled={actionsBlocked || validBoardPresets.length === 0} options={boardPresetOptions} testId={`${setupWorkspaceTestIds.batteryPresetSelectPrefix}-board`} />
           {#if boardRows.length > 0}
             <div class="mt-3" data-testid={`${setupWorkspaceTestIds.batteryPreviewPrefix}-board`}>
               <SetupPreviewStagePanel
                 onCancel={() => {
-                  selectedBoardPreset = "";
+                  selectedBoardPreset = null;
                 }}
                 onStage={() => stagePreview(boardPreviewEntries)}
                 rows={boardRows}
@@ -520,12 +470,12 @@ function round3(value: number): number {
           <HelperText class="mt-2">Choose a known power-module scaling preset to preview {batteryParamId("VOLT_MULT")} and {batteryParamId("AMP_PERVLT")}.</HelperText>
         </div>
         <div>
-          <NativeSelect bind:value={selectedSensorPreset} disabled={actionsBlocked || validSensorPresets.length === 0} options={sensorPresetOptions} testId={`${setupWorkspaceTestIds.batteryPresetSelectPrefix}-sensor`} />
+          <NativeSelect value={selectedSensorPreset ?? ""} onchange={(event) => { selectedSensorPreset = (event.currentTarget as HTMLSelectElement).value || null; }} disabled={actionsBlocked || validSensorPresets.length === 0} options={sensorPresetOptions} testId={`${setupWorkspaceTestIds.batteryPresetSelectPrefix}-sensor`} />
           {#if sensorRows.length > 0}
             <div class="mt-3" data-testid={`${setupWorkspaceTestIds.batteryPreviewPrefix}-sensor`}>
               <SetupPreviewStagePanel
                 onCancel={() => {
-                  selectedSensorPreset = "";
+                  selectedSensorPreset = null;
                 }}
                 onStage={() => stagePreview(sensorPreviewEntries)}
                 rows={sensorRows}
@@ -543,14 +493,14 @@ function round3(value: number): number {
         </div>
         <div>
           <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
-            <NativeSelect bind:value={selectedChemistry} disabled={actionsBlocked || validChemistries.length === 0} options={chemistryPresetOptions} testId={`${setupWorkspaceTestIds.batteryPresetSelectPrefix}-chemistry`} />
+            <NativeSelect value={selectedChemistry ?? ""} onchange={(event) => { selectedChemistry = (event.currentTarget as HTMLSelectElement).value || null; }} disabled={actionsBlocked || validChemistries.length === 0} options={chemistryPresetOptions} testId={`${setupWorkspaceTestIds.batteryPresetSelectPrefix}-chemistry`} />
             <Input bind:value={batteryCellCount} inputmode="numeric" min="1" step="1" type="number" />
           </div>
           {#if chemistryRows.length > 0}
             <div class="mt-3" data-testid={`${setupWorkspaceTestIds.batteryPreviewPrefix}-chemistry`}>
               <SetupPreviewStagePanel
                 onCancel={() => {
-                  selectedChemistry = "";
+                  selectedChemistry = null;
                 }}
                 onStage={() => stagePreview(chemistryPreviewEntries)}
                 rows={chemistryRows}
