@@ -156,7 +156,7 @@ type DomainAdapter<D extends MissionDomain> = {
 export const DOMAIN_ADAPTERS: Readonly<{ [D in MissionDomain]: DomainAdapter<D> }> = {
     mission: {
         emptyPlan: () => ({ items: [] }), defaultItem: createDefaultMissionItem, preview: previewFromMissionItem,
-        isReadOnly: (item) => "Other" in item.command,
+        isReadOnly: (item) => "Other" in item.command || "QgcPassthrough" in item.command,
         withCurrent: (item, current) => ({ ...item, current }),
         items: (plan) => plan.items, planFromItems: (items) => ({ items }),
         updatePosition: (item, transform) => {

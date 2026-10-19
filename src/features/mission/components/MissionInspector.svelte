@@ -210,6 +210,11 @@ function rawFields(command: MissionCommand) {
 }
 
 function editableFields(command: MissionCommand): EditableField[] {
+  if ("QgcPassthrough" in command) {
+    return (command.QgcPassthrough.params ?? []).map((value, index) => ({
+      key: `param${index + 1}`, label: `File parameter ${index + 1}`, type: "number" as const, value,
+    }));
+  }
   if ("Other" in command) {
     return rawFields(command);
   }
@@ -441,7 +446,7 @@ function updateAltitudeInput(event: Event) {
       {#if item.readOnly}
         <Alert density="compact" layout="stacked" variant="warning" testId={missionWorkspaceTestIds.inspectorReadonly}>
           <p class="font-semibold">Unsupported/raw mission item</p>
-          <p class="mt-1 text-xs text-warning/90">This preserved command stays read-only. Its raw parameters remain visible so imported content is not flattened away.</p>
+          <p class="mt-1 text-xs text-warning/90">{"QgcPassthrough" in missionItem.command ? "This file-only item can be exported unchanged, but cannot be uploaded to a vehicle." : "This preserved command stays read-only. Its raw parameters remain visible so imported content is not flattened away."}</p>
           <dl class="mt-3 grid gap-2 sm:grid-cols-2">
             {#each fields as field (field.key)}
               <FactTile density="compact" label={field.label} tone="warning" value={String(field.value)} unit={field.units} />

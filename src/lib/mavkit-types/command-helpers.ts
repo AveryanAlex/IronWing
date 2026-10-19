@@ -64,6 +64,9 @@ export function commandDisplayName(cmd: MissionCommand): string {
     if ("Other" in cmd) {
         return `Command #${cmd.Other.command}`;
     }
+    if ("QgcPassthrough" in cmd) {
+        return `Command #${cmd.QgcPassthrough.command} (file only)`;
+    }
     return "Unknown";
 }
 
@@ -81,7 +84,7 @@ export function withCommandField<C extends MissionCommand, F extends FieldOf<Pay
 /** Boundary for inspector inputs and decoded file fields; shape is checked before updating. */
 export function withDynamicCommandField(cmd: MissionCommand, fieldKey: string, value: unknown): MissionCommand {
     const [category, variant] = Object.entries(cmd)[0];
-    if (category === "Other" || typeof variant !== "object" || variant === null) return cmd;
+    if (category === "Other" || category === "QgcPassthrough" || typeof variant !== "object" || variant === null) return cmd;
     const [variantKey, inner] = Object.entries(variant)[0];
     if (!inner || typeof inner !== "object" || !(fieldKey in inner)) return cmd;
     const payload = inner as Record<string, unknown>;

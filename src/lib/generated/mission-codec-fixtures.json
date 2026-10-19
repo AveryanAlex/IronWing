@@ -1,6 +1,36 @@
 [
   {
     "command": {
+      "Other": {
+        "command": 31010,
+        "frame": "global_relative_alt",
+        "param1": 1.0,
+        "param2": 2.0,
+        "param3": 3.0,
+        "param4": 4.0,
+        "x": 557500000,
+        "y": 376250000,
+        "z": 80.0
+      }
+    },
+    "input": {
+      "command": 31010,
+      "frame": 3,
+      "params": [
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        55.75,
+        37.625,
+        80.0
+      ],
+      "type": "SimpleItem"
+    },
+    "name": "unknown SDK command coordinates"
+  },
+  {
+    "command": {
       "Do": {
         "PauseContinue": {
           "pause": true

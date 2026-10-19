@@ -1,4 +1,5 @@
 import type * as Generated from "../generated/mavkit";
+import type { QgcSimpleItem } from "../mission-plan-io/qgc-types";
 
 export type * from "../generated/mavkit";
 export type {
@@ -106,8 +107,11 @@ export type CondDistance = UiWire<Generated.CondDistance>;
 export type CondYaw = UiWire<Generated.CondYaw>;
 export type ConditionCommand = UiWire<Generated.ConditionCommand>;
 
-export type MissionCommand = UiWire<Generated.MissionCommand>;
-export type UiMissionItem = UiWire<Generated.MissionItem> & {
+/** Preserved file content which has no supported SDK/wire representation. */
+export type QgcPassthroughCommand = { QgcPassthrough: QgcSimpleItem };
+export type MissionCommand = UiWire<Generated.MissionCommand> | QgcPassthroughCommand;
+export type UiMissionItem = Omit<UiWire<Generated.MissionItem>, "command"> & {
+    command: MissionCommand;
     current?: boolean;
 };
 export type MissionItem = UiMissionItem;

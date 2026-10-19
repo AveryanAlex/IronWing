@@ -156,8 +156,8 @@ describe("mission-plan-io: parsePlanFile", () => {
                     param2: 2,
                     param3: 3,
                     param4: 4,
-                    x: 47.5,
-                    y: 8.6,
+                    x: 475000000,
+                    y: 86000000,
                     z: 700,
                 },
             },
@@ -168,7 +168,6 @@ describe("mission-plan-io: parsePlanFile", () => {
         expect(result.warnings).toEqual(
             expect.arrayContaining([
                 expect.stringContaining("not in COMMAND_CATALOG"),
-                expect.stringContaining("float degrees"),
             ]),
         );
     });
@@ -589,7 +588,6 @@ describe("mission-plan-io: exportPlanFile", () => {
             expect.arrayContaining([
                 expect.stringContaining("Fence return_point"),
                 expect.stringContaining("non-RelHome altitude frame"),
-                expect.stringContaining("float degrees"),
             ]),
         );
     });
@@ -641,8 +639,8 @@ describe("mission-plan-io: exportPlanFile", () => {
                                 param2: 2,
                                 param3: 3,
                                 param4: 4,
-                                x: 47.5,
-                                y: 8.6,
+                                x: 475000000,
+                                y: 86000000,
                                 z: 70,
                             },
                         },

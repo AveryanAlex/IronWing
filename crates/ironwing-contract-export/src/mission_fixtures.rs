@@ -6,6 +6,12 @@ use serde_json::json;
 pub fn generate() -> Result<String, serde_json::Error> {
     let cases = [
         (
+            "unknown SDK command coordinates",
+            MavCmd::MAV_CMD_USER_1,
+            [1.0, 2.0, 3.0, 4.0],
+            true,
+        ),
+        (
             "pause",
             MavCmd::MAV_CMD_DO_PAUSE_CONTINUE,
             [0.0, 0.0, 0.0, 0.0],

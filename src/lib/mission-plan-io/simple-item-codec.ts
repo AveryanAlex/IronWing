@@ -178,19 +178,36 @@ export function missionFrameToNumeric(frame: MissionFrame): number {
     return frame.other;
 }
 
+function qgcRawCoordinatesToWire(frame: MissionFrame, params: QgcParams): { x: number; y: number } | null {
+    if (typeof frame !== "string") return null;
+    const toWire = (value: number) => frame === "mission" ? value : Math.round(value * 1e7);
+    const x = toWire(params[4]);
+    const y = toWire(params[5]);
+    return [x, y].every((value) => Number.isInteger(value) && value >= -0x80000000 && value <= 0x7fffffff)
+        ? { x, y } : null;
+}
+
 export function parseSimpleItem(item: QgcSimpleItem, index: number, warnings: string[], label = `Mission item ${index + 1}`): MissionItem {
     const params = normalizeParams(item.params);
     const entry = commandIdToVariant(item.command);
     const context = `${label} (MAV_CMD ${item.command})`;
 
     const rawItem = (reason: string): MissionItem => {
+        const frame = missionFrameFromNumeric(numberOrZero(item.frame));
+        const coordinates = qgcRawCoordinatesToWire(frame, params);
+        if (!coordinates) {
+            warnings.push(`${context} ${reason}; preserved as file-only QGC content because its frame or coordinates cannot be represented safely for upload.`);
+            return {
+                command: { QgcPassthrough: structuredClone(item) },
+                current: index === 0, autocontinue: item.autoContinue ?? true,
+            };
+        }
         warnings.push(`${context} ${reason}; imported as Other without changing its parameters or frame.`);
-        warnings.push(`${context} stores Other.x and Other.y as float degrees from QGC params[4] and params[5], not degE7 wire integers.`);
         return {
             command: { Other: {
-                command: item.command, frame: missionFrameFromNumeric(numberOrZero(item.frame)),
+                command: item.command, frame,
                 param1: params[0], param2: params[1], param3: params[2], param4: params[3],
-                x: params[4], y: params[5], z: params[6],
+                ...coordinates, z: params[6],
             } },
             current: index === 0, autocontinue: item.autoContinue ?? true,
         };
@@ -250,6 +267,10 @@ function parsePositionFromParams(
 export function exportMissionItem(item: MissionItem, index: number, warnings: string[]): QgcSimpleItem {
     const context = `Mission item ${index + 1}`;
 
+    if ("QgcPassthrough" in item.command) {
+        return { ...structuredClone(item.command.QgcPassthrough), doJumpId: index + 1, autoContinue: item.autocontinue };
+    }
+
     if ("Other" in item.command && item.command.Other) {
         const params = normalizeParams([]);
         const raw = item.command.Other;
@@ -257,10 +278,10 @@ export function exportMissionItem(item: MissionItem, index: number, warnings: st
         params[1] = numberOrZero(raw.param2);
         params[2] = numberOrZero(raw.param3);
         params[3] = numberOrZero(raw.param4);
-        params[4] = raw.x;
-        params[5] = raw.y;
+        const scale = raw.frame === "global" || raw.frame === "global_relative_alt" || raw.frame === "global_terrain_alt" ? 1e7 : 1;
+        params[4] = raw.x / scale;
+        params[5] = raw.y / scale;
         params[6] = numberOrZero(raw.z);
-        warnings.push(`${context} exports Other.x and Other.y as float degrees because QGC .plan params[4] and params[5] are degree floats, not degE7 wire integers.`);
         return {
             type: "SimpleItem",
             autoContinue: item.autocontinue,

@@ -63,9 +63,17 @@ export type DomainPlanMap = {
 
 export function toWireMissionPlan(plan: MissionPlan | WireMissionPlan): WireMissionPlan {
   return {
-    items: plan.items.map((item) => {
-      const { current: _current, ...wireItem } = item as MissionPlan["items"][number];
-      return wireItem;
+    items: plan.items.map((item, index) => {
+      const { current: _current, command, ...wireItem } = item as MissionPlan["items"][number];
+      if ("QgcPassthrough" in command) {
+        throw new RangeError(`Mission item ${index + 1} is preserved file content and cannot be sent to the vehicle.`);
+      }
+      if ("Other" in command && ![command.Other.x, command.Other.y].every(
+        (value) => Number.isInteger(value) && value >= -0x80000000 && value <= 0x7fffffff,
+      )) {
+        throw new RangeError(`Mission item ${index + 1} requires integer wire x/y coordinates.`);
+      }
+      return { ...wireItem, command };
     }),
   };
 }
