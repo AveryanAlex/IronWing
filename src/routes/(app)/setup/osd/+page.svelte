@@ -1,4 +1,5 @@
 <script lang="ts">
+import { ArduPilotOsdType } from "../../../../lib/ardupilot/osd";
 import { Monitor } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
@@ -17,7 +18,6 @@ import SetupGuideCard from "../../../../features/setup/shared/SetupGuideCard.sve
 import SetupNotice from "../../../../features/setup/shared/SetupNotice.svelte";
 import { buildArduPilotOsdModel } from "../../../../lib/osd/ardupilot-osd-model";
 import { buildEffectiveOsdParamValues, type OsdRenderSource } from "../../../../lib/osd/ardupilot-osd-renderer";
-import { OSD_TYPE_DISPLAYPORT } from "../../../../lib/osd/ardupilot-osd-setup";
 import {
   loadOsdDisplayTargetSelection,
   saveOsdDisplayTargetSelection,
@@ -52,7 +52,7 @@ let model = $derived(
   buildArduPilotOsdModel({
     paramStore: params.paramStore,
     stagedEdits: params.stagedEdits,
-    displayTarget: effectiveParamValues.OSD_TYPE === OSD_TYPE_DISPLAYPORT ? displayTarget : null,
+    displayTarget: effectiveParamValues.OSD_TYPE === ArduPilotOsdType.DisplayPort ? displayTarget : null,
     displayTargetScreen: activeScreenNumber,
   }),
 );

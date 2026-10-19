@@ -1,4 +1,5 @@
 <script lang="ts">
+import { ArduPilotOsdType } from "../../../../lib/ardupilot/osd";
 import { Monitor, Search, SlidersHorizontal } from "lucide-svelte";
 
 import type { ParameterItemModel } from "../../../../lib/params/parameter-item-model";
@@ -9,11 +10,6 @@ import type {
   OsdScreenModel,
 } from "../../../../lib/osd/ardupilot-osd-model";
 import { clampOsdCoordinate } from "../../../../lib/osd/ardupilot-osd-model";
-import {
-  OSD_TYPE_ANALOG,
-  OSD_TYPE_DISPLAYPORT,
-  OSD_TYPE_MSP,
-} from "../../../../lib/osd/ardupilot-osd-setup";
 import {
   osdDisplayTargetCompatibility,
   osdDisplayTargetLabel,
@@ -144,9 +140,9 @@ let activeScreen = $derived.by(() => {
   return model.screens.find((screen) => screen.screen === selectedScreen) ?? model.screens[0] ?? null;
 });
 let osdType = $derived(normalizeOsdType(previewSource.paramValues.OSD_TYPE));
-let isAnalog = $derived(osdType === OSD_TYPE_ANALOG);
-let isDisplayPort = $derived(osdType === OSD_TYPE_DISPLAYPORT);
-let isDigital = $derived(osdType === OSD_TYPE_MSP || osdType === OSD_TYPE_DISPLAYPORT);
+let isAnalog = $derived(osdType === ArduPilotOsdType.Analog);
+let isDisplayPort = $derived(osdType === ArduPilotOsdType.DisplayPort);
+let isDigital = $derived(osdType === ArduPilotOsdType.Msp || osdType === ArduPilotOsdType.DisplayPort);
 let displayTargetCompatibility = $derived(
   osdDisplayTargetCompatibility(displayTarget, activeScreen?.txtResValue ?? null),
 );

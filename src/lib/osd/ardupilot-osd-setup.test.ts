@@ -1,13 +1,10 @@
+import { ArduPilotOsdType } from "../ardupilot/osd";
 import { ArduPilotSerialProtocol, ArduPilotSerialBaud } from "../ardupilot/serial";
 import { describe, expect, it } from "vitest";
 
 import type { ParamStore } from "../../params";
 import type { SerialPortRow } from "../setup/serial-port-model";
 import {
-  OSD_TYPE_ANALOG,
-  OSD_TYPE_DISPLAYPORT,
-  OSD_TYPE_MSP,
-  buildMspPortStagePlan,
   buildOsdConfigurationPlan,
   buildOsdProfileStagePlan,
   detectOsdConfiguration,
@@ -69,14 +66,14 @@ describe("ardupilot-osd-setup", () => {
     const plan = buildOsdProfileStagePlan({
       profileId: "dji",
       paramStore: createParamStore({
-        OSD_TYPE: OSD_TYPE_ANALOG,
+        OSD_TYPE: ArduPilotOsdType.Analog,
         MSP_OPTIONS: 1,
         OSD_OPTIONS: 0,
       }),
     });
 
     expect(Object.fromEntries(plan.map((target) => [target.name, target.value]))).toEqual({
-      OSD_TYPE: OSD_TYPE_MSP,
+      OSD_TYPE: ArduPilotOsdType.Msp,
       MSP_OPTIONS: 4,
       OSD_OPTIONS: 32,
     });
@@ -86,13 +83,13 @@ describe("ardupilot-osd-setup", () => {
     const plan = buildOsdProfileStagePlan({
       profileId: "displayport",
       paramStore: createParamStore({
-        OSD_TYPE: OSD_TYPE_ANALOG,
+        OSD_TYPE: ArduPilotOsdType.Analog,
         MSP_OPTIONS: 1,
       }),
     });
 
     expect(Object.fromEntries(plan.map((target) => [target.name, target.value]))).toEqual({
-      OSD_TYPE: OSD_TYPE_DISPLAYPORT,
+      OSD_TYPE: ArduPilotOsdType.DisplayPort,
       MSP_OPTIONS: 0,
     });
   });
@@ -100,14 +97,14 @@ describe("ardupilot-osd-setup", () => {
   it("stages selected DisplayPort UART and resets the previous DisplayPort UART to ArduPilot None", () => {
     expect(ArduPilotSerialProtocol.Disabled).toBe(-1);
 
-    const plan = buildMspPortStagePlan({
+    const plan = buildOsdConfigurationPlan({
+      profileId: "displayport",
+      paramStore: createParamStore({ OSD_TYPE: 1, MSP_OPTIONS: 0 }),
       ports: [row(1, ArduPilotSerialProtocol.MspDisplayPort, ArduPilotSerialBaud.Baud115200), row(2, 2, 57)],
       selectedPortPrefix: "SERIAL2",
-      protocol: ArduPilotSerialProtocol.MspDisplayPort,
-      protocolLabel: "MSP DisplayPort (42)",
     });
 
-    expect(plan.map((target) => [target.name, target.value])).toEqual([
+    expect(plan.targets.filter((target) => target.name.startsWith("SERIAL")).map((target) => [target.name, target.value])).toEqual([
       ["SERIAL1_PROTOCOL", ArduPilotSerialProtocol.Disabled],
       ["SERIAL2_PROTOCOL", ArduPilotSerialProtocol.MspDisplayPort],
       ["SERIAL2_BAUD", ArduPilotSerialBaud.Baud115200],
@@ -117,7 +114,7 @@ describe("ardupilot-osd-setup", () => {
   it("keeps a live disabled OSD_TYPE=0 distinct from staged analog OSD", () => {
     expect(detectOsdConfiguration({
       paramStore: createParamStore({ OSD_TYPE: 0 }),
-      stagedEdits: { OSD_TYPE: { nextValue: OSD_TYPE_ANALOG } },
+      stagedEdits: { OSD_TYPE: { nextValue: ArduPilotOsdType.Analog } },
     })).toEqual({ state: "disabled", osdType: 0 });
   });
 
@@ -129,11 +126,11 @@ describe("ardupilot-osd-setup", () => {
   });
 
   it("detects each supported live OSD backend", () => {
-    expect(detectOsdConfiguration({ paramStore: createParamStore({ OSD_TYPE: OSD_TYPE_ANALOG }) }).state)
+    expect(detectOsdConfiguration({ paramStore: createParamStore({ OSD_TYPE: ArduPilotOsdType.Analog }) }).state)
       .toBe("analog");
-    expect(detectOsdConfiguration({ paramStore: createParamStore({ OSD_TYPE: OSD_TYPE_MSP }) }).state)
+    expect(detectOsdConfiguration({ paramStore: createParamStore({ OSD_TYPE: ArduPilotOsdType.Msp }) }).state)
       .toBe("dji");
-    expect(detectOsdConfiguration({ paramStore: createParamStore({ OSD_TYPE: OSD_TYPE_DISPLAYPORT }) }).state)
+    expect(detectOsdConfiguration({ paramStore: createParamStore({ OSD_TYPE: ArduPilotOsdType.DisplayPort }) }).state)
       .toBe("displayport");
   });
 
@@ -152,7 +149,7 @@ describe("ardupilot-osd-setup", () => {
       issues: [],
     });
     expect(plan.targets.map((target) => [target.name, target.value])).toEqual([
-      ["OSD_TYPE", OSD_TYPE_ANALOG],
+      ["OSD_TYPE", ArduPilotOsdType.Analog],
     ]);
   });
 
@@ -194,7 +191,7 @@ describe("ardupilot-osd-setup", () => {
     expect(plan.canStage).toBe(true);
     expect(plan.issues).toEqual([]);
     expect(plan.targets.map((target) => [target.name, target.currentValue, target.value])).toEqual([
-      ["OSD_TYPE", 0, OSD_TYPE_MSP],
+      ["OSD_TYPE", 0, ArduPilotOsdType.Msp],
       ["MSP_OPTIONS", 0b10010001, 0b10010100],
       ["OSD_OPTIONS", 0b10000001, 0b10100001],
       ["SERIAL1_PROTOCOL", 33, ArduPilotSerialProtocol.Disabled],
@@ -225,7 +222,7 @@ describe("ardupilot-osd-setup", () => {
 
     expect(plan.canStage).toBe(true);
     expect(plan.targets.map((target) => [target.name, target.value])).toEqual([
-      ["OSD_TYPE", OSD_TYPE_DISPLAYPORT],
+      ["OSD_TYPE", ArduPilotOsdType.DisplayPort],
       ["MSP_OPTIONS", 0b10000010],
       ["SERIAL1_PROTOCOL", ArduPilotSerialProtocol.Disabled],
       ["SERIAL3_PROTOCOL", ArduPilotSerialProtocol.MspDisplayPort],
@@ -238,12 +235,12 @@ describe("ardupilot-osd-setup", () => {
       profileId: "displayport",
       selectedPortPrefix: "SERIAL2",
       ports: [row(1, 33), row(2, 2)],
-      paramStore: createParamStore({ OSD_TYPE: OSD_TYPE_MSP, MSP_OPTIONS: 4 }),
+      paramStore: createParamStore({ OSD_TYPE: ArduPilotOsdType.Msp, MSP_OPTIONS: 4 }),
     });
 
     expect(plan.canStage).toBe(true);
     expect(plan.targets.map((target) => [target.name, target.value])).toEqual([
-      ["OSD_TYPE", OSD_TYPE_DISPLAYPORT],
+      ["OSD_TYPE", ArduPilotOsdType.DisplayPort],
       ["MSP_OPTIONS", 4],
       ["SERIAL1_PROTOCOL", ArduPilotSerialProtocol.Disabled],
       ["SERIAL2_PROTOCOL", ArduPilotSerialProtocol.MspDisplayPort],
@@ -260,12 +257,12 @@ describe("ardupilot-osd-setup", () => {
         row(2, ArduPilotSerialProtocol.MspDisplayPort),
         row(3, 32),
       ],
-      paramStore: createParamStore({ OSD_TYPE: OSD_TYPE_MSP }),
+      paramStore: createParamStore({ OSD_TYPE: ArduPilotOsdType.Msp }),
     });
 
     expect(plan.canStage).toBe(true);
     expect(plan.targets.map((target) => [target.name, target.value])).toEqual([
-      ["OSD_TYPE", OSD_TYPE_ANALOG],
+      ["OSD_TYPE", ArduPilotOsdType.Analog],
       ["SERIAL1_PROTOCOL", ArduPilotSerialProtocol.Disabled],
       ["SERIAL2_PROTOCOL", ArduPilotSerialProtocol.Disabled],
     ]);
@@ -336,7 +333,7 @@ describe("ardupilot-osd-setup", () => {
         baudMetadataReady: false,
       })],
       paramStore: createParamStore({
-        OSD_TYPE: OSD_TYPE_ANALOG,
+        OSD_TYPE: ArduPilotOsdType.Analog,
         MSP_OPTIONS: 1,
         OSD_OPTIONS: 0,
       }),

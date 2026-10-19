@@ -1,34 +1,68 @@
-import { setBit } from "../bitmask";
+import { setBit, type BitIndex } from "../bitmask";
 import { ArduPilotSerialProtocol, ArduPilotSerialBaud } from "../ardupilot/serial";
-import type { ParamStore } from "../../params";
 import type { SerialPortRow } from "../setup/serial-port-model";
-import type { StagedParameterEdit } from "../stores/params";
-
-export const OSD_TYPE_ANALOG = 1;
-export const OSD_TYPE_MSP = 3;
-export const OSD_TYPE_DISPLAYPORT = 5;
-
-
-const OSD_PROFILE_SERIAL_PROTOCOLS = [ArduPilotSerialProtocol.DjiFpv, ArduPilotSerialProtocol.MspDisplayPort] as const;
-
-export const MSP_OPTIONS_TELEMETRY_MODE_BIT = 0;
-export const MSP_OPTIONS_DJI_BETAFLIGHT_FONT_BIT = 2;
-export const OSD_OPTIONS_TRANSLATE_ARROWS_BIT = 5;
+import {
+  readAppliedParameter as liveParamValue,
+  readProposedParameter as effectiveParamValue,
+  type ParameterValueSource,
+} from "../params/parameter-values";
+import { ArduPilotOsdType, MspOptionBit, OsdOptionBit } from "../ardupilot/osd";
+export {
+  readAppliedParameter as liveParamValue,
+  readProposedParameter as effectiveParamValue,
+} from "../params/parameter-values";
 
 export type OsdVideoSystemId = "analog" | "dji" | "displayport";
 export type OsdDetectedState = "disabled" | OsdVideoSystemId | "unknown";
 
-export type OsdVideoSystemProfile = {
-  id: OsdVideoSystemId;
+type BitParameterRule = {
+  name: "MSP_OPTIONS" | "OSD_OPTIONS";
+  edits: readonly { bit: BitIndex; enabled: boolean }[];
+  label: string;
+  detail: string;
+};
+type ProfileDefinition = {
   label: string;
   shortLabel: string;
   summary: string;
-  serialProtocol: number | null;
-  serialProtocolLabel: string | null;
-  primaryOsdType: number;
-  keyParams: string[];
+  backendDetail: string;
+  bitRules: readonly BitParameterRule[];
+  layoutParams: readonly string[];
   operatorNotes: string[];
-};
+} & (
+  | { kind: "onboard"; id: "analog"; primaryOsdType: ArduPilotOsdType.Analog }
+  | {
+      kind: "serial";
+      id: "dji";
+      primaryOsdType: ArduPilotOsdType.Msp;
+      serialProtocol: ArduPilotSerialProtocol.DjiFpv;
+      serialProtocolLabel: string;
+    }
+  | {
+      kind: "serial";
+      id: "displayport";
+      primaryOsdType: ArduPilotOsdType.DisplayPort;
+      serialProtocol: ArduPilotSerialProtocol.MspDisplayPort;
+      serialProtocolLabel: string;
+    }
+);
+export type OsdVideoSystemProfile = ProfileDefinition & { keyParams: string[] };
+
+function defineProfile<P extends ProfileDefinition>(profile: P): P & { keyParams: string[] } {
+  return {
+    ...profile,
+    keyParams: [
+      `OSD_TYPE=${profile.primaryOsdType}`,
+      ...(profile.kind === "serial"
+        ? [`SERIALn_PROTOCOL=${profile.serialProtocol}`, `SERIALn_BAUD=${ArduPilotSerialBaud.Baud115200}`]
+        : []),
+      ...profile.bitRules.map(
+        (rule) => `${rule.name} ${rule.edits.map((edit) => `bit${edit.bit}=${Number(edit.enabled)}`).join(", ")}`,
+      ),
+      ...profile.layoutParams,
+    ],
+  };
+}
 
 export type OsdSetupStageTarget = {
   name: string;
@@ -44,10 +78,7 @@ export type MspPortStageTarget = OsdSetupStageTarget & {
   action: "disable" | "enable" | "baud";
 };
 
-export type OsdSetupValueInput = {
-  paramStore: ParamStore | null;
-  stagedEdits?: Record<string, Pick<StagedParameterEdit, "nextValue"> | undefined>;
-};
+export type OsdSetupValueInput = ParameterValueSource;
 
 export type OsdConfigurationPlan = {
   profileId: OsdVideoSystemId;
@@ -63,50 +94,80 @@ export type OsdConfigurationPlanInput = OsdSetupValueInput & {
   ports: SerialPortRow[];
 };
 
-export const OSD_VIDEO_SYSTEM_PROFILES: Record<OsdVideoSystemId, OsdVideoSystemProfile> = {
-  analog: {
+export const OSD_VIDEO_SYSTEM_PROFILES = {
+  analog: defineProfile({
+    kind: "onboard",
     id: "analog",
     label: "Analog",
     shortLabel: "Analog",
     summary: "Use the flight controller's onboard MAX7456-style analog overlay. No MSP UART is required.",
-    serialProtocol: null,
-    serialProtocolLabel: null,
-    primaryOsdType: OSD_TYPE_ANALOG,
-    keyParams: ["OSD_TYPE=1", "OSDn_ENABLE", "OSDn_<ITEM>_EN/X/Y"],
+    primaryOsdType: ArduPilotOsdType.Analog,
+    backendDetail: `Enable onboard analog OSD (OSD_TYPE=${ArduPilotOsdType.Analog}).`,
+    bitRules: [],
+    layoutParams: ["OSDn_ENABLE", "OSDn_<ITEM>_EN/X/Y"],
     operatorNotes: [
       "Wire camera and VTX video through the flight controller's analog video pads.",
       "Use the layout editor below to enable items and place them on the 30 x 16 style character grid.",
     ],
-  },
-  dji: {
+  }),
+  dji: defineProfile({
+    kind: "serial",
     id: "dji",
     label: "DJI Stock Custom OSD",
     shortLabel: "DJI",
     summary: "Use DJI FPV/RE/compatible goggles custom OSD over MSP on the UART wired to the air unit.",
     serialProtocol: ArduPilotSerialProtocol.DjiFpv,
-    serialProtocolLabel: "DJI FPV / Custom OSD (33)",
-    primaryOsdType: OSD_TYPE_MSP,
-    keyParams: ["OSD_TYPE=3", "SERIALn_PROTOCOL=33", "SERIALn_BAUD=115", "MSP_OPTIONS bit2", "OSD_OPTIONS bit5"],
+    serialProtocolLabel: `DJI FPV / Custom OSD (${ArduPilotSerialProtocol.DjiFpv})`,
+    primaryOsdType: ArduPilotOsdType.Msp,
+    backendDetail: `Enable MSP OSD backend for DJI Custom OSD (OSD_TYPE=${ArduPilotOsdType.Msp}).`,
+    bitRules: [
+      {
+        name: "MSP_OPTIONS",
+        edits: [
+          { bit: MspOptionBit.TelemetryMode, enabled: false },
+          { bit: MspOptionBit.DjiBetaflightFont, enabled: true },
+        ],
+        label: "MSP options",
+        detail: "Use normal two-wire MSP and DJI/Betaflight font indexes.",
+      },
+      {
+        name: "OSD_OPTIONS",
+        edits: [{ bit: OsdOptionBit.TranslateArrows, enabled: true }],
+        label: "OSD options",
+        detail: "Translate direction arrows for DJI Betaflight-compatible fonts.",
+      },
+    ],
+    layoutParams: [],
     operatorNotes: [
       "Enable Custom OSD in the goggles display menu.",
       "Use both TX and RX between the flight controller UART and the DJI air unit for normal MSP operation.",
     ],
-  },
-  displayport: {
+  }),
+  displayport: defineProfile({
+    kind: "serial",
     id: "displayport",
     label: "MSP DisplayPort",
     shortLabel: "DisplayPort",
     summary: "Use MSP DisplayPort so ArduPilot draws the OSD layout directly on a compatible digital display.",
     serialProtocol: ArduPilotSerialProtocol.MspDisplayPort,
-    serialProtocolLabel: "MSP DisplayPort (42)",
-    primaryOsdType: OSD_TYPE_DISPLAYPORT,
-    keyParams: ["OSD_TYPE=5", "SERIALn_PROTOCOL=42", "SERIALn_BAUD=115", "OSDn_TXT_RES"],
+    serialProtocolLabel: `MSP DisplayPort (${ArduPilotSerialProtocol.MspDisplayPort})`,
+    primaryOsdType: ArduPilotOsdType.DisplayPort,
+    backendDetail: `Enable MSP DisplayPort as the OSD backend (OSD_TYPE=${ArduPilotOsdType.DisplayPort}).`,
+    bitRules: [
+      {
+        name: "MSP_OPTIONS",
+        edits: [{ bit: MspOptionBit.TelemetryMode, enabled: false }],
+        label: "MSP options",
+        detail: "Use normal two-wire MSP DisplayPort instead of one-wire telemetry push mode.",
+      },
+    ],
+    layoutParams: ["OSDn_TXT_RES"],
     operatorNotes: [
       "Wire TX and RX from the selected UART to the DisplayPort VTX or air unit.",
       "Select the connected display target and stage its required text-resolution mode before placing HD items.",
     ],
-  },
-};
+  }),
+} satisfies { [Id in OsdVideoSystemId]: Extract<OsdVideoSystemProfile, { id: Id }> };
 
 export const OSD_VIDEO_SYSTEM_PROFILE_LIST = [
   OSD_VIDEO_SYSTEM_PROFILES.analog,
@@ -119,171 +180,65 @@ export function detectOsdConfiguration(input: OsdSetupValueInput): {
   osdType: number | null;
 } {
   const osdType = liveParamValue(input.paramStore, "OSD_TYPE");
-  if (osdType === 0) {
-    return { state: "disabled", osdType };
-  }
-  if (osdType === OSD_TYPE_ANALOG) {
-    return { state: "analog", osdType };
-  }
-  if (osdType === OSD_TYPE_MSP) {
-    return { state: "dji", osdType };
-  }
-  if (osdType === OSD_TYPE_DISPLAYPORT) {
-    return { state: "displayport", osdType };
-  }
-
-  return { state: "unknown", osdType };
+  if (osdType === ArduPilotOsdType.Disabled) return { state: "disabled", osdType };
+  const profile = OSD_VIDEO_SYSTEM_PROFILE_LIST.find((profile) => profile.primaryOsdType === osdType);
+  return { state: profile?.id ?? "unknown", osdType };
 }
 
 export function buildOsdConfigurationPlan(input: OsdConfigurationPlanInput): OsdConfigurationPlan {
   const selectedPortPrefix = normalizePortPrefix(input.selectedPortPrefix);
-  const issues = missingProfileParameterIssues(input);
   const profile = OSD_VIDEO_SYSTEM_PROFILES[input.profileId];
+  const issues = ["OSD_TYPE", ...profile.bitRules.map((rule) => rule.name)]
+    .filter((name) => input.paramStore?.params[name] === undefined)
+    .map((name) => `${name} is unavailable on this vehicle.`);
+  const cleanupRows = osdProfileCleanupRows(input.ports, profile.kind === "serial" ? selectedPortPrefix : null);
+  const portTargets: MspPortStageTarget[] = [];
 
-  if (profile.serialProtocol === null) {
-    const cleanupRows = osdProfileCleanupRows(input.ports, null);
-    for (const row of cleanupRows) {
-      issues.push(...serialFieldTargetIssues(row, "protocol", ArduPilotSerialProtocol.Disabled));
+  if (profile.kind === "serial") {
+    const selected = input.ports.find((row) => row.prefix === selectedPortPrefix);
+    if (selectedPortPrefix === null) issues.push("Select the UART wired to the video system.");
+    else if (!selected) issues.push(`${selectedPortPrefix} is unavailable on this vehicle.`);
+    else {
+      issues.push(...serialFieldTargetIssues(selected, "protocol", profile.serialProtocol));
+      issues.push(...serialFieldTargetIssues(selected, "baud", ArduPilotSerialBaud.Baud115200));
+      portTargets.push(
+        buildPortTarget(
+          selected,
+          "protocol",
+          profile.serialProtocol,
+          "enable",
+          `Enable ${profile.serialProtocolLabel} on ${portLabel(selected)}.`,
+        ),
+        buildPortTarget(
+          selected,
+          "baud",
+          ArduPilotSerialBaud.Baud115200,
+          "baud",
+          `Set ${portLabel(selected)} to 115200 baud.`,
+        ),
+      );
     }
-
-    return completePlanOrIssues(input.profileId, selectedPortPrefix, issues, () => [
-      ...buildOsdProfileStagePlan(input),
-      ...buildOsdProfileCleanupStagePlan(cleanupRows),
-    ]);
   }
-  const serialProtocol = profile.serialProtocol;
-  const cleanupRows = osdProfileCleanupRows(input.ports, selectedPortPrefix);
-
-  const selectedRow = selectedPortPrefix === null
-    ? null
-    : input.ports.find((row) => row.prefix === selectedPortPrefix) ?? null;
-  if (selectedPortPrefix === null) {
-    issues.push("Select the UART wired to the video system.");
-  } else if (selectedRow === null) {
-    issues.push(`${selectedPortPrefix} is unavailable on this vehicle.`);
-  } else {
-    issues.push(...serialFieldTargetIssues(selectedRow, "protocol", serialProtocol));
-    issues.push(...serialFieldTargetIssues(selectedRow, "baud", ArduPilotSerialBaud.Baud115200));
-  }
-
-  for (const row of cleanupRows) {
+  for (const row of cleanupRows)
     issues.push(...serialFieldTargetIssues(row, "protocol", ArduPilotSerialProtocol.Disabled));
-  }
-
   return completePlanOrIssues(input.profileId, selectedPortPrefix, issues, () => [
     ...buildOsdProfileStagePlan(input),
-    ...buildDigitalOsdPortStagePlan({
-      ports: input.ports,
-      selectedPortPrefix,
-      protocol: serialProtocol,
-      protocolLabel: profile.serialProtocolLabel ?? `Protocol ${serialProtocol}`,
-    }),
+    ...buildOsdProfileCleanupStagePlan(cleanupRows),
+    ...portTargets,
   ]);
 }
 
-export function buildOsdProfileStagePlan(input: OsdSetupValueInput & {
-  profileId: OsdVideoSystemId;
-}): OsdSetupStageTarget[] {
-  const targets: Array<OsdSetupStageTarget | null> = [];
-
-  switch (input.profileId) {
-    case "analog":
-      targets.push(buildParamTarget(input, "OSD_TYPE", OSD_TYPE_ANALOG, "OSD backend", "Enable onboard analog OSD (OSD_TYPE=1)."));
-      break;
-    case "dji":
-      targets.push(buildParamTarget(
-        input,
-        "OSD_TYPE",
-        OSD_TYPE_MSP,
-        "OSD backend",
-        "Enable MSP OSD backend for DJI Custom OSD (OSD_TYPE=3).",
-      ));
-      targets.push(buildParamTarget(
-        input,
-        "MSP_OPTIONS",
-        setBit(setBit(effectiveParamValue(input, "MSP_OPTIONS") ?? 0, MSP_OPTIONS_TELEMETRY_MODE_BIT, false), MSP_OPTIONS_DJI_BETAFLIGHT_FONT_BIT, true),
-        "MSP options",
-        "Use normal two-wire MSP and DJI/Betaflight font indexes.",
-      ));
-      targets.push(buildParamTarget(
-        input,
-        "OSD_OPTIONS",
-        setBit(effectiveParamValue(input, "OSD_OPTIONS") ?? 0, OSD_OPTIONS_TRANSLATE_ARROWS_BIT, true),
-        "OSD options",
-        "Translate direction arrows for DJI Betaflight-compatible fonts.",
-      ));
-      break;
-    case "displayport":
-      targets.push(buildParamTarget(
-        input,
-        "OSD_TYPE",
-        OSD_TYPE_DISPLAYPORT,
-        "OSD backend",
-        "Enable MSP DisplayPort as the OSD backend (OSD_TYPE=5).",
-      ));
-      targets.push(buildParamTarget(
-        input,
-        "MSP_OPTIONS",
-        setBit(effectiveParamValue(input, "MSP_OPTIONS") ?? 0, MSP_OPTIONS_TELEMETRY_MODE_BIT, false),
-        "MSP options",
-        "Use normal two-wire MSP DisplayPort instead of one-wire telemetry push mode.",
-      ));
-      break;
+export function buildOsdProfileStagePlan(
+  input: OsdSetupValueInput & { profileId: OsdVideoSystemId },
+): OsdSetupStageTarget[] {
+  const profile = OSD_VIDEO_SYSTEM_PROFILES[input.profileId];
+  const targets = [buildParamTarget(input, "OSD_TYPE", profile.primaryOsdType, "OSD backend", profile.backendDetail)];
+  for (const rule of profile.bitRules) {
+    const current = effectiveParamValue(input, rule.name) ?? 0;
+    const value = rule.edits.reduce((mask, edit) => setBit(mask, edit.bit, edit.enabled), current);
+    targets.push(buildParamTarget(input, rule.name, value, rule.label, rule.detail));
   }
-
   return targets.filter((target): target is OsdSetupStageTarget => target !== null);
-}
-
-export function buildMspPortStagePlan(input: {
-  ports: SerialPortRow[];
-  selectedPortPrefix: string | null;
-  protocol: number;
-  protocolLabel: string;
-}): MspPortStageTarget[] {
-  const selectedPortPrefix = input.selectedPortPrefix?.trim();
-  if (!selectedPortPrefix) {
-    return [];
-  }
-
-  const targets: MspPortStageTarget[] = [];
-  for (const row of input.ports) {
-    if (row.prefix === selectedPortPrefix) {
-      continue;
-    }
-
-    if (row.protocolValue === input.protocol && row.hasProtocolParam) {
-      targets.push(buildPortTarget(row, "protocol", ArduPilotSerialProtocol.Disabled, "disable", `Disable ${input.protocolLabel} on ${portLabel(row)}.`));
-    }
-  }
-
-  const selectedRow = input.ports.find((row) => row.prefix === selectedPortPrefix);
-  if (!selectedRow) {
-    return targets;
-  }
-
-  if (selectedRow.hasProtocolParam) {
-    targets.push(buildPortTarget(selectedRow, "protocol", input.protocol, "enable", `Enable ${input.protocolLabel} on ${portLabel(selectedRow)}.`));
-  }
-  if (selectedRow.hasBaudParam) {
-    targets.push(buildPortTarget(selectedRow, "baud", ArduPilotSerialBaud.Baud115200, "baud", `Set ${portLabel(selectedRow)} to 115200 baud.`));
-  }
-
-  return targets;
-}
-
-export function effectiveParamValue(input: OsdSetupValueInput, name: string): number | null {
-  const stagedValue = input.stagedEdits?.[name]?.nextValue;
-  if (typeof stagedValue === "number" && Number.isFinite(stagedValue)) {
-    return stagedValue;
-  }
-
-  const value = input.paramStore?.params[name]?.value;
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-export function liveParamValue(paramStore: ParamStore | null, name: string): number | null {
-  const value = paramStore?.params[name]?.value;
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
 function buildParamTarget(
@@ -339,23 +294,6 @@ function normalizePortPrefix(prefix: string | null): string | null {
   return normalized ? normalized : null;
 }
 
-function missingProfileParameterIssues(input: OsdConfigurationPlanInput): string[] {
-  return requiredProfileParamNames(input.profileId)
-    .filter((name) => input.paramStore?.params[name] === undefined)
-    .map((name) => `${name} is unavailable on this vehicle.`);
-}
-
-function requiredProfileParamNames(profileId: OsdVideoSystemId): string[] {
-  switch (profileId) {
-    case "analog":
-      return ["OSD_TYPE"];
-    case "dji":
-      return ["OSD_TYPE", "MSP_OPTIONS", "OSD_OPTIONS"];
-    case "displayport":
-      return ["OSD_TYPE", "MSP_OPTIONS"];
-  }
-}
-
 function serialFieldIssues(row: SerialPortRow, field: "protocol" | "baud"): string[] {
   const hasParam = field === "protocol" ? row.hasProtocolParam : row.hasBaudParam;
   const metadataReady = field === "protocol" ? row.protocolMetadataReady : row.baudMetadataReady;
@@ -371,77 +309,42 @@ function serialFieldIssues(row: SerialPortRow, field: "protocol" | "baud"): stri
   return [];
 }
 
-function serialFieldTargetIssues(
-  row: SerialPortRow,
-  field: "protocol" | "baud",
-  targetValue: number,
-): string[] {
+function serialFieldTargetIssues(row: SerialPortRow, field: "protocol" | "baud", targetValue: number): string[] {
   const currentValue = field === "protocol" ? row.protocolValue : row.baudValue;
   return currentValue === targetValue ? [] : serialFieldIssues(row, field);
 }
 
 function osdProfileCleanupRows(ports: SerialPortRow[], excludedPortPrefix: string | null): SerialPortRow[] {
-  return ports.filter((row) => (
-    row.prefix !== excludedPortPrefix && isOsdProfileSerialProtocol(row.protocolValue)
-  ));
+  return ports.filter((row) => row.prefix !== excludedPortPrefix && isOsdProfileSerialProtocol(row.protocolValue));
 }
 
 function isOsdProfileSerialProtocol(protocol: number | null): boolean {
-  return OSD_PROFILE_SERIAL_PROTOCOLS.some((candidate) => candidate === protocol);
+  return OSD_VIDEO_SYSTEM_PROFILE_LIST.some(
+    (profile) => profile.kind === "serial" && profile.serialProtocol === protocol,
+  );
 }
 
 function buildOsdProfileCleanupStagePlan(rows: SerialPortRow[]): MspPortStageTarget[] {
-  return rows.flatMap((row) => (
+  return rows.flatMap((row) =>
     row.hasProtocolParam
-      ? [buildPortTarget(
-        row,
-        "protocol",
-        ArduPilotSerialProtocol.Disabled,
-        "disable",
-        `Disable ${osdProfileProtocolLabel(row.protocolValue)} on ${portLabel(row)}.`,
-      )]
-      : []
-  ));
-}
-
-function buildDigitalOsdPortStagePlan(input: {
-  ports: SerialPortRow[];
-  selectedPortPrefix: string | null;
-  protocol: number;
-  protocolLabel: string;
-}): MspPortStageTarget[] {
-  const selectedPortPrefix = input.selectedPortPrefix?.trim();
-  const targets = buildOsdProfileCleanupStagePlan(
-    osdProfileCleanupRows(input.ports, selectedPortPrefix ?? null),
+      ? [
+          buildPortTarget(
+            row,
+            "protocol",
+            ArduPilotSerialProtocol.Disabled,
+            "disable",
+            `Disable ${osdProfileProtocolLabel(row.protocolValue)} on ${portLabel(row)}.`,
+          ),
+        ]
+      : [],
   );
-  if (!selectedPortPrefix) {
-    return targets;
-  }
-
-  const selectedRow = input.ports.find((row) => row.prefix === selectedPortPrefix);
-  if (!selectedRow) {
-    return targets;
-  }
-
-  if (selectedRow.hasProtocolParam) {
-    targets.push(buildPortTarget(selectedRow, "protocol", input.protocol, "enable", `Enable ${input.protocolLabel} on ${portLabel(selectedRow)}.`));
-  }
-  if (selectedRow.hasBaudParam) {
-    targets.push(buildPortTarget(selectedRow, "baud", ArduPilotSerialBaud.Baud115200, "baud", `Set ${portLabel(selectedRow)} to 115200 baud.`));
-  }
-
-  return targets;
 }
 
 function osdProfileProtocolLabel(protocol: number | null): string {
-  if (protocol === ArduPilotSerialProtocol.DjiFpv) {
-    return OSD_VIDEO_SYSTEM_PROFILES.dji.serialProtocolLabel ?? "DJI FPV / Custom OSD";
-  }
-  if (protocol === ArduPilotSerialProtocol.MspDisplayPort) {
-    return OSD_VIDEO_SYSTEM_PROFILES.displayport.serialProtocolLabel ?? "MSP DisplayPort";
-  }
-
-  return "OSD profile protocol";
+  const profile = OSD_VIDEO_SYSTEM_PROFILE_LIST.find(
+    (profile) => profile.kind === "serial" && profile.serialProtocol === protocol,
+  );
+  return profile?.kind === "serial" ? profile.serialProtocolLabel : "OSD profile protocol";
 }
 
 function completePlanOrIssues(

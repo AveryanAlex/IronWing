@@ -96,14 +96,14 @@ let noProfileMessage = $derived(
     : "The vehicle does not expose a recognized OSD backend. Select a video system to prepare a setup transaction.",
 );
 let currentProfilePorts = $derived.by(() => {
-  if (profile?.serialProtocol === null || profile === null) {
+  if (profile?.kind !== "serial") {
     return [];
   }
 
   return serialModel.ports.filter((row) => row.protocolValue === profile.serialProtocol);
 });
 let selectedPortPrefix = $derived.by(() => {
-  if (!draftProfileId || profile?.serialProtocol === null) {
+  if (!draftProfileId || profile?.kind !== "serial") {
     return null;
   }
 
@@ -333,7 +333,7 @@ function mspStatusText(): string {
   if (!profile) {
     return "Select a video system to review the OSD setup transaction.";
   }
-  if (profile.serialProtocol === null) {
+  if (profile.kind === "onboard") {
     return "Analog onboard OSD uses the flight controller video overlay chip and does not need a SERIAL/MSP port.";
   }
   if (serialModel.ports.length === 0) {
@@ -375,7 +375,7 @@ function targetValueText(target: OsdSetupStageTarget): string {
   {#snippet status()}
     {#if !profile}
       <SetupStatusPill tone="muted">No profile</SetupStatusPill>
-    {:else if profile.serialProtocol === null}
+    {:else if profile.kind === "onboard"}
       <SetupStatusPill tone="success">No UART</SetupStatusPill>
     {:else if currentProfilePorts.length > 0}
       <SetupStatusPill tone="success">UART ready</SetupStatusPill>
@@ -424,7 +424,7 @@ function targetValueText(target: OsdSetupStageTarget): string {
         {/if}
       </div>
 
-      {#if profile && profile.serialProtocol !== null}
+      {#if profile && profile.kind === "serial"}
         <div class="rounded-lg border border-border bg-bg-primary p-3">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <label class="grid min-w-0 flex-1 gap-1 text-xs font-medium uppercase tracking-wide text-text-muted">
@@ -485,7 +485,7 @@ function targetValueText(target: OsdSetupStageTarget): string {
                 <span>{note}</span>
               </li>
             {/each}
-            {#if mspOsdPorts.length > 0 && profile.serialProtocol !== null}
+            {#if mspOsdPorts.length > 0 && profile.kind === "serial"}
               <li class="flex gap-2">
                 <span class="mt-2 size-1.5 shrink-0 rounded-full bg-text-muted"></span>
                 <span>Detected MSP/OSD protocols on {mspOsdPorts.map((row) => row.prefix).join(", ")}.</span>
