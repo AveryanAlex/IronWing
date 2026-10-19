@@ -1,3 +1,5 @@
+import type { StagedParameterValues } from "../params/parameter-values";
+import { hasParameter, hasPendingParameterEdit, readAppliedParameter, readProposedParameter } from "../params/parameter-values";
 import { ArduPilotSerialProtocol, isConfiguredSerialProtocol, serialPortBoardLabel } from "../ardupilot/serial";
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
@@ -6,7 +8,7 @@ export const MAX_SERIAL_INDEX = 9;
 export type SerialPortModelInput = {
   paramStore: ParamStore | null;
   metadata: ParamMetadataMap | null;
-  stagedEdits: Record<string, { nextValue: number } | undefined>;
+  stagedEdits: StagedParameterValues;
 };
 
 export type SerialPortOption = {
@@ -47,32 +49,6 @@ export type SerialPortModel = {
   recoveryReasons: string[];
   recoveryText: string | null;
 };
-
-function hasParam(input: SerialPortModelInput, name: string): boolean {
-  return input.paramStore?.params[name] !== undefined;
-}
-
-function currentValue(input: SerialPortModelInput, name: string): number | null {
-  return input.paramStore?.params[name]?.value ?? null;
-}
-
-function stagedOrCurrentValue(input: SerialPortModelInput, name: string): number | null {
-  const stagedValue = input.stagedEdits[name]?.nextValue;
-  if (typeof stagedValue === "number" && Number.isFinite(stagedValue)) {
-    return stagedValue;
-  }
-
-  return currentValue(input, name);
-}
-
-function hasPendingChange(input: SerialPortModelInput, name: string): boolean {
-  const stagedValue = input.stagedEdits[name]?.nextValue;
-  const storedValue = currentValue(input, name);
-
-  return typeof stagedValue === "number"
-    && Number.isFinite(stagedValue)
-    && stagedValue !== storedValue;
-}
 
 function normalizeOptions(values: { code: number; label: string }[] | undefined): SerialPortOption[] {
   if (!Array.isArray(values)) {
@@ -136,8 +112,8 @@ export function detectSerialPorts(input: SerialPortModelInput): SerialPortRow[] 
     const prefix = `SERIAL${index}`;
     const protocolParamName = `${prefix}_PROTOCOL`;
     const baudParamName = `${prefix}_BAUD`;
-    const protocolPresent = hasParam(input, protocolParamName);
-    const baudPresent = hasParam(input, baudParamName);
+    const protocolPresent = hasParameter(input.paramStore, protocolParamName);
+    const baudPresent = hasParameter(input.paramStore, baudParamName);
 
     if (!protocolPresent && !baudPresent) {
       continue;
@@ -145,10 +121,10 @@ export function detectSerialPorts(input: SerialPortModelInput): SerialPortRow[] 
 
     const protocolOptions = normalizeOptions(input.metadata?.get(protocolParamName)?.values);
     const baudOptions = normalizeOptions(input.metadata?.get(baudParamName)?.values);
-    const protocolValue = stagedOrCurrentValue(input, protocolParamName);
-    const baudValue = stagedOrCurrentValue(input, baudParamName);
-    const pendingProtocolChange = hasPendingChange(input, protocolParamName);
-    const pendingBaudChange = hasPendingChange(input, baudParamName);
+    const protocolValue = readProposedParameter(input, protocolParamName);
+    const baudValue = readProposedParameter(input, baudParamName);
+    const pendingProtocolChange = hasPendingParameterEdit(input, protocolParamName);
+    const pendingBaudChange = hasPendingParameterEdit(input, baudParamName);
 
     const row: SerialPortRow = {
       index,

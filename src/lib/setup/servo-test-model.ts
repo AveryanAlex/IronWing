@@ -1,3 +1,4 @@
+import { readAppliedParameter } from "../params/parameter-values";
 import { readChannelPwm, SERVO_TELEMETRY_CHANNEL_COUNT, SERVO_PARAMETER_OUTPUT_COUNT } from "../telemetry-channels";
 import type { FrameClass } from "../airframe";
 import { ArduPilotServoFunction, permitsDirectServoCommand } from "../ardupilot/servo-functions";
@@ -64,18 +65,14 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function currentParamValue(input: ServoParamsInput, name: string): number | null {
-  return input.paramStore?.params[name]?.value ?? null;
-}
-
 function clampWithinWindow(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, Math.round(value)));
 }
 
 function resolveServoWindow(index: number, input: ServoParamsInput) {
-  const minValue = currentParamValue(input, `SERVO${index}_MIN`);
-  const maxValue = currentParamValue(input, `SERVO${index}_MAX`);
-  const trimValue = currentParamValue(input, `SERVO${index}_TRIM`);
+  const minValue = readAppliedParameter(input.paramStore, `SERVO${index}_MIN`);
+  const maxValue = readAppliedParameter(input.paramStore, `SERVO${index}_MAX`);
+  const trimValue = readAppliedParameter(input.paramStore, `SERVO${index}_TRIM`);
 
   const minPwm = isFiniteNumber(minValue) ? Math.round(minValue) : SERVO_COMMAND_PWM_MIN;
   const maxPwm = isFiniteNumber(maxValue) ? Math.round(maxValue) : SERVO_COMMAND_PWM_MAX;
@@ -195,7 +192,7 @@ export function deriveConfiguredServoOutputs(input: ServoParamsInput): ServoConf
 
   for (let index = 1; index <= SERVO_OUTPUT_COUNT; index += 1) {
     const functionParamName = `SERVO${index}_FUNCTION`;
-    const functionValue = currentParamValue(input, functionParamName);
+    const functionValue = readAppliedParameter(input.paramStore, functionParamName);
 
     if (!isFiniteNumber(functionValue) || functionValue < 0) {
       continue;

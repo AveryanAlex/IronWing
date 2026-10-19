@@ -1,3 +1,5 @@
+import type { StagedParameterValues } from "../params/parameter-values";
+import { readAppliedParameter, hasParameter, readProposedParameter, hasPendingParameterEdit } from "../params/parameter-values";
 import type { PwmChannelSamples } from "../telemetry-channels";
 import type { ParamStore } from "../../params";
 import type { FlightModeEntry } from "../../telemetry";
@@ -78,7 +80,7 @@ export type FlightModeBitmaskSlot = {
 export type FlightModeModelInput = {
   vehicleType: string | null;
   paramStore: ParamStore | null;
-  stagedEdits: Record<string, { nextValue: number } | undefined>;
+  stagedEdits: StagedParameterValues;
   availableModes: unknown;
   previousAvailableModes?: unknown;
   currentModeName?: string | null;
@@ -126,40 +128,6 @@ export const RECOMMENDED_FLIGHT_MODE_PRESETS: Record<
     labels: ["Manual", "Hold", "RTL", "Loiter", "Auto", "Guided"],
   },
 };
-
-function hasParam(paramStore: ParamStore | null, name: string): boolean {
-  return paramStore?.params[name] !== undefined;
-}
-
-function currentValue(paramStore: ParamStore | null, name: string): number | null {
-  return paramStore?.params[name]?.value ?? null;
-}
-
-function stagedOrCurrentValue(
-  paramStore: ParamStore | null,
-  stagedEdits: Record<string, { nextValue: number } | undefined>,
-  name: string,
-): number | null {
-  const stagedValue = stagedEdits[name]?.nextValue;
-  if (typeof stagedValue === "number" && Number.isFinite(stagedValue)) {
-    return stagedValue;
-  }
-
-  return currentValue(paramStore, name);
-}
-
-function hasPendingChange(
-  paramStore: ParamStore | null,
-  stagedEdits: Record<string, { nextValue: number } | undefined>,
-  name: string,
-): boolean {
-  const stagedValue = stagedEdits[name]?.nextValue;
-  const storedValue = currentValue(paramStore, name);
-
-  return typeof stagedValue === "number"
-    && Number.isFinite(stagedValue)
-    && stagedValue !== storedValue;
-}
 
 function normalizeModeName(value: unknown): string | null {
   return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
@@ -289,14 +257,14 @@ export function canReorderFlightModeSlots(
 export function buildFlightModePresetPreviewRows(
   preset: FlightModePreset,
   paramStore: ParamStore | null,
-  stagedEdits: Record<string, { nextValue: number } | undefined>,
+  stagedEdits: StagedParameterValues,
   options: FlightModeOption[],
 ): FlightModePresetPreviewRow[] {
   const recommended = RECOMMENDED_FLIGHT_MODE_PRESETS[preset];
 
   return FLIGHT_MODE_PARAM_NAMES.map((paramName, index) => {
     const nextValue = recommended.modes[index] ?? null;
-    const current = stagedOrCurrentValue(paramStore, stagedEdits, paramName);
+    const current = readProposedParameter({ paramStore, stagedEdits }, paramName);
     const proposedName = modeNameForValue(nextValue, options, recommended.labels[index]);
     const currentName = current === null ? null : modeNameForValue(current, options);
     const willChange = current !== nextValue;
@@ -315,7 +283,7 @@ export function buildFlightModeModel(input: FlightModeModelInput): FlightModeMod
   const preset = vehicleTypeToFlightModePreset(input.vehicleType);
   const normalizedCurrentModes = normalizeAvailableModes(input.availableModes);
   const normalizedPreviousModes = normalizeAvailableModes(input.previousAvailableModes);
-  const flightModeChannel = stagedOrCurrentValue(input.paramStore, input.stagedEdits, FLIGHT_MODE_CHANNEL_PARAM);
+  const flightModeChannel = readProposedParameter(input, FLIGHT_MODE_CHANNEL_PARAM);
   const activeSlotIndex = getActiveFlightModeSlotIndex(input.rcChannels, flightModeChannel);
 
   let availabilityState: FlightModeAvailabilityState = "unavailable";
@@ -342,8 +310,8 @@ export function buildFlightModeModel(input: FlightModeModelInput): FlightModeMod
   }
 
   const slots = FLIGHT_MODE_PARAM_NAMES.map((paramName, index) => {
-    const current = currentValue(input.paramStore, paramName);
-    const effective = stagedOrCurrentValue(input.paramStore, input.stagedEdits, paramName);
+    const current = readAppliedParameter(input.paramStore, paramName);
+    const effective = readProposedParameter(input, paramName);
     const recommendedFallback = preset
       ? RECOMMENDED_FLIGHT_MODE_PRESETS[preset].labels[index]
       : undefined;
@@ -363,21 +331,21 @@ export function buildFlightModeModel(input: FlightModeModelInput): FlightModeMod
   });
 
   const missingParamNames = [
-    ...FLIGHT_MODE_PARAM_NAMES.filter((name) => !hasParam(input.paramStore, name)),
-    ...(!hasParam(input.paramStore, FLIGHT_MODE_CHANNEL_PARAM) ? [FLIGHT_MODE_CHANNEL_PARAM] : []),
+    ...FLIGHT_MODE_PARAM_NAMES.filter((name) => !hasParameter(input.paramStore, name)),
+    ...(!hasParameter(input.paramStore, FLIGHT_MODE_CHANNEL_PARAM) ? [FLIGHT_MODE_CHANNEL_PARAM] : []),
   ];
 
   const simpleModeSupported = preset === "copter";
   const simpleValue = simpleModeSupported
-    ? stagedOrCurrentValue(input.paramStore, input.stagedEdits, "SIMPLE")
+    ? readProposedParameter(input, "SIMPLE")
     : null;
   const superSimpleValue = simpleModeSupported
-    ? stagedOrCurrentValue(input.paramStore, input.stagedEdits, "SUPER_SIMPLE")
+    ? readProposedParameter(input, "SUPER_SIMPLE")
     : null;
-  const simpleModeSlots = simpleModeSupported && hasParam(input.paramStore, "SIMPLE")
+  const simpleModeSlots = simpleModeSupported && hasParameter(input.paramStore, "SIMPLE")
     ? buildBitmaskSlots(simpleValue)
     : [];
-  const superSimpleSlots = simpleModeSupported && hasParam(input.paramStore, "SUPER_SIMPLE")
+  const superSimpleSlots = simpleModeSupported && hasParameter(input.paramStore, "SUPER_SIMPLE")
     ? buildBitmaskSlots(superSimpleValue)
     : [];
 
@@ -391,10 +359,10 @@ export function buildFlightModeModel(input: FlightModeModelInput): FlightModeMod
   if (normalizedCurrentModes.malformedCount > 0) {
     recoveryReasons.push(`Dropped ${normalizedCurrentModes.malformedCount} malformed available-mode row${normalizedCurrentModes.malformedCount === 1 ? "" : "s"}. Unsupported slot values fall back to raw mode numbers.`);
   }
-  if (simpleModeSupported && !hasParam(input.paramStore, "SIMPLE")) {
+  if (simpleModeSupported && !hasParameter(input.paramStore, "SIMPLE")) {
     recoveryReasons.push("SIMPLE is unavailable for this copter scope, so Simple-mode toggles stay hidden.");
   }
-  if (simpleModeSupported && !hasParam(input.paramStore, "SUPER_SIMPLE")) {
+  if (simpleModeSupported && !hasParameter(input.paramStore, "SUPER_SIMPLE")) {
     recoveryReasons.push("SUPER_SIMPLE is unavailable for this copter scope, so Super Simple toggles stay hidden.");
   }
   if (slots.some((slot) => slot.unresolved) && options.length > 0) {
@@ -406,7 +374,7 @@ export function buildFlightModeModel(input: FlightModeModelInput): FlightModeMod
     FLIGHT_MODE_CHANNEL_PARAM,
     ...(simpleModeSupported ? ["SIMPLE", "SUPER_SIMPLE"] : []),
   ]);
-  const hasPendingChanges = [...relevantPendingNames].some((name) => hasPendingChange(input.paramStore, input.stagedEdits, name));
+  const hasPendingChanges = [...relevantPendingNames].some((name) => hasPendingParameterEdit(input, name));
   const unresolvedSlotCount = slots.filter((slot) => slot.unresolved).length;
   const canStagePreset = preset !== null
     && availabilityState === "live"

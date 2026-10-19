@@ -1,3 +1,5 @@
+import type { StagedParameterValues } from "../params/parameter-values";
+import { resolveParameterValue } from "../params/parameter-values";
 import {
   ATC_RAT_PIT_FLTE,
   ATC_RAT_RLL_FLTE,
@@ -100,7 +102,7 @@ type InitialParamsModelInput = {
   vehicleType: string | null;
   paramStore: ParamStore | null;
   metadata: ParamMetadataMap | null;
-  stagedEdits: Record<string, { nextValue: number } | undefined>;
+  stagedEdits: StagedParameterValues;
   inputs: InitialParamsCalculatorInputs;
   fallbackInputs?: ResolvedInitialParamsInputs | null;
 };
@@ -172,14 +174,6 @@ const SAFETY_DEFAULTS: ReadonlyArray<{ canonical: string; label: string; propose
 
 function roundToDigits(value: number, digits = 2): number {
   return Number.parseFloat(value.toFixed(digits));
-}
-
-function currentOrStagedValue(
-  item: ParameterItemModel,
-  stagedEdits: Record<string, { nextValue: number } | undefined>,
-): number {
-  const stagedValue = stagedEdits[item.name]?.nextValue;
-  return typeof stagedValue === "number" && Number.isFinite(stagedValue) ? stagedValue : item.value;
 }
 
 function validateCalculatorInputs(inputs: InitialParamsCalculatorInputs): {
@@ -484,7 +478,7 @@ function buildBatch(
   definitions: RecommendationDefinition[],
   itemIndex: Map<string, ParameterItemModel>,
   profile: VehicleProfile,
-  stagedEdits: Record<string, { nextValue: number } | undefined>,
+  stagedEdits: StagedParameterValues,
   usingFallbackInputs: boolean,
 ): {
   batch: InitialParamsPreviewBatch;
@@ -503,7 +497,7 @@ function buildBatch(
       continue;
     }
 
-    const currentValue = currentOrStagedValue(item, stagedEdits);
+    const currentValue = resolveParameterValue(item.value, stagedEdits[item.name]) ?? item.value;
     const willChange = currentValue !== definition.proposedValue;
 
     entries.push({

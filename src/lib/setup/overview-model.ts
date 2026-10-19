@@ -1,3 +1,6 @@
+import type { StagedParameterValues } from "../params/parameter-values";
+import { readAppliedParameter } from "../params/parameter-values";
+import { readProposedParameter } from "../params/parameter-values";
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
 import { buildParameterItemIndex } from "../params/parameter-item-model";
@@ -39,23 +42,12 @@ export type SetupOverviewModelInput = {
   firmwareVersion: string | null;
   paramStore: ParamStore | null;
   metadata: ParamMetadataMap | null;
-  stagedEdits: Record<string, { nextValue: number } | undefined>;
+  stagedEdits: StagedParameterValues;
 };
 
 type FindingSeed = Omit<SetupOverviewSafetyFinding, "state">;
 
-const EMPTY_STAGED_EDITS: Record<string, { nextValue: number } | undefined> = {};
-
-function currentValue(paramStore: ParamStore | null, name: string): number | null {
-  return paramStore?.params[name]?.value ?? null;
-}
-
-function stagedOrCurrentValue(input: SafetyModelInput, name: string): number | null {
-  const stagedValue = input.stagedEdits[name]?.nextValue;
-  return typeof stagedValue === "number" && Number.isFinite(stagedValue)
-    ? stagedValue
-    : currentValue(input.paramStore, name);
-}
+const EMPTY_STAGED_EDITS: StagedParameterValues = {};
 
 function normalizeFindingId(value: string): string {
   return value
@@ -85,8 +77,8 @@ function modelWarningSeeds(
 
 function collectSafetySeeds(input: SafetyModelInput): FindingSeed[] {
   const seeds: FindingSeed[] = [];
-  const armingCheck = stagedOrCurrentValue(input, "ARMING_CHECK");
-  const armingRequire = stagedOrCurrentValue(input, "ARMING_REQUIRE");
+  const armingCheck = readProposedParameter(input, "ARMING_CHECK");
+  const armingRequire = readProposedParameter(input, "ARMING_REQUIRE");
 
   if (armingCheck === 0) {
     seeds.push({
@@ -124,7 +116,7 @@ function collectSafetySeeds(input: SafetyModelInput): FindingSeed[] {
 
   const geofence = buildGeofenceModel(input);
   const fenceEnablePresent = input.paramStore?.params.FENCE_ENABLE !== undefined;
-  const fenceTypeValue = stagedOrCurrentValue(input, "FENCE_TYPE");
+  const fenceTypeValue = readProposedParameter(input, "FENCE_TYPE");
   const fenceTypeLabelsAvailable = (input.metadata?.get("FENCE_TYPE")?.bitmask?.length ?? 0) > 0;
   const geofenceWarnings = geofence.warningTexts.filter((warning) => {
     if (warning.startsWith("Fence is disabled")) {

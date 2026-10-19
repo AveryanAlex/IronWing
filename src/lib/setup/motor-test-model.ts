@@ -1,3 +1,5 @@
+import type { StagedParameterValues } from "../params/parameter-values";
+import { hasParameter, readAppliedParameter, readStagedParameter } from "../params/parameter-values";
 import type { MotorNumber, MotorRotation } from "../airframe";
 import type { ParamStore } from "../../params";
 import type { StatusMessage } from "../../statustext";
@@ -12,7 +14,7 @@ export type MotorTestStatus = "available" | "unsupported-bridge" | "blocked-layo
 
 export type MotorTestParamsInput = {
   paramStore: ParamStore | null;
-  stagedEdits: Record<string, { nextValue: number } | undefined>;
+  stagedEdits: StagedParameterValues;
 };
 
 export type MotorOwnerResolution = {
@@ -100,19 +102,6 @@ export function findMotorTestFailureStatus(entries: readonly StatusMessage[], af
   return null;
 }
 
-function getCurrentParamValue(input: MotorTestParamsInput, name: string): number | null {
-  return input.paramStore?.params[name]?.value ?? null;
-}
-
-function getStagedParamValue(input: MotorTestParamsInput, name: string): number | null {
-  const nextValue = input.stagedEdits[name]?.nextValue;
-  return typeof nextValue === "number" && Number.isFinite(nextValue) ? nextValue : null;
-}
-
-function hasParam(input: MotorTestParamsInput, name: string): boolean {
-  return input.paramStore?.params[name] !== undefined;
-}
-
 function deriveRoleLabel(role: MotorDiagramEntry["role"]): string {
   switch (role) {
     case "lift":
@@ -154,12 +143,12 @@ export function resolveMotorOwner(
 
   for (let index = 1; index <= outputCount; index += 1) {
     const functionParamName = `SERVO${index}_FUNCTION`;
-    if (!hasParam(input, functionParamName)) {
+    if (!hasParameter(input.paramStore, functionParamName)) {
       continue;
     }
 
-    const currentValue = getCurrentParamValue(input, functionParamName);
-    const stagedValue = getStagedParamValue(input, functionParamName);
+    const currentValue = readAppliedParameter(input.paramStore, functionParamName);
+    const stagedValue = readStagedParameter(input.stagedEdits, functionParamName);
     const hasPendingFunctionChange = stagedValue !== null && stagedValue !== currentValue;
     const currentOwnsMotor = currentValue === targetFunction;
     const stagedOwnsMotor = stagedValue === targetFunction;

@@ -1,3 +1,5 @@
+import type { StagedParameterValues } from "../params/parameter-values";
+import { readAppliedParameter, readProposedParameter } from "../params/parameter-values";
 import { getAllLayouts, getMotorLayout } from "../../data/motor-layouts";
 import {
   isAirframe,
@@ -133,7 +135,7 @@ export type VtolTopologyModel = {
 
 export type VtolTopologyInput = {
   paramStore: ParamStore | null;
-  stagedEdits: Record<string, { nextValue: number } | undefined>;
+  stagedEdits: StagedParameterValues;
 };
 
 const TOPOLOGY_PARAM_NAMES = new Set([
@@ -280,16 +282,6 @@ export function getVtolFrameLayoutOptions(frameClass: FrameClass): readonly Vtol
     }));
 }
 
-function currentValue(input: VtolTopologyInput, name: string): number | null {
-  const value = input.paramStore?.params[name]?.value;
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function proposedValue(input: VtolTopologyInput, name: string): number | null {
-  const staged = input.stagedEdits[name]?.nextValue;
-  return typeof staged === "number" && Number.isFinite(staged) ? staged : currentValue(input, name);
-}
-
 function isEnabled(value: number | null): boolean {
   return value !== null && value > 0;
 }
@@ -302,7 +294,7 @@ function readOutputOwners(
   const owners: VtolOutputOwner[] = [];
   for (let outputIndex = 1; outputIndex <= 32; outputIndex += 1) {
     const functionParamName = `SERVO${outputIndex}_FUNCTION`;
-    const value = proposed ? proposedValue(input, functionParamName) : currentValue(input, functionParamName);
+    const value = proposed ? readProposedParameter(input, functionParamName) : readAppliedParameter(input.paramStore, functionParamName);
     if (value === functionValue) {
       owners.push({ outputIndex, functionValue, functionParamName });
     }
@@ -722,7 +714,7 @@ function buildIssues(
 }
 
 function buildSnapshot(input: VtolTopologyInput, proposed: boolean): VtolTopologySnapshot {
-  const read = (name: string) => (proposed ? proposedValue(input, name) : currentValue(input, name));
+  const read = (name: string) => (proposed ? readProposedParameter(input, name) : readAppliedParameter(input.paramStore, name));
   const values = {
     Q_ENABLE: read("Q_ENABLE"),
     Q_FRAME_CLASS: read("Q_FRAME_CLASS"),

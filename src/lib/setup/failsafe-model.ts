@@ -1,3 +1,5 @@
+import type { StagedParameterValues } from "../params/parameter-values";
+import { readAppliedParameter, hasParameter, readProposedParameter, hasPendingParameterEdit } from "../params/parameter-values";
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
 import {
@@ -27,7 +29,7 @@ export type SafetyModelInput = {
   vehicleType: string | null;
   paramStore: ParamStore | null;
   metadata: ParamMetadataMap | null;
-  stagedEdits: Record<string, { nextValue: number } | undefined>;
+  stagedEdits: StagedParameterValues;
 };
 
 export type FailsafeSectionModel = {
@@ -176,40 +178,6 @@ const GEOFENCE_REQUIRED_ROWS: Record<Exclude<SafetyVehicleFamily, "unknown">, { 
   },
 };
 
-function currentValue(paramStore: ParamStore | null, name: string): number | null {
-  return paramStore?.params[name]?.value ?? null;
-}
-
-function stagedOrCurrentValue(
-  paramStore: ParamStore | null,
-  stagedEdits: Record<string, { nextValue: number } | undefined>,
-  name: string,
-): number | null {
-  const stagedValue = stagedEdits[name]?.nextValue;
-  if (typeof stagedValue === "number" && Number.isFinite(stagedValue)) {
-    return stagedValue;
-  }
-
-  return currentValue(paramStore, name);
-}
-
-function hasParam(paramStore: ParamStore | null, name: string): boolean {
-  return paramStore?.params[name] !== undefined;
-}
-
-function hasPendingChange(
-  paramStore: ParamStore | null,
-  stagedEdits: Record<string, { nextValue: number } | undefined>,
-  name: string,
-): boolean {
-  const stagedValue = stagedEdits[name]?.nextValue;
-  const storedValue = currentValue(paramStore, name);
-
-  return typeof stagedValue === "number"
-    && Number.isFinite(stagedValue)
-    && stagedValue !== storedValue;
-}
-
 function hasEnumMetadata(metadata: ParamMetadataMap | null, name: string): boolean {
   const values = metadata?.get(name)?.values;
   return Array.isArray(values)
@@ -253,7 +221,7 @@ export function buildFailsafeDefaultsPreview(input: SafetyModelInput): SafetyDef
       : FAILSAFE_DEFAULTS_COPTER;
 
   return defaults.map((entry) => {
-    const current = stagedOrCurrentValue(input.paramStore, input.stagedEdits, entry.paramName);
+    const current = readProposedParameter(input, entry.paramName);
     return {
       paramName: entry.paramName,
       label: entry.label,
@@ -271,13 +239,13 @@ function buildRecoveryReasons(
   const reasons: string[] = [];
 
   for (const name of requiredRows.numeric) {
-    if (!hasParam(input.paramStore, name)) {
+    if (!hasParameter(input.paramStore, name)) {
       reasons.push(`${name} is absent from the active parameter set.`);
     }
   }
 
   for (const name of requiredRows.enum) {
-    if (!hasParam(input.paramStore, name)) {
+    if (!hasParameter(input.paramStore, name)) {
       reasons.push(`${name} is absent from the active parameter set.`);
     } else if (!hasEnumMetadata(input.metadata, name)) {
       reasons.push(`${name} option labels are unavailable, so this selector stays read-only in the guided view.`);
@@ -285,7 +253,7 @@ function buildRecoveryReasons(
   }
 
   for (const name of requiredRows.bitmask ?? []) {
-    if (!hasParam(input.paramStore, name)) {
+    if (!hasParameter(input.paramStore, name)) {
       reasons.push(`${name} is absent from the active parameter set.`);
     } else if (!hasBitmaskMetadata(input.metadata, name)) {
       reasons.push(`${name} checklist labels are unavailable, so this checklist stays read-only in the guided view.`);
@@ -299,11 +267,11 @@ function hasPendingChangesForRows(
   input: SafetyModelInput,
   rows: readonly string[],
 ): boolean {
-  return rows.some((name) => hasPendingChange(input.paramStore, input.stagedEdits, name));
+  return rows.some((name) => hasPendingParameterEdit(input, name));
 }
 
 function firstPresentParamName(paramStore: ParamStore | null, names: readonly string[]): string | null {
-  return names.find((name) => hasParam(paramStore, name)) ?? null;
+  return names.find((name) => hasParameter(paramStore, name)) ?? null;
 }
 
 function buildRtlRecoveryReasons(
@@ -329,7 +297,7 @@ function rtlValue(
   names: readonly string[],
 ): { name: string; value: number | null } {
   const name = firstPresentParamName(input.paramStore, names) ?? names[0];
-  return { name, value: stagedOrCurrentValue(input.paramStore, input.stagedEdits, name) };
+  return { name, value: readProposedParameter(input, name) };
 }
 
 function isMetersPerSecondUnit(unit: string | undefined): boolean {
@@ -363,13 +331,13 @@ export function buildFailsafeSectionModel(input: SafetyModelInput): FailsafeSect
   const warningTexts: string[] = [];
   const radioParam = family === "plane" ? "THR_FAILSAFE" : family === "rover" ? "FS_ACTION" : "FS_THR_ENABLE";
   const gcsParam = family === "plane" ? "FS_LONG_ACTN" : family === "rover" ? "FS_ACTION" : "FS_GCS_ENABLE";
-  const lowVolt = stagedOrCurrentValue(input.paramStore, input.stagedEdits, "BATT_LOW_VOLT");
-  const criticalVolt = stagedOrCurrentValue(input.paramStore, input.stagedEdits, "BATT_CRT_VOLT");
+  const lowVolt = readProposedParameter(input, "BATT_LOW_VOLT");
+  const criticalVolt = readProposedParameter(input, "BATT_CRT_VOLT");
 
-  if (stagedOrCurrentValue(input.paramStore, input.stagedEdits, radioParam) === 0) {
+  if (readProposedParameter(input, radioParam) === 0) {
     warningTexts.push(family === "rover" ? "Radio / GCS failsafe is disabled." : "Radio failsafe is disabled.");
   }
-  if (family !== "rover" && stagedOrCurrentValue(input.paramStore, input.stagedEdits, gcsParam) === 0) {
+  if (family !== "rover" && readProposedParameter(input, gcsParam) === 0) {
     warningTexts.push("GCS failsafe is disabled.");
   }
   if (
@@ -432,8 +400,8 @@ export function buildRtlReturnModel(input: SafetyModelInput): RtlReturnModel {
     summaryText = `Return altitude ${holdAlt.value === -1 ? "current altitude" : formatRtlValue(holdAlt.value, holdAlt.name === "RTL_ALTITUDE" ? 1 : 100, "m")}`;
     detailText = "Plane RTL keeps return altitude and auto-land intent explicit for fixed-wing recovery.";
   } else {
-    const speed = stagedOrCurrentValue(input.paramStore, input.stagedEdits, "RTL_SPEED");
-    const radius = stagedOrCurrentValue(input.paramStore, input.stagedEdits, "WP_RADIUS");
+    const speed = readProposedParameter(input, "RTL_SPEED");
+    const radius = readProposedParameter(input, "WP_RADIUS");
     const speedFactor = isMetersPerSecondUnit(input.metadata?.get("RTL_SPEED")?.units) ? 1 : 100;
     summaryText = `Return speed ${formatRtlValue(speed, speedFactor, "m/s")} · Approach radius ${formatRtlValue(radius, 1, "m")}`;
     detailText = "Rover return keeps speed and arrival radius explicit without pretending aircraft-only altitude controls exist.";
@@ -469,8 +437,8 @@ export function buildGeofenceModel(input: SafetyModelInput): GeofenceModel {
 
   const required = GEOFENCE_REQUIRED_ROWS[family];
   const recoveryReasons = buildRecoveryReasons(input, required);
-  const fenceEnabled = (stagedOrCurrentValue(input.paramStore, input.stagedEdits, "FENCE_ENABLE") ?? 0) !== 0;
-  const fenceMask = stagedOrCurrentValue(input.paramStore, input.stagedEdits, "FENCE_TYPE") ?? 0;
+  const fenceEnabled = (readProposedParameter(input, "FENCE_ENABLE") ?? 0) !== 0;
+  const fenceMask = readProposedParameter(input, "FENCE_TYPE") ?? 0;
   const selectedTypeLabels = normalizeBitmaskLabels(input.metadata, "FENCE_TYPE")
     .filter((entry) => (fenceMask & (1 << entry.bit)) !== 0)
     .map((entry) => entry.label);
@@ -484,8 +452,8 @@ export function buildGeofenceModel(input: SafetyModelInput): GeofenceModel {
     warningTexts.push("Fence is disabled, so breach actions will not trigger.");
   }
 
-  const altMax = stagedOrCurrentValue(input.paramStore, input.stagedEdits, "FENCE_ALT_MAX");
-  const altMin = stagedOrCurrentValue(input.paramStore, input.stagedEdits, "FENCE_ALT_MIN");
+  const altMax = readProposedParameter(input, "FENCE_ALT_MAX");
+  const altMin = readProposedParameter(input, "FENCE_ALT_MIN");
   if (
     family !== "rover"
     && typeof altMax === "number"

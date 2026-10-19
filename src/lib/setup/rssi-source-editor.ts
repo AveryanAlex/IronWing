@@ -1,3 +1,4 @@
+import type { StagedParameterValues } from "../params/parameter-values";
 import type { ParamMeta } from "../../param-metadata";
 import type { ParameterItemModel } from "../params/parameter-item-model";
 import type { RcChannelSample } from "./rc-input-normalization";
@@ -6,7 +7,7 @@ import { clampNumber, roundToIncrement } from "./rate-curves";
 export const RSSI_TYPE_PARAM_NAME = "RSSI_TYPE";
 
 export type RssiSourceType = 0 | 1 | 2 | 3 | 4 | 5;
-export type RssiStagedEdits = Record<string, { nextValue: number } | undefined>;
+export type RssiStagedEdits = StagedParameterValues;
 
 export type RssiSourceOption = {
   code: number;

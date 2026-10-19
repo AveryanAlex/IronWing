@@ -1,9 +1,10 @@
+import type { StagedParameterValues } from "../params/parameter-values";
 import type { ParamMeta } from "../../param-metadata";
 import { formatParamValue, type ParameterItemModel } from "../params/parameter-item-model";
 import type { RcChannelSample } from "./rc-input-normalization";
 import { roundToIncrement } from "./rate-curves";
 
-export type RcOptionStagedEdits = Record<string, { nextValue: number } | undefined>;
+export type RcOptionStagedEdits = StagedParameterValues;
 
 export type RcFunctionOption = {
   code: number;

@@ -1,3 +1,5 @@
+import type { StagedParameterValues } from "../params/parameter-values";
+import { readAppliedParameter, readProposedParameter } from "../params/parameter-values";
 import type { FrameClass } from "../airframe";
 import { ArduPilotServoFunction } from "../ardupilot/servo-functions";
 import { getMotorLayout } from "../../data/motor-layouts";
@@ -20,7 +22,7 @@ export type OutputFunctionSource = "required" | "recommended" | "configured" | "
 export type OutputMappingInput = {
   paramStore: ParamStore | null;
   metadata: ParamMetadataMap | null;
-  stagedEdits: Record<string, { nextValue: number } | undefined>;
+  stagedEdits: StagedParameterValues;
   vehicleType: string | null;
   addedFunctionValues?: readonly number[];
 };
@@ -122,19 +124,6 @@ const KNOWN_FUNCTION_LABELS = new Map<number, string>([
   [ArduPilotServoFunction.BoostThrottle, "Boost throttle"],
 ]);
 
-function currentValue(input: Pick<OutputMappingInput, "paramStore">, paramName: string): number | null {
-  const value = input.paramStore?.params[paramName]?.value;
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function proposedValue(
-  input: Pick<OutputMappingInput, "paramStore" | "stagedEdits">,
-  paramName: string,
-): number | null {
-  const staged = input.stagedEdits[paramName]?.nextValue;
-  return typeof staged === "number" && Number.isFinite(staged) ? staged : currentValue(input, paramName);
-}
-
 function metadataFunctionLabels(input: Pick<OutputMappingInput, "paramStore" | "metadata">): Map<number, string> {
   const labels = new Map(KNOWN_FUNCTION_LABELS);
   for (const paramName of Object.keys(input.paramStore?.params ?? {})) {
@@ -177,11 +166,11 @@ export function discoverPhysicalOutputs(
   return Object.keys(input.paramStore?.params ?? {})
     .flatMap((paramName) => {
       const match = paramName.match(OUTPUT_FUNCTION_PARAM);
-      const appliedFunctionValue = currentValue(input, paramName);
+      const appliedFunctionValue = readAppliedParameter(input.paramStore, paramName);
       if (!match || appliedFunctionValue === null) return [];
       const index = Number(match[1]);
       if (!Number.isInteger(index) || index < 1) return [];
-      const proposedFunctionValue = proposedValue(input, paramName) ?? appliedFunctionValue;
+      const proposedFunctionValue = readProposedParameter(input, paramName) ?? appliedFunctionValue;
       return [
         {
           index,
@@ -216,7 +205,7 @@ function buildRequirements(input: OutputMappingInput): {
     (profile.isCopter &&
       ["FRAME_CLASS", "FRAME_TYPE"].some((name) => {
         const staged = input.stagedEdits[name]?.nextValue;
-        const applied = currentValue(input, name);
+        const applied = readAppliedParameter(input.paramStore, name);
         return typeof staged === "number" && applied !== null && staged !== applied;
       }));
 

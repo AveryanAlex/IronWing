@@ -1,8 +1,9 @@
+import type { StagedParameterValues } from "../params/parameter-values";
 import type { ParameterItemModel } from "../params/parameter-item-model";
 import { SERVO_COMMAND_PWM_MAX, SERVO_COMMAND_PWM_MIN } from "./servo-test-model";
 
 export type ServoPwmPoint = "min" | "mid" | "max";
-type ProposedEdits = Record<string, { nextValue: number } | undefined>;
+type ProposedEdits = StagedParameterValues;
 
 export type ServoPwmSetting = {
   point: ServoPwmPoint;

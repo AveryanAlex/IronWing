@@ -1,3 +1,5 @@
+import type { StagedParameterValues } from "../params/parameter-values";
+import { readProposedParameter } from "../params/parameter-values";
 import type { ParamStore } from "../../params";
 import { deriveVehicleProfile, type VehicleProfile } from "./vehicle-profile";
 
@@ -42,26 +44,10 @@ export type VtolSetupModel = {
 type VtolSetupModelInput = {
   vehicleType: string | null;
   paramStore: ParamStore | null;
-  stagedEdits: Record<string, { nextValue: number } | undefined>;
+  stagedEdits: StagedParameterValues;
 };
 
 const VTOL_FLIGHT_MODE_VALUES = new Set([17, 18, 19, 20, 21, 23, 25]);
-
-function stagedOrCurrentValue(input: VtolSetupModelInput, ...names: string[]): number | null {
-  for (const name of names) {
-    const stagedValue = input.stagedEdits[name]?.nextValue;
-    if (typeof stagedValue === "number" && Number.isFinite(stagedValue)) {
-      return stagedValue;
-    }
-
-    const currentValue = input.paramStore?.params[name]?.value;
-    if (typeof currentValue === "number" && Number.isFinite(currentValue)) {
-      return currentValue;
-    }
-  }
-
-  return null;
-}
 
 function hasAnyParam(input: VtolSetupModelInput, ...names: string[]): boolean {
   return names.some((name) => input.paramStore?.params[name] !== undefined);
@@ -72,10 +58,10 @@ function hasAllParams(input: VtolSetupModelInput, names: readonly string[]): boo
 }
 
 function buildAssistModel(input: VtolSetupModelInput): VtolAssistModel {
-  const value = stagedOrCurrentValue(input, "Q_ASSIST_SPEED");
-  const minimumAirspeedMps = stagedOrCurrentValue(input, "AIRSPEED_MIN", "ARSPD_FBW_MIN");
-  const airspeedType = stagedOrCurrentValue(input, "ARSPD_TYPE");
-  const airspeedUse = stagedOrCurrentValue(input, "ARSPD_USE");
+  const value = readProposedParameter(input, "Q_ASSIST_SPEED");
+  const minimumAirspeedMps = readProposedParameter(input, "AIRSPEED_MIN", "ARSPD_FBW_MIN");
+  const airspeedType = readProposedParameter(input, "ARSPD_TYPE");
+  const airspeedUse = readProposedParameter(input, "ARSPD_USE");
   const airspeedSensorConfigured = airspeedType === null
     ? null
     : airspeedType > 0 && (airspeedUse === null || airspeedUse > 0);

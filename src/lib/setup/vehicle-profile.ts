@@ -1,3 +1,5 @@
+import type { StagedParameterValues } from "../params/parameter-values";
+import { hasParameter, readAppliedParameter, readProposedParameter } from "../params/parameter-values";
 import { getVehicleDescriptor, type VehicleFamily } from "../vehicle-descriptor";
 export type { VehicleFamily } from "../vehicle-descriptor";
 import type { Airframe } from "../airframe";
@@ -38,25 +40,8 @@ export type VehicleProfile = {
 
 export type VehicleProfileParamsInput = {
   paramStore: ParamStore | null;
-  stagedEdits: Record<string, { nextValue: number } | undefined>;
+  stagedEdits: StagedParameterValues;
 };
-
-function hasStoreParam(input: VehicleProfileParamsInput, name: string): boolean {
-  return input.paramStore?.params[name] !== undefined;
-}
-
-function getCurrentParamValue(input: VehicleProfileParamsInput, name: string): number | null {
-  return input.paramStore?.params[name]?.value ?? null;
-}
-
-function getStagedOrCurrentParamValue(input: VehicleProfileParamsInput, name: string): number | null {
-  const stagedValue = input.stagedEdits[name]?.nextValue;
-  if (typeof stagedValue === "number" && Number.isFinite(stagedValue)) {
-    return stagedValue;
-  }
-
-  return getCurrentParamValue(input, name);
-}
 
 function isEnabledFlag(value: number | null): boolean {
   return value !== null && value > 0;
@@ -81,20 +66,20 @@ export function deriveVehicleProfile(vehicleType: string | null, input: VehicleP
 
   const vehicleFamily: VehicleFamily = isPlane ? "plane" : isCopter ? "copter" : isRover ? "rover" : "unknown";
 
-  const qEnable = getStagedOrCurrentParamValue(input, "Q_ENABLE");
-  const qEnableCurrent = getCurrentParamValue(input, "Q_ENABLE");
-  const qFrameClass = getStagedOrCurrentParamValue(input, "Q_FRAME_CLASS");
-  const qFrameType = getStagedOrCurrentParamValue(input, "Q_FRAME_TYPE");
-  const qFrameClassCurrent = getCurrentParamValue(input, "Q_FRAME_CLASS");
-  const qFrameTypeCurrent = getCurrentParamValue(input, "Q_FRAME_TYPE");
-  const qTiltEnable = getStagedOrCurrentParamValue(input, "Q_TILT_ENABLE");
-  const qTailsitEnable = getStagedOrCurrentParamValue(input, "Q_TAILSIT_ENABLE");
+  const qEnable = readProposedParameter(input, "Q_ENABLE");
+  const qEnableCurrent = readAppliedParameter(input.paramStore, "Q_ENABLE");
+  const qFrameClass = readProposedParameter(input, "Q_FRAME_CLASS");
+  const qFrameType = readProposedParameter(input, "Q_FRAME_TYPE");
+  const qFrameClassCurrent = readAppliedParameter(input.paramStore, "Q_FRAME_CLASS");
+  const qFrameTypeCurrent = readAppliedParameter(input.paramStore, "Q_FRAME_TYPE");
+  const qTiltEnable = readProposedParameter(input, "Q_TILT_ENABLE");
+  const qTailsitEnable = readProposedParameter(input, "Q_TAILSIT_ENABLE");
 
-  const hasQEnable = hasStoreParam(input, "Q_ENABLE");
-  const hasQFrameClass = hasStoreParam(input, "Q_FRAME_CLASS");
-  const hasQFrameType = hasStoreParam(input, "Q_FRAME_TYPE");
+  const hasQEnable = hasParameter(input.paramStore, "Q_ENABLE");
+  const hasQFrameClass = hasParameter(input.paramStore, "Q_FRAME_CLASS");
+  const hasQFrameType = hasParameter(input.paramStore, "Q_FRAME_TYPE");
   const hasAnyQuadPlaneParams = ["Q_ENABLE", "Q_FRAME_CLASS", "Q_FRAME_TYPE", "Q_TILT_ENABLE", "Q_TAILSIT_ENABLE"].some(
-    (name) => hasStoreParam(input, name),
+    (name) => hasParameter(input.paramStore, name),
   );
   const hasCompleteQuadPlaneParams = hasQFrameClass && hasQFrameType;
   const hasPartialQuadPlaneParams = (hasQFrameClass || hasQFrameType) && !hasCompleteQuadPlaneParams;
@@ -112,8 +97,8 @@ export function deriveVehicleProfile(vehicleType: string | null, input: VehicleP
     (isEnabledFlag(qEnableCurrent) ||
       hasQFrameClass ||
       hasQFrameType ||
-      isEnabledFlag(getCurrentParamValue(input, "Q_TILT_ENABLE")) ||
-      isEnabledFlag(getCurrentParamValue(input, "Q_TAILSIT_ENABLE")));
+      isEnabledFlag(readAppliedParameter(input.paramStore, "Q_TILT_ENABLE")) ||
+      isEnabledFlag(readAppliedParameter(input.paramStore, "Q_TAILSIT_ENABLE")));
 
   const tiltEnabled = quadPlaneEnabled && isEnabledFlag(qTiltEnable);
   const tailsitterEnabled = quadPlaneEnabled && isEnabledFlag(qTailsitEnable);
@@ -146,7 +131,7 @@ export function deriveVehicleProfile(vehicleType: string | null, input: VehicleP
             ? "awaiting-refresh"
             : "plain-plane";
 
-  const hasStandardFrameParams = hasStoreParam(input, "FRAME_CLASS") && hasStoreParam(input, "FRAME_TYPE");
+  const hasStandardFrameParams = hasParameter(input.paramStore, "FRAME_CLASS") && hasParameter(input.paramStore, "FRAME_TYPE");
   const frameParamFamily = isPlane
     ? hasCompleteQuadPlaneParams && quadPlaneEnabled
       ? "quadplane"
@@ -160,8 +145,8 @@ export function deriveVehicleProfile(vehicleType: string | null, input: VehicleP
   const frameTypeParam =
     frameParamFamily === "copter" ? "FRAME_TYPE" : frameParamFamily === "quadplane" ? "Q_FRAME_TYPE" : null;
 
-  const frameClassValue = frameClassParam ? getStagedOrCurrentParamValue(input, frameClassParam) : null;
-  const frameTypeValue = frameTypeParam ? getStagedOrCurrentParamValue(input, frameTypeParam) : null;
+  const frameClassValue = frameClassParam ? readProposedParameter(input, frameClassParam) : null;
+  const frameTypeValue = frameTypeParam ? readProposedParameter(input, frameTypeParam) : null;
 
   return {
     vehicleFamily,

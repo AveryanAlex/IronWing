@@ -1,3 +1,4 @@
+import type { StagedParameterValues } from "../params/parameter-values";
 import type { ParamMeta } from "../../param-metadata";
 import type { ParameterItemModel } from "../params/parameter-item-model";
 
@@ -9,7 +10,7 @@ export const RC_RECEIVER_SETTING_NAMES = [
 ] as const;
 
 export type RcReceiverSettingName = (typeof RC_RECEIVER_SETTING_NAMES)[number];
-export type RcReceiverSettingsStagedEdits = Record<string, { nextValue: number } | undefined>;
+export type RcReceiverSettingsStagedEdits = StagedParameterValues;
 
 export type RcReceiverSettingSpec = {
   name: RcReceiverSettingName;
