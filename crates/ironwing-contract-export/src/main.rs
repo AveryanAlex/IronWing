@@ -3,6 +3,7 @@ use std::{env, error::Error, fs, path::PathBuf, process};
 mod commands;
 mod events;
 mod json_wire;
+mod mission_fixtures;
 
 use ironwing_core::{
     ipc::{self, calibration, guided, logs},
@@ -95,6 +96,7 @@ fn generated_files() -> Result<Vec<(&'static str, String)>, Box<dyn Error>> {
         ("commands.ts", generated_commands()?),
         ("ironwing-json.ts", generated_ironwing_json()),
         ("mavkit-json.ts", generated_mavkit_json()),
+        ("mission-codec-fixtures.json", mission_fixtures::generate()?),
         ("index.ts", generated_index()),
     ])
 }

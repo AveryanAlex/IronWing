@@ -1,0 +1,248 @@
+[
+  {
+    "command": {
+      "Do": {
+        "PauseContinue": {
+          "pause": true
+        }
+      }
+    },
+    "input": {
+      "command": 193,
+      "frame": 2,
+      "params": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "type": "SimpleItem"
+    },
+    "name": "pause"
+  },
+  {
+    "command": {
+      "Do": {
+        "PauseContinue": {
+          "pause": false
+        }
+      }
+    },
+    "input": {
+      "command": 193,
+      "frame": 2,
+      "params": [
+        1.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "type": "SimpleItem"
+    },
+    "name": "continue"
+  },
+  {
+    "command": {
+      "Nav": {
+        "ArcWaypoint": {
+          "arc_angle_deg": 90.0,
+          "direction": "clockwise",
+          "position": {
+            "RelHome": {
+              "latitude_deg": 55.75,
+              "longitude_deg": 37.625,
+              "relative_alt_m": 80.0
+            }
+          }
+        }
+      }
+    },
+    "input": {
+      "command": 36,
+      "frame": 3,
+      "params": [
+        90.0,
+        0.0,
+        0.0,
+        0.0,
+        55.75,
+        37.625,
+        80.0
+      ],
+      "type": "SimpleItem"
+    },
+    "name": "clockwise arc"
+  },
+  {
+    "command": {
+      "Nav": {
+        "ArcWaypoint": {
+          "arc_angle_deg": 90.0,
+          "direction": "counter_clockwise",
+          "position": {
+            "RelHome": {
+              "latitude_deg": 55.75,
+              "longitude_deg": 37.625,
+              "relative_alt_m": 80.0
+            }
+          }
+        }
+      }
+    },
+    "input": {
+      "command": 36,
+      "frame": 3,
+      "params": [
+        -90.0,
+        0.0,
+        0.0,
+        0.0,
+        55.75,
+        37.625,
+        80.0
+      ],
+      "type": "SimpleItem"
+    },
+    "name": "counterclockwise arc"
+  },
+  {
+    "command": {
+      "Nav": {
+        "LoiterToAlt": {
+          "direction": "clockwise",
+          "exit_xtrack": true,
+          "position": {
+            "RelHome": {
+              "latitude_deg": 55.75,
+              "longitude_deg": 37.625,
+              "relative_alt_m": 80.0
+            }
+          },
+          "radius_m": 40.0
+        }
+      }
+    },
+    "input": {
+      "command": 31,
+      "frame": 3,
+      "params": [
+        0.0,
+        40.0,
+        0.0,
+        1.0,
+        55.75,
+        37.625,
+        80.0
+      ],
+      "type": "SimpleItem"
+    },
+    "name": "clockwise loiter to altitude"
+  },
+  {
+    "command": {
+      "Nav": {
+        "LoiterToAlt": {
+          "direction": "counter_clockwise",
+          "exit_xtrack": false,
+          "position": {
+            "RelHome": {
+              "latitude_deg": 55.75,
+              "longitude_deg": 37.625,
+              "relative_alt_m": 80.0
+            }
+          },
+          "radius_m": 40.0
+        }
+      }
+    },
+    "input": {
+      "command": 31,
+      "frame": 3,
+      "params": [
+        0.0,
+        -40.0,
+        0.0,
+        0.0,
+        55.75,
+        37.625,
+        80.0
+      ],
+      "type": "SimpleItem"
+    },
+    "name": "counterclockwise loiter to altitude"
+  },
+  {
+    "command": {
+      "Nav": {
+        "LoiterTurns": {
+          "direction": "clockwise",
+          "exit_xtrack": true,
+          "position": {
+            "RelHome": {
+              "latitude_deg": 55.75,
+              "longitude_deg": 37.625,
+              "relative_alt_m": 80.0
+            }
+          },
+          "radius_m": 40.0,
+          "turns": 2.0
+        }
+      }
+    },
+    "input": {
+      "command": 18,
+      "frame": 3,
+      "params": [
+        2.0,
+        0.0,
+        40.0,
+        1.0,
+        55.75,
+        37.625,
+        80.0
+      ],
+      "type": "SimpleItem"
+    },
+    "name": "clockwise loiter turns"
+  },
+  {
+    "command": {
+      "Nav": {
+        "LoiterTurns": {
+          "direction": "counter_clockwise",
+          "exit_xtrack": false,
+          "position": {
+            "RelHome": {
+              "latitude_deg": 55.75,
+              "longitude_deg": 37.625,
+              "relative_alt_m": 80.0
+            }
+          },
+          "radius_m": 40.0,
+          "turns": 2.0
+        }
+      }
+    },
+    "input": {
+      "command": 18,
+      "frame": 3,
+      "params": [
+        2.0,
+        0.0,
+        -40.0,
+        0.0,
+        55.75,
+        37.625,
+        80.0
+      ],
+      "type": "SimpleItem"
+    },
+    "name": "counterclockwise loiter turns"
+  }
+]

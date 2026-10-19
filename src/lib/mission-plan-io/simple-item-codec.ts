@@ -17,7 +17,6 @@ import {
     ALT_CHANGE_ACTIONS,
     FENCE_ACTIONS,
     GRIPPER_ACTIONS,
-    LOITER_DIRECTIONS,
     PARACHUTE_ACTIONS,
     SPEED_TYPES,
     WINCH_ACTIONS,
@@ -400,10 +399,20 @@ const COMMAND_CODEC_BY_KEY: { [K in CommandKey]: CustomCommandCodec | GenericCom
     "Nav:SplineWaypoint": genericCodec(true, [
         numberField("hold_time_s", "param1"),
     ]),
-    "Nav:ArcWaypoint": genericCodec(true, [
-        numberField("arc_angle_deg", "param1"),
-        enumIndexField("direction", "param2", LOITER_DIRECTIONS),
-    ]),
+    "Nav:ArcWaypoint": customCodec(
+        true,
+        (params, position) => {
+            const command = defaultCommand("Nav", "ArcWaypoint", position ?? undefined);
+            return withCommandField(
+                withCommandField(command, "arc_angle_deg", Math.abs(params[0])),
+                "direction", directionFromSignedMagnitude(params[0]),
+            );
+        },
+        (command, params) => {
+            const data = commandVariantPayload(command, "Nav", "ArcWaypoint") ?? {};
+            params[0] = encodeSignedMagnitude(numberOrZero(data.arc_angle_deg), data.direction);
+        },
+    ),
     "Nav:Takeoff": genericCodec(true, [
         numberField("pitch_deg", "param1"),
     ]),
@@ -460,15 +469,15 @@ const COMMAND_CODEC_BY_KEY: { [K in CommandKey]: CustomCommandCodec | GenericCom
         true,
         (params, position) => {
             let command = defaultCommand("Nav", "LoiterToAlt", position ?? undefined);
-            command = withCommandField(command, "radius_m", Math.abs(params[0]));
-            command = withCommandField(command, "direction", directionFromSignedMagnitude(params[0]));
-            command = withCommandField(command, "exit_xtrack", Math.abs(params[1]) > 0.5);
+            command = withCommandField(command, "radius_m", Math.abs(params[1]));
+            command = withCommandField(command, "direction", directionFromSignedMagnitude(params[1]));
+            command = withCommandField(command, "exit_xtrack", Math.abs(params[3]) > 0.5);
             return command;
         },
         (command, params) => {
             const data = commandVariantPayload(command, "Nav", "LoiterToAlt") ?? {};
-            params[0] = encodeSignedMagnitude(numberOrZero(data.radius_m), data.direction);
-            params[1] = data.exit_xtrack ? 1 : 0;
+            params[1] = encodeSignedMagnitude(numberOrZero(data.radius_m), data.direction);
+            params[3] = data.exit_xtrack ? 1 : 0;
         },
     ),
     "Nav:ContinueAndChangeAlt": genericCodec(true, [
@@ -530,7 +539,7 @@ const COMMAND_CODEC_BY_KEY: { [K in CommandKey]: CustomCommandCodec | GenericCom
         numberField("tag", "param1"),
     ]),
     "Do:PauseContinue": genericCodec(false, [
-        boolField("pause", "param1"),
+        { field: "pause", slot: "param1", decode: (value) => value === 0 ? true : value === 1 ? false : undefined, encode: (value) => value ? 0 : 1 },
     ]),
     "Do:ChangeSpeed": genericCodec(false, [
         enumIndexField("speed_type", "param1", SPEED_TYPES),

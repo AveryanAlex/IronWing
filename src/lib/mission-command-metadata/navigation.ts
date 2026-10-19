@@ -318,7 +318,8 @@ export const NAVIGATION_COMMAND_METADATA: Record<number, CommandMetadata> = {
         docsUrl: `${COMMON_CMD_REF}#mav-cmd-nav-loiter-to-alt`,
         frame: FRAME_RELATIVE_ALT,
         params: {
-            param1: { label: "Radius", units: "m", description: "Orbit radius. 0 = pirouette." },
+            param2: { label: "Radius", units: "m", description: "Orbit radius. Negative values select counter-clockwise turns." },
+            param4: { label: "Exit Crosstrack", description: "Leave the orbit aligned with the next leg." },
             x: { label: "Latitude", units: "degE7" },
             y: { label: "Longitude", units: "degE7" },
             z: { label: "Altitude", units: "m", description: "Target altitude relative to home.", required: true },
@@ -345,7 +346,7 @@ export const NAVIGATION_COMMAND_METADATA: Record<number, CommandMetadata> = {
         id: 36,
         category: "navigation",
         summary: "Fly an arc to the target position instead of a straight-line leg.",
-        docsUrl: `${COMMON_CMD_REF}#mav-cmd-nav-pathplanning`,
+        docsUrl: `${COMMON_CMD_REF}#mav-cmd-nav-arc-waypoint`,
         frame: FRAME_RELATIVE_ALT,
         params: {
             param1: { label: "Arc Angle", units: "deg", description: "Signed sweep angle used to shape the arc." },
