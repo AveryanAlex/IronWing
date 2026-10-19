@@ -122,8 +122,8 @@ function createScopedSessionState({
 function createMockService(overrides: Partial<LiveSettingsService> = {}) {
   return {
     loadMessageRateCatalog: vi.fn(async () => [
-      { id: 33, name: "Global Position", default_rate_hz: 4 },
-      { id: 30, name: "Attitude", default_rate_hz: 4 },
+      { id: 33, name: "Global Position", default_rate_hz: 4, request_on_connect: false },
+      { id: 30, name: "Attitude", default_rate_hz: 4, request_on_connect: false },
     ]),
     applyTelemetryRate: vi.fn(async () => undefined),
     applyMessageRate: vi.fn(async () => undefined),

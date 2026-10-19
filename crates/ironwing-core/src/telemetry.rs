@@ -1,4 +1,5 @@
-pub const DEFAULT_TELEMETRY_INTERVAL_MS: u64 = 200;
+pub const DEFAULT_TELEMETRY_RATE_HZ: u32 = 5;
+pub const DEFAULT_TELEMETRY_INTERVAL_MS: u64 = 1000 / DEFAULT_TELEMETRY_RATE_HZ as u64;
 pub const MIN_TELEMETRY_RATE_HZ: u32 = 1;
 pub const MAX_TELEMETRY_RATE_HZ: u32 = 20;
 pub const TELEMETRY_RATE_RANGE_ERROR: &str = "rate_hz must be between 1 and 20";
@@ -12,6 +13,7 @@ pub struct MessageRateInfo {
     pub id: u32,
     pub name: &'static str,
     pub default_rate_hz: f32,
+    pub request_on_connect: bool,
 }
 
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
@@ -25,63 +27,62 @@ pub const AVAILABLE_MESSAGE_RATES: &[MessageRateInfo] = &[
     MessageRateInfo {
         id: 33,
         name: "Global Position",
-        default_rate_hz: 4.0,
+        default_rate_hz: 5.0,
+        request_on_connect: true,
     },
     MessageRateInfo {
         id: 30,
         name: "Attitude",
-        default_rate_hz: 4.0,
+        default_rate_hz: 5.0,
+        request_on_connect: true,
     },
     MessageRateInfo {
         id: 24,
         name: "GPS Raw",
         default_rate_hz: 2.0,
+        request_on_connect: true,
     },
     MessageRateInfo {
         id: 1,
         name: "System Status",
         default_rate_hz: 1.0,
+        request_on_connect: true,
     },
     MessageRateInfo {
         id: 65,
         name: "RC Channels",
         default_rate_hz: 2.0,
+        request_on_connect: false,
     },
     MessageRateInfo {
         id: 36,
         name: "Servo Output",
         default_rate_hz: 2.0,
+        request_on_connect: false,
     },
     MessageRateInfo {
         id: 74,
         name: "VFR HUD",
         default_rate_hz: 4.0,
+        request_on_connect: false,
     },
     MessageRateInfo {
         id: 62,
         name: "Nav Controller",
         default_rate_hz: 2.0,
+        request_on_connect: false,
     },
 ];
 
-pub const DEFAULT_TELEMETRY_STREAM_REQUESTS: &[MessageIntervalRequest] = &[
-    MessageIntervalRequest {
-        message_id: 33,
-        interval_usec: 200_000,
-    },
-    MessageIntervalRequest {
-        message_id: 30,
-        interval_usec: 200_000,
-    },
-    MessageIntervalRequest {
-        message_id: 24,
-        interval_usec: 500_000,
-    },
-    MessageIntervalRequest {
-        message_id: 1,
-        interval_usec: 1_000_000,
-    },
-];
+pub fn default_telemetry_stream_requests() -> impl Iterator<Item = MessageIntervalRequest> {
+    AVAILABLE_MESSAGE_RATES
+        .iter()
+        .filter(|entry| entry.request_on_connect)
+        .map(|entry| MessageIntervalRequest {
+            message_id: entry.id,
+            interval_usec: (1_000_000.0 / entry.default_rate_hz) as i32,
+        })
+}
 
 pub fn available_message_rates() -> Vec<MessageRateInfo> {
     AVAILABLE_MESSAGE_RATES.to_vec()
@@ -98,6 +99,22 @@ pub fn telemetry_interval_ms_for_rate(rate_hz: u32) -> Result<u64, &'static str>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn startup_requests_match_catalog_defaults() {
+        let requests: Vec<_> = default_telemetry_stream_requests().collect();
+        assert_eq!(requests.len(), 4);
+        for request in requests {
+            let entry = AVAILABLE_MESSAGE_RATES
+                .iter()
+                .find(|entry| entry.id == request.message_id)
+                .unwrap();
+            assert_eq!(
+                request.interval_usec,
+                (1_000_000.0 / entry.default_rate_hz) as i32
+            );
+        }
+    }
 
     #[test]
     fn telemetry_rate_validation_accepts_bounds() {

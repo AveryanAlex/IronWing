@@ -768,6 +768,7 @@ export type MessageRateInfo = {
 	id: number,
 	name: string,
 	default_rate_hz: number | null,
+	request_on_connect: boolean,
 };
 
 /**  Typed mission command API item used by plan serialization and validation. */
@@ -1529,52 +1530,62 @@ export const OPERATION_IDS = [
   "firmware_bootloader_installation",
 ] as const;
 
+export const DEFAULT_TELEMETRY_RATE_HZ = 5;
+
 export const MESSAGE_RATE_CATALOG = [
   {
     "id": 33,
     "name": "Global Position",
-    "default_rate_hz": 4.0
+    "default_rate_hz": 5.0,
+    "request_on_connect": true
   },
   {
     "id": 30,
     "name": "Attitude",
-    "default_rate_hz": 4.0
+    "default_rate_hz": 5.0,
+    "request_on_connect": true
   },
   {
     "id": 24,
     "name": "GPS Raw",
-    "default_rate_hz": 2.0
+    "default_rate_hz": 2.0,
+    "request_on_connect": true
   },
   {
     "id": 1,
     "name": "System Status",
-    "default_rate_hz": 1.0
+    "default_rate_hz": 1.0,
+    "request_on_connect": true
   },
   {
     "id": 65,
     "name": "RC Channels",
-    "default_rate_hz": 2.0
+    "default_rate_hz": 2.0,
+    "request_on_connect": false
   },
   {
     "id": 36,
     "name": "Servo Output",
-    "default_rate_hz": 2.0
+    "default_rate_hz": 2.0,
+    "request_on_connect": false
   },
   {
     "id": 74,
     "name": "VFR HUD",
-    "default_rate_hz": 4.0
+    "default_rate_hz": 4.0,
+    "request_on_connect": false
   },
   {
     "id": 62,
     "name": "Nav Controller",
-    "default_rate_hz": 2.0
+    "default_rate_hz": 2.0,
+    "request_on_connect": false
   }
 ] as const satisfies readonly MessageRateInfo[];
 
 export const MESSAGE_RATE_LIMITS = {
-  "max": 50.0,
-  "min": 0.10000000149011612
+  "min": 0.1,
+  "max": 50
 } as const;
 
 export const TELEMETRY_RATE_LIMITS = {

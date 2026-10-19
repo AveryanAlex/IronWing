@@ -121,7 +121,7 @@ where
 }
 
 async fn request_tcp_telemetry_streams(vehicle: Vehicle) {
-    for request in telemetry::DEFAULT_TELEMETRY_STREAM_REQUESTS {
+    for request in telemetry::default_telemetry_stream_requests() {
         if let Err(err) = vehicle
             .raw()
             .set_message_interval(request.message_id, request.interval_usec)

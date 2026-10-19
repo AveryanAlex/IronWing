@@ -20,7 +20,7 @@ const wasmRuntimeMock = vi.hoisted(() => ({
 
 const wasmContractMock = vi.hoisted(() => ({
   availableMessageRates: vi.fn(async () => [
-    { id: 33, name: "Core Global Position", default_rate_hz: 4 },
+    { id: 33, name: "Core Global Position", default_rate_hz: 4, request_on_connect: false },
   ]),
   webTransportDescriptors: vi.fn(async (options: {
     websocketAvailable: boolean;
@@ -372,7 +372,7 @@ describe("web backend commands", () => {
 
   it("reports available message rates from the shared wasm contract", async () => {
     await expect(invokeWebCommand("get_available_message_rates")).resolves.toEqual([
-      { id: 33, name: "Core Global Position", default_rate_hz: 4 },
+      { id: 33, name: "Core Global Position", default_rate_hz: 4, request_on_connect: false },
     ]);
 
     expect(wasmContractMock.availableMessageRates).toHaveBeenCalledTimes(1);

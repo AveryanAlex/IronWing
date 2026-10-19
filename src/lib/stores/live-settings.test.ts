@@ -130,10 +130,10 @@ function createSettingsStorage(settings?: unknown) {
 }
 
 const DEFAULT_CATALOG: MessageRateInfo[] = [
-  { id: 30, name: "Attitude", default_rate_hz: 4 },
-  { id: 33, name: "Global Position", default_rate_hz: 2 },
-  { id: 36, name: "Servo Output", default_rate_hz: 2 },
-  { id: 65, name: "RC Channels", default_rate_hz: 2 },
+  { id: 30, name: "Attitude", default_rate_hz: 4, request_on_connect: false },
+  { id: 33, name: "Global Position", default_rate_hz: 2, request_on_connect: false },
+  { id: 36, name: "Servo Output", default_rate_hz: 2, request_on_connect: false },
+  { id: 65, name: "RC Channels", default_rate_hz: 2, request_on_connect: false },
 ];
 
 function createMockService(overrides: Partial<LiveSettingsService> = {}) {

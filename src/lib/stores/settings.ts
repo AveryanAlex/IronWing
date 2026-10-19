@@ -1,18 +1,18 @@
+import {
+  DEFAULT_TELEMETRY_RATE_HZ,
+  TELEMETRY_RATE_LIMITS as TELEMETRY_RATE_HZ_LIMITS,
+  MESSAGE_RATE_LIMITS as MESSAGE_RATE_HZ_LIMITS,
+} from "../generated/ironwing";
 import { writable } from "svelte/store";
 
 import { getBrowserStorage, readStorageJson, writeStorageJson } from "../local-storage";
 
 export const SETTINGS_STORAGE_KEY = "ironwing.settings";
 
-export const TELEMETRY_RATE_HZ_LIMITS = {
-  min: 1,
-  max: 20,
-} as const;
-
-export const MESSAGE_RATE_HZ_LIMITS = {
-  min: 0.1,
-  max: 50,
-} as const;
+export {
+  TELEMETRY_RATE_LIMITS as TELEMETRY_RATE_HZ_LIMITS,
+  MESSAGE_RATE_LIMITS as MESSAGE_RATE_HZ_LIMITS,
+} from "../generated/ironwing";
 
 export type Settings = {
   telemetryRateHz: number;
@@ -24,7 +24,6 @@ export type Settings = {
   recordingAutoRecordOnConnect: boolean;
 };
 
-const DEFAULT_TELEMETRY_RATE_HZ = 5;
 const DEFAULT_SVS_ENABLED = true;
 const DEFAULT_TERRAIN_SAFETY_MARGIN_M = 10;
 const DEFAULT_CRUISE_SPEED_MPS = 15;

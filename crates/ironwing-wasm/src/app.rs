@@ -1205,7 +1205,7 @@ fn emit_session_state(state: &Rc<RefCell<RuntimeState>>, provenance: DomainProve
 }
 
 async fn request_telemetry_streams(vehicle: mavkit::Vehicle) {
-    for request in telemetry::DEFAULT_TELEMETRY_STREAM_REQUESTS {
+    for request in telemetry::default_telemetry_stream_requests() {
         let _ = vehicle
             .raw()
             .set_message_interval(request.message_id, request.interval_usec)

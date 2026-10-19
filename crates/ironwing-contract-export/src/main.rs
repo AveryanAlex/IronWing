@@ -350,16 +350,21 @@ fn generated_ironwing() -> Result<String, Box<dyn Error>> {
 
 fn telemetry_constants_ts() -> Result<String, Box<dyn Error>> {
     let mut body = String::new();
+    body.push_str(&format!(
+        "export const DEFAULT_TELEMETRY_RATE_HZ = {};\n\n",
+        telemetry::DEFAULT_TELEMETRY_RATE_HZ
+    ));
     body.push_str("export const MESSAGE_RATE_CATALOG = ");
     body.push_str(&serde_json::to_string_pretty(
         telemetry::AVAILABLE_MESSAGE_RATES,
     )?);
     body.push_str(" as const satisfies readonly MessageRateInfo[];\n\n");
     body.push_str("export const MESSAGE_RATE_LIMITS = ");
-    body.push_str(&serde_json::to_string_pretty(&serde_json::json!({
-        "min": telemetry::MIN_MESSAGE_RATE_HZ,
-        "max": telemetry::MAX_MESSAGE_RATE_HZ,
-    }))?);
+    body.push_str(&format!(
+        "{{\n  \"min\": {},\n  \"max\": {}\n}}",
+        telemetry::MIN_MESSAGE_RATE_HZ,
+        telemetry::MAX_MESSAGE_RATE_HZ
+    ));
     body.push_str(" as const;\n\n");
     body.push_str("export const TELEMETRY_RATE_LIMITS = ");
     body.push_str(&serde_json::to_string_pretty(&serde_json::json!({
