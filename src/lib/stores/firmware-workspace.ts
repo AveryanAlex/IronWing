@@ -33,15 +33,6 @@ import {
   deriveFirmwareSessionPhase,
   firmwareInstallResultToStatus,
   isFirmwareSessionActive,
-  normalizeBootloaderInstallationResult,
-  normalizeDfuScanResult,
-  normalizeFirmwareBootloaderBoardInfo,
-  normalizeFirmwareInstallPreflightInfo,
-  normalizeFirmwareInstallReadinessResponse,
-  normalizeFirmwareInstallResult,
-  normalizeFirmwareProgress,
-  normalizeFirmwareRebootToBootloaderResult,
-  normalizeFirmwareSessionStatus,
   type FirmwareService,
 } from "../platform/firmware";
 import type { FirmwareSessionPath } from "../../firmware";
@@ -312,19 +303,7 @@ export function createFirmwareWorkspaceStore(
     initializePromise = (async () => {
       try {
         stopProgress = await service.subscribeProgress((progress) => {
-          try {
-            const normalized = normalizeFirmwareProgress(progress);
-            updateState((state) => ({
-              ...state,
-              progress: normalized,
-              progressError: null,
-            }));
-          } catch (error) {
-            updateState((state) => ({
-              ...state,
-              progressError: service.formatError(error),
-            }));
-          }
+          updateState((state) => ({ ...state, progress, progressError: null }));
         });
       } catch (error) {
         updateState((state) => ({
@@ -356,7 +335,7 @@ export function createFirmwareWorkspaceStore(
 
   async function refreshSessionStatus() {
     try {
-      const nextStatus = normalizeFirmwareSessionStatus(await service.sessionStatus());
+      const nextStatus = await service.sessionStatus();
       applyObservedSessionStatus(nextStatus);
       return nextStatus;
     } catch (error) {
@@ -379,7 +358,7 @@ export function createFirmwareWorkspaceStore(
     }));
 
     try {
-      const preflight = normalizeFirmwareInstallPreflightInfo(await service.installPreflight());
+      const preflight = await service.installPreflight();
       applyObservedSessionStatus(preflight.session_status);
 
       const previous = get(store);
@@ -425,7 +404,7 @@ export function createFirmwareWorkspaceStore(
     }));
 
     try {
-      const scan = normalizeDfuScanResult(await service.listDfuDevices());
+      const scan = await service.listDfuDevices();
       const devices = scan.kind === "available" ? scan.devices : [];
       const current = get(store);
       const selectedDevice = resolvePreferredDfuDevice(current.recovery.device, devices);
@@ -437,7 +416,7 @@ export function createFirmwareWorkspaceStore(
           device: selectedDevice,
           devices,
           scanPhase: "ready",
-          scanError: scan.kind === "unsupported" ? bootloaderInstallationPlatformUnsupportedGuidance(scan.reason) : null,
+          scanError: scan.kind === "unsupported" ? bootloaderInstallationPlatformUnsupportedGuidance() : null,
         },
       }));
 
@@ -476,7 +455,7 @@ export function createFirmwareWorkspaceStore(
     }));
 
     try {
-      const response = normalizeFirmwareInstallReadinessResponse(await service.installReadiness(request));
+      const response = await service.installReadiness(request);
       const latest = get(store);
       if (latest.serial.readiness.requestToken !== requestToken) {
         updateState((state) => ({
@@ -586,7 +565,7 @@ export function createFirmwareWorkspaceStore(
     }));
 
     try {
-      const result = normalizeFirmwareRebootToBootloaderResult(await service.rebootToBootloader(port));
+      const result = await service.rebootToBootloader(port);
       const message = result.result === "requested"
         ? "Bootloader reboot requested. If the device re-enumerates, refresh and select/grant the bootloader port, then autodetect or start install."
         : result.result === "unsupported"
@@ -657,7 +636,7 @@ export function createFirmwareWorkspaceStore(
     }));
 
     try {
-      const info = normalizeFirmwareBootloaderBoardInfo(await service.detectBootloaderBoard(port));
+      const info = await service.detectBootloaderBoard(port);
       updateState((state) => ({
         ...state,
         serial: {
@@ -856,14 +835,13 @@ export function createFirmwareWorkspaceStore(
 
     try {
       const result = promptBootloaderRebootForInstallResult(
-        normalizeFirmwareInstallResult(
+        
           await service.startFirmwareInstallUpdate(
             state.serial.port,
             state.serial.baud,
             source,
             serialOptionsFromState(state.serial),
           ),
-        ),
       );
       pendingStartPath = null;
       const nextStatus = firmwareInstallResultToStatus(result);
@@ -931,9 +909,8 @@ export function createFirmwareWorkspaceStore(
     }));
 
     try {
-      const result = normalizeBootloaderInstallationResult(
-        await service.startBootloaderInstallation(state.recovery.device, state.recovery.source),
-      );
+      const result = 
+        await service.startBootloaderInstallation(state.recovery.device, state.recovery.source);
       pendingStartPath = null;
       const nextStatus = bootloaderInstallationResultToStatus(result);
       applyObservedSessionStatus(nextStatus, { clearLastError: true });

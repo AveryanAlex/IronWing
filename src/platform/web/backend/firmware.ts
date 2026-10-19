@@ -39,7 +39,6 @@ import { ardupilotFirmwareUrl } from "../../../lib/ardupilot-urls";
 import {
   BOOTLOADER_INSTALLATION_WEB_UNSUPPORTED_GUIDANCE,
   WEB_SERIAL_FLASH_UNSUPPORTED_REASON,
-  WEB_BOOTLOADER_INSTALLATION_UNSUPPORTED_REASON,
 } from "../../../lib/firmware/platform-guidance";
 import {
   firmwareBootloaderCatalogTargetsFromRemote,
@@ -56,7 +55,6 @@ export const WEB_SERIAL_FLASH_UNSUPPORTED_RESULT = {
 
 export const WEB_BOOTLOADER_INSTALLATION_UNSUPPORTED_RESULT = {
   result: "platform_unsupported",
-  reason: WEB_BOOTLOADER_INSTALLATION_UNSUPPORTED_REASON,
 } satisfies BootloaderInstallationResult;
 
 const STM32_DFU_VID = 0x0483;
@@ -148,7 +146,7 @@ export function completeBootloaderInstallation(result: BootloaderInstallationRes
   const outcome = result.result === "driver_guidance"
     ? { result: "unsupported_bootloader_installation_path" as const, guidance: result.guidance }
     : result.result === "platform_unsupported"
-      ? { result: "unsupported_bootloader_installation_path" as const, guidance: result.reason ?? BOOTLOADER_INSTALLATION_WEB_UNSUPPORTED_GUIDANCE }
+      ? { result: "unsupported_bootloader_installation_path" as const, guidance: BOOTLOADER_INSTALLATION_WEB_UNSUPPORTED_GUIDANCE }
       : result;
   webBackendRuntime.firmwareSessionStatus = {
     kind: "completed",
@@ -268,7 +266,6 @@ async function webDfuDevices(): Promise<DfuScanResult> {
   if (!usb) {
     return {
       kind: "unsupported",
-      reason: WEB_BOOTLOADER_INSTALLATION_UNSUPPORTED_REASON,
     };
   }
 

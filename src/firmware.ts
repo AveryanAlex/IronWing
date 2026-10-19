@@ -16,10 +16,7 @@ export type FirmwareProgress = GeneratedJson.FirmwareProgress;
 
 export type PortInfo = GeneratedJson.PortInfo;
 export type DfuDeviceInfo = GeneratedJson.DfuDeviceInfo;
-export type DfuScanResult = Exclude<GeneratedJson.DfuScanResult, { kind: "unsupported" }> | {
-  kind: "unsupported";
-  reason?: string;
-};
+export type DfuScanResult = GeneratedJson.DfuScanResult;
 
 export type FirmwareInstallPreflightInfo = Omit<GeneratedJson.SerialPreflightInfo, "available_ports"> & {
   available_ports: PortInfo[];
@@ -43,10 +40,7 @@ export type FirmwareBootloaderBoardInfo = GeneratedJson.FirmwareBootloaderBoardI
 export type BootloaderInstallationSource = GeneratedJson.DfuRecoverySource;
 export type FirmwareInstallResult = GeneratedJson.SerialFlowResult;
 export type FirmwareInstallUpdateResult = GeneratedJson.SerialFlowResult;
-export type BootloaderInstallationResult = Exclude<GeneratedJson.DfuRecoveryResult, { result: "platform_unsupported" }> | {
-  result: "platform_unsupported";
-  reason?: string;
-};
+export type BootloaderInstallationResult = GeneratedJson.DfuRecoveryResult;
 
 export type CatalogEntry = GeneratedJson.CatalogEntry;
 export type CatalogTargetSummary = GeneratedJson.CatalogTargetSummary;
