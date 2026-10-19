@@ -1,3 +1,4 @@
+import { createWaypointItem, createTriggerDistanceItem, createImageStartCaptureItem } from "./survey-capture";
 import type { MissionItem, GeoPoint2d, GeoPoint3d } from "./mavkit-types";
 import {
     latLonToLocalXY,
@@ -593,24 +594,6 @@ function createPositionResolver(params: StructureScanParams) {
     };
 }
 
-function createWaypointItem(position: GeoPoint3d, hold_time_s = 0): MissionItem {
-    return {
-        command: {
-            Nav: {
-                Waypoint: {
-                    position,
-                    hold_time_s,
-                    acceptance_radius_m: 1,
-                    pass_radius_m: 0,
-                    yaw_deg: 0,
-                },
-            },
-        },
-        current: false,
-        autocontinue: true,
-    };
-}
-
 function createMountControlItem(pitch_deg: number, yaw_deg: number): MissionItem {
     return {
         command: {
@@ -619,38 +602,6 @@ function createMountControlItem(pitch_deg: number, yaw_deg: number): MissionItem
                     pitch_deg,
                     roll_deg: 0,
                     yaw_deg,
-                },
-            },
-        },
-        current: false,
-        autocontinue: true,
-    };
-}
-
-function createTriggerDistanceItem(meters: number, trigger_now: boolean): MissionItem {
-    return {
-        command: {
-            Do: {
-                CamTriggerDistance: {
-                    meters,
-                    trigger_now,
-                },
-            },
-        },
-        current: false,
-        autocontinue: true,
-    };
-}
-
-function createImageStartCaptureItem(): MissionItem {
-    return {
-        command: {
-            Do: {
-                ImageStartCapture: {
-                    instance: 0,
-                    interval_s: 0,
-                    total_images: 1,
-                    start_number: 0,
                 },
             },
         },

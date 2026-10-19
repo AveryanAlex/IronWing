@@ -1,3 +1,4 @@
+import { createWaypointItem, createTriggerDistanceItem, createImageStartCaptureItem, photoCountForTransect, samplePhotoPoints } from "./survey-capture";
 import type { MissionItem, GeoPoint3d } from "./mavkit-types";
 import {
   latLonToLocalXY,
@@ -90,7 +91,6 @@ type PlannedTransect = {
 };
 
 const DEFAULT_HOVER_HOLD_TIME_S = 1;
-const PHOTO_COUNT_EPSILON_M = 1e-9;
 
 export async function generateSurvey(params: SurveyParams): Promise<SurveyResult> {
   const normalizedParams = normalizeSurveyParams(params);
@@ -497,56 +497,6 @@ function createPositionResolver(params: SurveyParams) {
   };
 }
 
-function createWaypointItem(position: GeoPoint3d, hold_time_s = 0): MissionItem {
-  return {
-    command: {
-      Nav: {
-        Waypoint: {
-          position,
-          hold_time_s,
-          acceptance_radius_m: 1,
-          pass_radius_m: 0,
-          yaw_deg: 0,
-        },
-      },
-    },
-    current: false,
-    autocontinue: true,
-  };
-}
-
-function createTriggerDistanceItem(meters: number, trigger_now: boolean): MissionItem {
-  return {
-    command: {
-      Do: {
-        CamTriggerDistance: {
-          meters,
-          trigger_now,
-        },
-      },
-    },
-    current: false,
-    autocontinue: true,
-  };
-}
-
-function createImageStartCaptureItem(): MissionItem {
-  return {
-    command: {
-      Do: {
-        ImageStartCapture: {
-          instance: 0,
-          interval_s: 0,
-          total_images: 1,
-          start_number: 0,
-        },
-      },
-    },
-    current: false,
-    autocontinue: true,
-  };
-}
-
 function planTransects(
   polygon: Vec2[],
   ref: GeoRef,
@@ -766,28 +716,4 @@ function normalizeVector(vector: Vec2): Vec2 {
     x: vector.x / magnitude,
     y: vector.y / magnitude,
   };
-}
-
-function photoCountForTransect(length_m: number, triggerDistance_m: number): number {
-  if (triggerDistance_m <= 0) {
-    return 0;
-  }
-  return Math.max(1, Math.floor((length_m + PHOTO_COUNT_EPSILON_M) / triggerDistance_m) + 1);
-}
-
-function samplePhotoPoints(start: Vec2, end: Vec2, triggerDistance_m: number): Vec2[] {
-  const length_m = distanceBetween(start, end);
-  const photoCount = photoCountForTransect(length_m, triggerDistance_m);
-  if (photoCount <= 1 || length_m === 0) {
-    return [start];
-  }
-
-  return Array.from({ length: photoCount }, (_, index) => {
-    const distance_m = Math.min(index * triggerDistance_m, length_m);
-    const t = length_m === 0 ? 0 : distance_m / length_m;
-    return {
-      x: start.x + (end.x - start.x) * t,
-      y: start.y + (end.y - start.y) * t,
-    };
-  });
 }
