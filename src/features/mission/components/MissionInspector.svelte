@@ -1,7 +1,10 @@
 <script lang="ts">
+
 import { AlertTriangle, Info, Settings2 } from "lucide-svelte";
 import type { HomePosition } from "../../../mission";
 import {
+  commandVariant,
+  commandPayload,
   commandPosition,
   defaultCommand,
   geoPoint3dLatLon,
@@ -90,68 +93,6 @@ function titleCase(value: string) {
   return value
     .replace(/_/g, " ")
     .replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-function commandVariant(command: MissionCommand): { category: "Nav" | "Do" | "Condition"; variant: string } | null {
-  if ("Nav" in command) {
-    return {
-      category: "Nav",
-      variant: typeof command.Nav === "string" ? command.Nav : Object.keys(command.Nav)[0] ?? "Waypoint",
-    };
-  }
-
-  if ("Do" in command) {
-    return {
-      category: "Do",
-      variant: typeof command.Do === "string" ? command.Do : Object.keys(command.Do)[0] ?? "Jump",
-    };
-  }
-
-  if ("Condition" in command) {
-    return {
-      category: "Condition",
-      variant: Object.keys(command.Condition)[0] ?? "Delay",
-    };
-  }
-
-  return null;
-}
-
-function commandPayload(command: MissionCommand): Record<string, unknown> | null {
-  if ("Nav" in command) {
-    const variant = commandVariant(command);
-    if (!variant) {
-      return null;
-    }
-
-    if (typeof command.Nav === "string") {
-      return null;
-    }
-    return (command.Nav as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
-  }
-
-  if ("Do" in command) {
-    const variant = commandVariant(command);
-    if (!variant) {
-      return null;
-    }
-
-    if (typeof command.Do === "string") {
-      return null;
-    }
-    return (command.Do as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
-  }
-
-  if (!("Condition" in command)) {
-    return null;
-  }
-
-  const variant = commandVariant(command);
-  if (!variant) {
-    return null;
-  }
-
-  return (command.Condition as Record<string, Record<string, unknown>>)[variant.variant] ?? null;
 }
 
 function commandSelectValue(command: MissionCommand): string {

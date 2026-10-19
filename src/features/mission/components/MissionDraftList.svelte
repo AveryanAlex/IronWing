@@ -1,4 +1,5 @@
 <script lang="ts">
+
 import { DragDropProvider, type DragDropEventHandlers } from "@dnd-kit/svelte";
 import { createSortable, isSortable } from "@dnd-kit/svelte/sortable";
 import { tick } from "svelte";
@@ -6,6 +7,8 @@ import { flip, type AnimationConfig, type FlipParams } from "svelte/animate";
 import { cubicOut } from "svelte/easing";
 import { MapPin, Navigation, Trash2 } from "lucide-svelte";
 import {
+  commandVariant,
+  commandPayload,
   commandCategory,
   commandDisplayName,
   type MissionCommand,
@@ -210,38 +213,9 @@ function compactNumber(value: number) {
   return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-function commandPayload(command: MissionCommand): Record<string, unknown> | null {
-  if ("Nav" in command) {
-    if (typeof command.Nav === "string") {
-      return null;
-    }
-    const variant = Object.keys(command.Nav)[0];
-    return variant ? (command.Nav as Record<string, Record<string, unknown>>)[variant] ?? null : null;
-  }
-
-  if ("Do" in command) {
-    if (typeof command.Do === "string") {
-      return null;
-    }
-    const variant = Object.keys(command.Do)[0];
-    return variant ? (command.Do as Record<string, Record<string, unknown>>)[variant] ?? null : null;
-  }
-
-  if ("Condition" in command) {
-    const variant = Object.keys(command.Condition)[0];
-    return variant ? (command.Condition as Record<string, Record<string, unknown>>)[variant] ?? null : null;
-  }
-
-  return null;
-}
-
 function commandDoPayload(command: MissionCommand, variant: string): Record<string, unknown> | null {
-  if (!("Do" in command) || typeof command.Do === "string") {
-    return null;
-  }
-
-  const payload = (command.Do as Record<string, unknown>)[variant];
-  return payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : null;
+  const descriptor = commandVariant(command);
+  return descriptor?.category === "Do" && descriptor.variant === variant ? descriptor.payload : null;
 }
 
 function normalizeTargetIndex(target: number, rowCount: number): number | null {

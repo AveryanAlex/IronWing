@@ -18,8 +18,6 @@ export {
     addTypedWaypointAt,
     bulkDelete,
     deleteTypedAt,
-    insertTypedAfter,
-    insertTypedBefore,
     insertTypedItemsAfter,
     moveTypedDown,
     moveTypedUp,

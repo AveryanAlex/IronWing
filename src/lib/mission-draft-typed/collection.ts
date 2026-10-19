@@ -89,49 +89,6 @@ export function setFenceReturnPoint(state: TypedDraftState, point: { latitude_de
     });
 }
 
-export function insertTypedBefore(state: TypedDraftState, domain: MissionDomain, index: number): TypedDraftState {
-    return withActiveItems(state, domain, (items) => {
-        if (items.length === 0) {
-            const doc = defaultItemForDomain(domain, 0, 0, 25);
-            const draftItem = createDraftItem(domain, doc, 0);
-            return { items: [draftItem], selection: singletonSelection(draftItem.uiId) };
-        }
-
-        const insertAt = Math.max(0, Math.min(index, items.length));
-        const before = items[insertAt - 1]?.preview;
-        const after = items[insertAt]?.preview;
-        const seed = before ?? after ?? { latitude_deg: 0, longitude_deg: 0, altitude_m: 25 };
-
-        let latitude_deg = seed.latitude_deg ?? 0;
-        let longitude_deg = seed.longitude_deg ?? 0;
-        let altitude_m = seed.altitude_m ?? 25;
-
-        if (before?.latitude_deg !== null && after?.latitude_deg !== null && before?.longitude_deg !== null && after?.longitude_deg !== null) {
-            latitude_deg = (before.latitude_deg + after.latitude_deg) / 2;
-            longitude_deg = (before.longitude_deg + after.longitude_deg) / 2;
-            altitude_m = ((before.altitude_m ?? altitude_m) + (after.altitude_m ?? altitude_m)) / 2;
-        } else if (before?.latitude_deg !== null && before?.longitude_deg !== null) {
-            latitude_deg = before.latitude_deg + 0.0004;
-            longitude_deg = before.longitude_deg + 0.0004;
-            altitude_m = before.altitude_m ?? altitude_m;
-        } else if (after?.latitude_deg !== null && after?.longitude_deg !== null) {
-            latitude_deg = after.latitude_deg - 0.0004;
-            longitude_deg = after.longitude_deg - 0.0004;
-            altitude_m = after.altitude_m ?? altitude_m;
-        }
-
-        const doc = defaultItemForDomain(domain, latitude_deg, longitude_deg, altitude_m);
-        const draftItem = createDraftItem(domain, doc, insertAt);
-        const nextItems = [...items];
-        nextItems.splice(insertAt, 0, draftItem);
-        return { items: nextItems, selection: singletonSelection(draftItem.uiId) };
-    });
-}
-
-export function insertTypedAfter(state: TypedDraftState, domain: MissionDomain, index: number): TypedDraftState {
-    return insertTypedBefore(state, domain, index + 1);
-}
-
 export function bulkDelete(state: TypedDraftState, domain: MissionDomain, uiIds: Iterable<number>): TypedDraftState {
     return withActiveItems(state, domain, (items, selection) => {
         const deleteUiIds = new Set(uiIds);

@@ -1,8 +1,8 @@
 import { isCommandKey, type CommandKey, type CommandField } from "../mission-command-definitions";
 import {
     commandPosition,
+    commandVariant,
     defaultCommand,
-    defaultGeoPoint3d,
     geoPoint3dAltitude,
     type GeoPoint3d,
     type LoiterDirection,
@@ -22,7 +22,6 @@ import {
     WINCH_ACTIONS,
 } from "../mission-command-enums";
 import {
-    COMMAND_CATALOG,
     commandIdToVariant,
     variantToCommandId,
     type CatalogEntry,
@@ -348,59 +347,17 @@ export function exportMissionItem(item: MissionItem, index: number, warnings: st
 }
 
 function resolveMissionCommandEntry(command: MissionCommand): CatalogEntry | null {
-    if ("Nav" in command && command.Nav) {
-        if (typeof command.Nav === "string") {
-            const id = variantToCommandId("Nav", command.Nav);
-            return id === undefined ? null : commandIdToVariant(id) ?? null;
-        }
-        const variant = Object.keys(command.Nav)[0];
-        const id = variantToCommandId("Nav", variant);
-        return id === undefined ? null : commandIdToVariant(id) ?? null;
-    }
-
-    if ("Do" in command && command.Do) {
-        if (typeof command.Do === "string") {
-            const id = variantToCommandId("Do", command.Do);
-            return id === undefined ? null : commandIdToVariant(id) ?? null;
-        }
-        const variant = Object.keys(command.Do)[0];
-        const id = variantToCommandId("Do", variant);
-        return id === undefined ? null : commandIdToVariant(id) ?? null;
-    }
-
-    if ("Condition" in command && command.Condition) {
-        const variant = Object.keys(command.Condition)[0];
-        const id = variantToCommandId("Condition", variant);
-        return id === undefined ? null : commandIdToVariant(id) ?? null;
-    }
-
-    return null;
+    const descriptor = commandVariant(command);
+    if (!descriptor) return null;
+    const id = variantToCommandId(descriptor.category, descriptor.variant);
+    return id === undefined ? null : commandIdToVariant(id) ?? null;
 }
 
 function commandVariantPayload(
-    command: MissionCommand,
-    category: CatalogEntry["category"],
-    variant: string,
+    command: MissionCommand, category: CatalogEntry["category"], variant: string,
 ): Record<string, unknown> | null {
-    if (category === "Nav" && "Nav" in command && command.Nav) {
-        if (typeof command.Nav === "string") {
-            return command.Nav === variant ? {} : null;
-        }
-        return (command.Nav as unknown as Record<string, Record<string, unknown>>)[variant] ?? null;
-    }
-
-    if (category === "Do" && "Do" in command && command.Do) {
-        if (typeof command.Do === "string") {
-            return command.Do === variant ? {} : null;
-        }
-        return (command.Do as unknown as Record<string, Record<string, unknown>>)[variant] ?? null;
-    }
-
-    if (category === "Condition" && "Condition" in command && command.Condition) {
-        return (command.Condition as unknown as Record<string, Record<string, unknown>>)[variant] ?? null;
-    }
-
-    return null;
+    const descriptor = commandVariant(command);
+    return descriptor?.category === category && descriptor.variant === variant ? descriptor.payload : null;
 }
 
 function commandKey(category: CatalogEntry["category"], variant: string): CommandKey {

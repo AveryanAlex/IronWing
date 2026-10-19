@@ -4,6 +4,8 @@ export { pascalToDisplay } from "./mission-command-names";
 
 export {
     commandCategory,
+    commandVariant,
+    commandPayload,
     commandDisplayName,
     commandHasPosition,
     commandPosition,

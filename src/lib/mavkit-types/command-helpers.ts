@@ -1,33 +1,30 @@
+import type { CommandCategory } from "../mission-command-definitions";
 import { pascalToDisplay } from "../mission-command-names";
 import type { ConditionCommand, DoCommand, GeoPoint3d, MissionCommand, NavCommand } from "./mission-types";
 
-function variantPayload(command: NavCommand | DoCommand | ConditionCommand): Record<string, unknown> | null {
-    if (typeof command === "string") {
-        return null;
-    }
+export function commandVariant(command: MissionCommand): {
+    category: CommandCategory; variant: string; payload: Record<string, unknown> | null;
+} | null {
+    const describe = (category: CommandCategory, value: NavCommand | DoCommand | ConditionCommand) => {
+        if (typeof value === "string") return { category, variant: value, payload: null };
+        const entry = Object.entries(value)[0];
+        if (!entry) return null;
+        const [variant, payload] = entry;
+        return { category, variant, payload: payload as Record<string, unknown> };
+    };
+    if ("Nav" in command) return describe("Nav", command.Nav);
+    if ("Do" in command) return describe("Do", command.Do);
+    if ("Condition" in command) return describe("Condition", command.Condition);
+    return null;
+}
 
-    const payload = Object.values(command)[0];
-    return payload && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
+export function commandPayload(command: MissionCommand): Record<string, unknown> | null {
+    return commandVariant(command)?.payload ?? null;
 }
 
 export function commandPosition(cmd: MissionCommand): GeoPoint3d | null {
-    if ("Nav" in cmd) {
-        const payload = variantPayload(cmd.Nav);
-        if (payload && "position" in payload) {
-            return payload.position as GeoPoint3d;
-        }
-        return null;
-    }
-
-    if ("Do" in cmd) {
-        const payload = variantPayload(cmd.Do);
-        if (payload && "position" in payload) {
-            return payload.position as GeoPoint3d;
-        }
-        return null;
-    }
-
-    return null;
+    const payload = commandPayload(cmd);
+    return payload && "position" in payload ? payload.position as GeoPoint3d : null;
 }
 
 export function commandHasPosition(cmd: MissionCommand): boolean {
@@ -44,23 +41,8 @@ export function commandCategory(
 }
 
 export function commandDisplayName(cmd: MissionCommand): string {
-    if ("Nav" in cmd) {
-        const nav = cmd.Nav;
-        if (typeof nav === "string") return pascalToDisplay(nav);
-        const key = Object.keys(nav)[0];
-        return pascalToDisplay(key);
-    }
-    if ("Do" in cmd) {
-        const d = cmd.Do;
-        if (typeof d === "string") return pascalToDisplay(d);
-        const key = Object.keys(d)[0];
-        return pascalToDisplay(key);
-    }
-    if ("Condition" in cmd) {
-        const c = cmd.Condition;
-        const key = Object.keys(c)[0];
-        return pascalToDisplay(key);
-    }
+    const descriptor = commandVariant(cmd);
+    if (descriptor) return pascalToDisplay(descriptor.variant);
     if ("Other" in cmd) {
         return `Command #${cmd.Other.command}`;
     }
@@ -83,12 +65,11 @@ export function withCommandField<C extends MissionCommand, F extends FieldOf<Pay
 
 /** Boundary for inspector inputs and decoded file fields; shape is checked before updating. */
 export function withDynamicCommandField(cmd: MissionCommand, fieldKey: string, value: unknown): MissionCommand {
-    const [category, variant] = Object.entries(cmd)[0];
-    if (category === "Other" || category === "QgcPassthrough" || typeof variant !== "object" || variant === null) return cmd;
-    const [variantKey, inner] = Object.entries(variant)[0];
-    if (!inner || typeof inner !== "object" || !(fieldKey in inner)) return cmd;
-    const payload = inner as Record<string, unknown>;
-    if (typeof payload[fieldKey] !== typeof value) throw new TypeError(`Invalid value for ${category}:${variantKey}.${fieldKey}`);
-    // The existing SDK variant and its payload are retained; only a checked field is replaced.
-    return { [category]: { [variantKey]: { ...payload, [fieldKey]: value } } } as MissionCommand;
+    const descriptor = commandVariant(cmd);
+    const payload = descriptor?.payload;
+    if (!descriptor || !payload || !(fieldKey in payload)) return cmd;
+    if (typeof payload[fieldKey] !== typeof value) throw new TypeError(
+        `Invalid value for ${descriptor.category}:${descriptor.variant}.${fieldKey}`,
+    );
+    return { [descriptor.category]: { [descriptor.variant]: { ...payload, [fieldKey]: value } } } as MissionCommand;
 }
