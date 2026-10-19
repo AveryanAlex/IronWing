@@ -71,25 +71,25 @@ export class WasmByteBridge {
     pushInbound(bytes: Uint8Array): Promise<void>;
 }
 
+/**
+ * Owns one parsed log. Browser adapters release it on close/replacement.
+ */
+export class WasmLog {
+    free(): void;
+    [Symbol.dispose](): void;
+    chartSeriesQuery(request: any): any;
+    exportCsvBytes(request: any): any;
+    flightPath(start_usec?: bigint | null, end_usec?: bigint | null, max_points?: number | null): any;
+    flightSummary(): any;
+    constructor(path: string, format: string, bytes: Uint8Array);
+    parseSummary(): any;
+    playbackFrame(cursor_usec?: bigint | null): any;
+    queryMessages(msg_type: string, start_usec?: bigint | null, end_usec?: bigint | null, max_points?: number | null): any;
+    rawMessagesQuery(request: any): any;
+    telemetryTrack(max_points?: number | null): any;
+}
+
 export function availableMessageRates(): any;
-
-export function logChartSeriesQuery(path: string, format: string, bytes: Uint8Array, request: any): any;
-
-export function logExportCsvBytes(path: string, format: string, bytes: Uint8Array, request: any): any;
-
-export function logFlightPath(path: string, format: string, bytes: Uint8Array, start_usec?: bigint | null, end_usec?: bigint | null, max_points?: number | null): any;
-
-export function logFlightSummary(path: string, format: string, bytes: Uint8Array): any;
-
-export function logParseSummary(path: string, format: string, bytes: Uint8Array): any;
-
-export function logQueryMessages(path: string, format: string, bytes: Uint8Array, msg_type: string, start_usec?: bigint | null, end_usec?: bigint | null, max_points?: number | null): any;
-
-export function logRawMessagesQuery(path: string, format: string, bytes: Uint8Array, request: any): any;
-
-export function logTelemetryAt(path: string, format: string, bytes: Uint8Array, cursor_usec?: bigint | null): any;
-
-export function logTelemetryTrack(path: string, format: string, bytes: Uint8Array, max_points?: number | null): any;
 
 export function start(): void;
 
@@ -107,6 +107,7 @@ export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly __wbg_ironwingwasmruntime_free: (a: number, b: number) => void;
     readonly __wbg_wasmbytebridge_free: (a: number, b: number) => void;
+    readonly __wbg_wasmlog_free: (a: number, b: number) => void;
     readonly availableMessageRates: () => [number, number, number];
     readonly ironwingwasmruntime_ackSessionSnapshot: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly ironwingwasmruntime_armVehicle: (a: number, b: number) => any;
@@ -163,20 +164,21 @@ export interface InitOutput {
     readonly ironwingwasmruntime_updateGuidedSession: (a: number, b: any) => any;
     readonly ironwingwasmruntime_vehicleTakeoff: (a: number, b: number) => any;
     readonly ironwingwasmruntime_waitConnect: (a: number) => any;
-    readonly logChartSeriesQuery: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
-    readonly logExportCsvBytes: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
-    readonly logFlightPath: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: bigint, i: number, j: bigint, k: number) => [number, number, number];
-    readonly logFlightSummary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
-    readonly logParseSummary: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
-    readonly logQueryMessages: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: bigint, k: number, l: bigint, m: number) => [number, number, number];
-    readonly logRawMessagesQuery: (a: number, b: number, c: number, d: number, e: number, f: number, g: any) => [number, number, number];
-    readonly logTelemetryAt: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: bigint) => [number, number, number];
-    readonly logTelemetryTrack: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly start: () => void;
     readonly wasmbytebridge_close: (a: number) => void;
     readonly wasmbytebridge_isClosed: (a: number) => number;
     readonly wasmbytebridge_nextOutbound: (a: number) => any;
     readonly wasmbytebridge_pushInbound: (a: number, b: any) => any;
+    readonly wasmlog_chartSeriesQuery: (a: number, b: any) => [number, number, number];
+    readonly wasmlog_exportCsvBytes: (a: number, b: any) => [number, number, number];
+    readonly wasmlog_flightPath: (a: number, b: number, c: bigint, d: number, e: bigint, f: number) => [number, number, number];
+    readonly wasmlog_flightSummary: (a: number) => [number, number, number];
+    readonly wasmlog_new: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly wasmlog_parseSummary: (a: number) => [number, number, number];
+    readonly wasmlog_playbackFrame: (a: number, b: number, c: bigint) => [number, number, number];
+    readonly wasmlog_queryMessages: (a: number, b: number, c: number, d: number, e: bigint, f: number, g: bigint, h: number) => [number, number, number];
+    readonly wasmlog_rawMessagesQuery: (a: number, b: any) => [number, number, number];
+    readonly wasmlog_telemetryTrack: (a: number, b: number) => [number, number, number];
     readonly webSerialDetectBootloaderBoard: (a: number, b: number, c: any, d: any) => any;
     readonly webSerialFirmwareInstallUpdate: (a: number, b: number, c: any, d: any, e: any, f: any, g: any) => any;
     readonly webTransportDescriptors: (a: number, b: number, c: number) => [number, number, number];

@@ -20,124 +20,106 @@ fn parse(path: &str, format: &str, bytes: &[u8]) -> Result<log_engine::ParsedLog
         .map_err(|error| JsValue::from_str(&error))
 }
 
-#[wasm_bindgen(js_name = logParseSummary)]
-pub fn log_parse_summary(path: &str, format: &str, bytes: &[u8]) -> Result<JsValue, JsValue> {
-    let parsed = parse(path, format, bytes)?;
-    to_js(&serde_json::json!({
-        "summary": parsed.store.summary,
-        "diagnostics": parsed.diagnostics,
-    }))
+/// Owns one parsed log. Browser adapters release it on close/replacement.
+#[wasm_bindgen]
+pub struct WasmLog {
+    parsed: log_engine::ParsedLog,
 }
 
-#[wasm_bindgen(js_name = logQueryMessages)]
-pub fn log_query_messages(
-    path: &str,
-    format: &str,
-    bytes: &[u8],
-    msg_type: &str,
-    start_usec: Option<u64>,
-    end_usec: Option<u64>,
-    max_points: Option<usize>,
-) -> Result<JsValue, JsValue> {
-    let parsed = parse(path, format, bytes)?;
-    to_js(&log_engine::query_log_messages(
-        &parsed.store,
-        msg_type,
-        start_usec,
-        end_usec,
-        max_points,
-    )?)
-}
+#[wasm_bindgen]
+impl WasmLog {
+    #[wasm_bindgen(constructor)]
+    pub fn new(path: &str, format: &str, bytes: &[u8]) -> Result<WasmLog, JsValue> {
+        Ok(Self {
+            parsed: parse(path, format, bytes)?,
+        })
+    }
 
-#[wasm_bindgen(js_name = logRawMessagesQuery)]
-pub fn log_raw_messages_query(
-    path: &str,
-    format: &str,
-    bytes: &[u8],
-    request: JsValue,
-) -> Result<JsValue, JsValue> {
-    let parsed = parse(path, format, bytes)?;
-    let request: RawMessageQuery = from_js(request)?;
-    to_js(&log_engine::query_raw_message_page(
-        &parsed.store,
-        &request,
-    )?)
-}
+    #[wasm_bindgen(js_name = parseSummary)]
+    pub fn log_parse_summary(&self) -> Result<JsValue, JsValue> {
+        to_js(&serde_json::json!({
+            "summary": self.parsed.store.summary,
+            "diagnostics": self.parsed.diagnostics,
+        }))
+    }
 
-#[wasm_bindgen(js_name = logChartSeriesQuery)]
-pub fn log_chart_series_query(
-    path: &str,
-    format: &str,
-    bytes: &[u8],
-    request: JsValue,
-) -> Result<JsValue, JsValue> {
-    let parsed = parse(path, format, bytes)?;
-    let request: ChartSeriesRequest = from_js(request)?;
-    to_js(&log_engine::query_chart_series(&parsed.store, &request))
-}
+    #[wasm_bindgen(js_name = queryMessages)]
+    pub fn log_query_messages(
+        &self,
+        msg_type: &str,
+        start_usec: Option<u64>,
+        end_usec: Option<u64>,
+        max_points: Option<usize>,
+    ) -> Result<JsValue, JsValue> {
+        to_js(&log_engine::query_log_messages(
+            &self.parsed.store,
+            msg_type,
+            start_usec,
+            end_usec,
+            max_points,
+        )?)
+    }
 
-#[wasm_bindgen(js_name = logFlightPath)]
-pub fn log_flight_path(
-    path: &str,
-    format: &str,
-    bytes: &[u8],
-    start_usec: Option<u64>,
-    end_usec: Option<u64>,
-    max_points: Option<usize>,
-) -> Result<JsValue, JsValue> {
-    let parsed = parse(path, format, bytes)?;
-    to_js(&log_engine::flight_path_points(
-        &parsed.store,
-        start_usec,
-        end_usec,
-        max_points,
-    )?)
-}
+    #[wasm_bindgen(js_name = rawMessagesQuery)]
+    pub fn log_raw_messages_query(&self, request: JsValue) -> Result<JsValue, JsValue> {
+        let request: RawMessageQuery = from_js(request)?;
+        to_js(&log_engine::query_raw_message_page(
+            &self.parsed.store,
+            &request,
+        )?)
+    }
 
-#[wasm_bindgen(js_name = logTelemetryTrack)]
-pub fn log_telemetry_track(
-    path: &str,
-    format: &str,
-    bytes: &[u8],
-    max_points: Option<usize>,
-) -> Result<JsValue, JsValue> {
-    let parsed = parse(path, format, bytes)?;
-    to_js(&log_engine::telemetry_track(&parsed.store, max_points))
-}
+    #[wasm_bindgen(js_name = chartSeriesQuery)]
+    pub fn log_chart_series_query(&self, request: JsValue) -> Result<JsValue, JsValue> {
+        let request: ChartSeriesRequest = from_js(request)?;
+        to_js(&log_engine::query_chart_series(
+            &self.parsed.store,
+            &request,
+        ))
+    }
 
-#[wasm_bindgen(js_name = logTelemetryAt)]
-pub fn log_telemetry_at(
-    path: &str,
-    format: &str,
-    bytes: &[u8],
-    cursor_usec: Option<u64>,
-) -> Result<JsValue, JsValue> {
-    let parsed = parse(path, format, bytes)?;
-    to_js(&log_engine::telemetry_at(&parsed.store, cursor_usec))
-}
+    #[wasm_bindgen(js_name = flightPath)]
+    pub fn log_flight_path(
+        &self,
+        start_usec: Option<u64>,
+        end_usec: Option<u64>,
+        max_points: Option<usize>,
+    ) -> Result<JsValue, JsValue> {
+        to_js(&log_engine::flight_path_points(
+            &self.parsed.store,
+            start_usec,
+            end_usec,
+            max_points,
+        )?)
+    }
 
-#[wasm_bindgen(js_name = logFlightSummary)]
-pub fn log_flight_summary(path: &str, format: &str, bytes: &[u8]) -> Result<JsValue, JsValue> {
-    let parsed = parse(path, format, bytes)?;
-    to_js(&log_engine::flight_summary(&parsed.store))
-}
+    #[wasm_bindgen(js_name = telemetryTrack)]
+    pub fn log_telemetry_track(&self, max_points: Option<usize>) -> Result<JsValue, JsValue> {
+        to_js(&log_engine::telemetry_track(&self.parsed.store, max_points))
+    }
 
-#[wasm_bindgen(js_name = logExportCsvBytes)]
-pub fn log_export_csv_bytes(
-    path: &str,
-    format: &str,
-    bytes: &[u8],
-    request: JsValue,
-) -> Result<JsValue, JsValue> {
-    let parsed = parse(path, format, bytes)?;
-    let request: LogExportRequest = from_js(request)?;
-    let (bytes, rows_written) = log_engine::export_csv_bytes(&parsed.store, &request)?;
-    to_js(&serde_json::json!({
-        "operation_id": OperationId::LogExport,
-        "destination_path": request.destination_path,
-        "bytes_written": bytes.len(),
-        "rows_written": rows_written,
-        "diagnostics": [],
-        "bytes": bytes,
-    }))
+    #[wasm_bindgen(js_name = flightSummary)]
+    pub fn log_flight_summary(&self) -> Result<JsValue, JsValue> {
+        to_js(&log_engine::flight_summary(&self.parsed.store))
+    }
+
+    #[wasm_bindgen(js_name = exportCsvBytes)]
+    pub fn log_export_csv_bytes(&self, request: JsValue) -> Result<JsValue, JsValue> {
+        let request: LogExportRequest = from_js(request)?;
+        let (bytes, rows_written) = log_engine::export_csv_bytes(&self.parsed.store, &request)?;
+        to_js(&serde_json::json!({
+            "operation_id": OperationId::LogExport,
+            "destination_path": request.destination_path,
+            "bytes_written": bytes.len(),
+            "rows_written": rows_written,
+            "diagnostics": [],
+            "bytes": bytes,
+        }))
+    }
+
+    #[wasm_bindgen(js_name = playbackFrame)]
+    pub fn playback_frame(&mut self, cursor_usec: Option<u64>) -> Result<JsValue, JsValue> {
+        self.parsed.store.set_playback_cursor_usec(cursor_usec);
+        to_js(&self.parsed.store.playback_frame())
+    }
 }

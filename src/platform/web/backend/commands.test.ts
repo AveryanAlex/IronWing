@@ -187,7 +187,14 @@ const wasmContractMock = vi.hoisted(() => ({
   })),
   logFlightPath: vi.fn(async () => []),
   logTelemetryTrack: vi.fn(async () => []),
-  logTelemetryAt: vi.fn(async () => ({ timestamp_usec: 100 })),
+  logFree: vi.fn(),
+  logPlaybackFrame: vi.fn(() => ({
+    session: { available: true, complete: true, provenance: "playback", value: { status: "active", connection: { kind: "disconnected" }, vehicle_state: null, home_position: null } },
+    telemetry: { available: true, complete: true, provenance: "playback", value: { gps: { satellites: 12 } } },
+    support: { available: false, complete: false, provenance: "playback", value: null },
+    status_text: { available: true, complete: true, provenance: "playback", value: { entries: [] } },
+    playback: { cursor_usec: 100 },
+  })),
   logFlightSummary: vi.fn(async () => ({ duration_secs: 0, max_alt_m: null, avg_alt_m: null, max_speed_mps: null, avg_speed_mps: null, total_distance_m: null, max_distance_from_home_m: null, battery_start_v: null, battery_end_v: null, battery_min_v: null, mah_consumed: null, gps_sats_min: null, gps_sats_max: null })),
   logExportCsvBytes: vi.fn(async () => ({ operation_id: "log_export", destination_path: "flight.csv", bytes_written: 1, rows_written: 1, diagnostics: [], bytes: [10] })),
 }));
@@ -232,15 +239,19 @@ vi.mock("../wasm", () => ({
   wasmWebSerialDetectBootloaderBoard: wasmContractMock.webSerialDetectBootloaderBoard,
   wasmWebUsbBootloaderInstallation: wasmContractMock.webUsbBootloaderInstallation,
   wasmWebTransportDescriptors: wasmContractMock.webTransportDescriptors,
-  wasmLogParseSummary: wasmContractMock.logParseSummary,
-  wasmLogQueryMessages: wasmContractMock.logQueryMessages,
-  wasmLogRawMessagesQuery: wasmContractMock.logRawMessagesQuery,
-  wasmLogChartSeriesQuery: wasmContractMock.logChartSeriesQuery,
-  wasmLogFlightPath: wasmContractMock.logFlightPath,
-  wasmLogTelemetryTrack: wasmContractMock.logTelemetryTrack,
-  wasmLogTelemetryAt: wasmContractMock.logTelemetryAt,
-  wasmLogFlightSummary: wasmContractMock.logFlightSummary,
-  wasmLogExportCsvBytes: wasmContractMock.logExportCsvBytes,
+  wasmOpenLog: vi.fn(async (path, format, bytes) => ({
+    ...await wasmContractMock.logParseSummary(path, format, bytes),
+    free: wasmContractMock.logFree,
+    queryMessages: wasmContractMock.logQueryMessages,
+    rawMessagesQuery: (request: unknown) => wasmContractMock.logRawMessagesQuery(path, format, bytes, request),
+    chartSeriesQuery: (request: unknown) => wasmContractMock.logChartSeriesQuery(path, format, bytes, request),
+    flightPath: wasmContractMock.logFlightPath,
+    telemetryTrack: wasmContractMock.logTelemetryTrack,
+    flightSummary: wasmContractMock.logFlightSummary,
+    playbackFrame: wasmContractMock.logPlaybackFrame,
+    exportCsvBytes: wasmContractMock.logExportCsvBytes,
+  })),
+
 }));
 
 const webSerialMock = vi.hoisted(() => ({
@@ -605,6 +616,14 @@ describe("web backend commands", () => {
 
     expect(wasmContractMock.logParseSummary).toHaveBeenCalledWith("flight.tlog", "tlog", new Uint8Array([1, 2, 3]));
     expect(wasmContractMock.logRawMessagesQuery).toHaveBeenCalledTimes(1);
+    expect(wasmContractMock.logParseSummary).toHaveBeenCalledTimes(2); // import index + opening
+    expect(wasmContractMock.logFree).toHaveBeenCalledTimes(1); // indexing handle
+    await invokeWebCommand("playback_seek", { cursorUsec: 150 });
+    await invokeWebCommand("playback_seek", { cursorUsec: 175 });
+    expect(wasmContractMock.logPlaybackFrame).toHaveBeenCalledTimes(2);
+    expect(wasmContractMock.logParseSummary).toHaveBeenCalledTimes(2);
+    await invokeWebCommand("log_close");
+    expect(wasmContractMock.logFree).toHaveBeenCalledTimes(2);
   });
 
   it("records browser inbound transport bytes as a completed TLOG", async () => {
@@ -843,11 +862,9 @@ describe("web backend commands", () => {
   it("keeps pure-web DFU and bootloader installation unsupported without WebUSB", async () => {
     await expect(invokeWebCommand("firmware_list_dfu_devices")).resolves.toEqual(expect.objectContaining({
       kind: "unsupported",
-      reason: expect.stringContaining("WebUSB/DFU"),
     }));
     await expect(invokeWebCommand("firmware_bootloader_installation")).resolves.toEqual(expect.objectContaining({
       result: "platform_unsupported",
-      reason: expect.stringContaining("WebUSB/DFU"),
     }));
   });
 

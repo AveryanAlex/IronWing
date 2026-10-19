@@ -69,82 +69,41 @@ function nullableUsec(value: number | null | undefined): bigint | null {
   return value == null ? null : BigInt(Math.trunc(value));
 }
 
-export async function wasmLogParseSummary(path: string, format: LogFormat, bytes: Uint8Array): Promise<{
+export type ParsedLogHandle = {
   summary: LogSummary;
-  diagnostics: unknown[];
-}> {
-  const module = await ensureWasmModule();
-  return module.logParseSummary(path, format, bytes) as { summary: LogSummary; diagnostics: unknown[] };
-}
+  diagnostics: import("../../logs").LogDiagnostic[];
+  free(): void;
+  queryMessages(msgType: string, startUsec?: number | null, endUsec?: number | null, maxPoints?: number | null): LogDataPoint[];
+  rawMessagesQuery(request: RawMessageQuery): RawMessagePage;
+  chartSeriesQuery(request: ChartSeriesRequest): ChartSeriesPage;
+  flightPath(startUsec?: number | null, endUsec?: number | null, maxPoints?: number | null): FlightPathPoint[];
+  telemetryTrack(maxPoints?: number | null): TelemetrySnapshot[];
+  flightSummary(): FlightSummary;
+  playbackFrame(cursorUsec?: number | null): import("../../lib/generated/ironwing-json").PlaybackFrame;
+  exportCsvBytes(request: LogExportRequest): LogExportResult & { bytes: number[] };
+};
 
-export async function wasmLogQueryMessages(options: {
-  path: string;
-  format: LogFormat;
-  bytes: Uint8Array;
-  msgType: string;
-  startUsec?: number | null;
-  endUsec?: number | null;
-  maxPoints?: number | null;
-}): Promise<LogDataPoint[]> {
+export async function wasmOpenLog(path: string, format: LogFormat, bytes: Uint8Array): Promise<ParsedLogHandle> {
   const module = await ensureWasmModule();
-  return module.logQueryMessages(
-    options.path,
-    options.format,
-    options.bytes,
-    options.msgType,
-    nullableUsec(options.startUsec),
-    nullableUsec(options.endUsec),
-    options.maxPoints ?? null,
-  ) as LogDataPoint[];
-}
-
-export async function wasmLogRawMessagesQuery(path: string, format: LogFormat, bytes: Uint8Array, request: RawMessageQuery): Promise<RawMessagePage> {
-  const module = await ensureWasmModule();
-  return module.logRawMessagesQuery(path, format, bytes, request) as RawMessagePage;
-}
-
-export async function wasmLogChartSeriesQuery(path: string, format: LogFormat, bytes: Uint8Array, request: ChartSeriesRequest): Promise<ChartSeriesPage> {
-  const module = await ensureWasmModule();
-  return module.logChartSeriesQuery(path, format, bytes, request) as ChartSeriesPage;
-}
-
-export async function wasmLogFlightPath(options: {
-  path: string;
-  format: LogFormat;
-  bytes: Uint8Array;
-  startUsec?: number | null;
-  endUsec?: number | null;
-  maxPoints?: number | null;
-}): Promise<FlightPathPoint[]> {
-  const module = await ensureWasmModule();
-  return module.logFlightPath(
-    options.path,
-    options.format,
-    options.bytes,
-    nullableUsec(options.startUsec),
-    nullableUsec(options.endUsec),
-    options.maxPoints ?? null,
-  ) as FlightPathPoint[];
-}
-
-export async function wasmLogTelemetryTrack(path: string, format: LogFormat, bytes: Uint8Array, maxPoints?: number | null): Promise<TelemetrySnapshot[]> {
-  const module = await ensureWasmModule();
-  return module.logTelemetryTrack(path, format, bytes, maxPoints ?? null) as TelemetrySnapshot[];
-}
-
-export async function wasmLogTelemetryAt(path: string, format: LogFormat, bytes: Uint8Array, cursorUsec?: number | null): Promise<TelemetrySnapshot> {
-  const module = await ensureWasmModule();
-  return module.logTelemetryAt(path, format, bytes, nullableUsec(cursorUsec)) as TelemetrySnapshot;
-}
-
-export async function wasmLogFlightSummary(path: string, format: LogFormat, bytes: Uint8Array): Promise<FlightSummary> {
-  const module = await ensureWasmModule();
-  return module.logFlightSummary(path, format, bytes) as FlightSummary;
-}
-
-export async function wasmLogExportCsvBytes(path: string, format: LogFormat, bytes: Uint8Array, request: LogExportRequest): Promise<LogExportResult & { bytes: number[] }> {
-  const module = await ensureWasmModule();
-  return module.logExportCsvBytes(path, format, bytes, request) as LogExportResult & { bytes: number[] };
+  const log = new module.WasmLog(path, format, bytes);
+  try {
+    const parsed = log.parseSummary() as Pick<ParsedLogHandle, "summary" | "diagnostics">;
+    return {
+      ...parsed,
+      free: () => log.free(),
+      queryMessages: (type, start, end, max) => log.queryMessages(type, nullableUsec(start), nullableUsec(end), max ?? null),
+      rawMessagesQuery: (request) => log.rawMessagesQuery(request),
+      chartSeriesQuery: (request) => log.chartSeriesQuery(request),
+      flightPath: (start, end, max) => log.flightPath(nullableUsec(start), nullableUsec(end), max ?? null),
+      telemetryTrack: (max) => log.telemetryTrack(max ?? null),
+      flightSummary: () => log.flightSummary(),
+      playbackFrame: (cursor) => log.playbackFrame(nullableUsec(cursor)),
+      exportCsvBytes: (request) => log.exportCsvBytes(request),
+    };
+  } catch (error) {
+    log.free();
+    throw error;
+  }
 }
 
 export async function wasmWebSerialFirmwareInstallUpdate(options: {

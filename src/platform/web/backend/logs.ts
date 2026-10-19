@@ -1,15 +1,6 @@
+import { PLAYBACK_SPEEDS, DEFAULT_PLAYBACK_SPEED } from "../../../lib/generated/ironwing";
 import { emitWebEvent } from "../event";
-import {
-  wasmLogChartSeriesQuery,
-  wasmLogExportCsvBytes,
-  wasmLogFlightPath,
-  wasmLogFlightSummary,
-  wasmLogParseSummary,
-  wasmLogQueryMessages,
-  wasmLogRawMessagesQuery,
-  wasmLogTelemetryAt,
-  wasmLogTelemetryTrack,
-} from "../wasm";
+import { wasmOpenLog, type ParsedLogHandle } from "../wasm";
 import { definePlatformCommandHandlers } from "./command-handler";
 import {
   BROWSER_LOG_STORAGE_LOCATION,
@@ -31,9 +22,8 @@ import type {
   LogMetadata,
   RawMessageQuery,
 } from "../../../logs";
-import type { ReplayState, TelemetrySnapshot } from "../../../playback";
+import type { ReplayState } from "../../../playback";
 import type { SessionEnvelope } from "../../../session";
-import type { TelemetryState } from "../../../telemetry";
 import { EVENT_NAMES } from "../../../lib/generated/events";
 
 export const EMPTY_WEB_LOG_LIBRARY: LogLibraryCatalog = createEmptyBrowserLogLibraryCatalog();
@@ -58,15 +48,14 @@ export const WEB_LOG_FORMAT_ADAPTERS: LogFormatAdapter[] = [
 ];
 
 const INDEX_SCHEMA_VERSION = 1;
-const PLAYBACK_SPEEDS = [0.5, 1, 2, 4, 8, 16];
 const PLAYBACK_TICK_MSEC = 100;
 
 type ActiveLog = {
   entryId: string;
-  sourcePath: string;
-  format: LogFormat;
-  bytes: Uint8Array;
-  summary: Awaited<ReturnType<typeof wasmLogParseSummary>>["summary"];
+  leases: number;
+  closed: boolean;
+  handle: ParsedLogHandle;
+  summary: ParsedLogHandle["summary"];
 };
 
 type BrowserPlayback = {
@@ -115,6 +104,7 @@ export const logCommandHandlers = definePlatformCommandHandlers({
   log_get_summary: () => activeLog?.summary ?? null,
   log_close: () => {
     stopPlayback(false);
+    closeLog(activeLog);
     activeLog = null;
   },
   log_raw_messages_query: async ({ request }) => queryRawMessages(request),
@@ -169,37 +159,41 @@ export async function registerBrowserLogBytes(source: BrowserFileMetadata, bytes
   const operation = startOperation("log_library_register");
   emitProgress("parsing", operation, { entryId, message: "parsing browser log" });
   try {
-    const parsed = await wasmLogParseSummary(source.name, format, bytes);
-    const importedAt = Date.now();
-    const metadata = metadataFromSummary(parsed.summary);
-    const index = {
-      index_id: entryId,
-      relative_path: `${entryId}.json`,
-      format,
-      index_version: INDEX_SCHEMA_VERSION,
-      built_at_unix_msec: importedAt,
-      message_count: metadata.total_messages,
-      covers_start_usec: metadata.start_usec,
-      covers_end_usec: metadata.end_usec,
-    };
-    await getBrowserPersistentStorage().putLogBytes({ entry_id: entryId, format, source, bytes });
-    await getBrowserPersistentStorage().putLogIndex({
-      index_id: entryId,
-      entry_id: entryId,
-      reference: index,
-      payload: { metadata, diagnostics: parsed.diagnostics },
-    });
-    const entry = await saveEntry({
-      entry_id: entryId,
-      status: statusFromIndexResult(metadata.total_messages, parsed.diagnostics as LogDiagnostic[]),
-      imported_at_unix_msec: importedAt,
-      source: referencedFile(source),
-      metadata,
-      diagnostics: parsed.diagnostics as LogDiagnostic[],
-      index,
-    });
-    emitProgress("completed", operation, { entryId, completedItems: metadata.total_messages, totalItems: metadata.total_messages, percent: 100 });
-    return entry;
+    const parsed = await wasmOpenLog(source.name, format, bytes);
+    try {
+      const importedAt = Date.now();
+      const metadata = metadataFromSummary(parsed.summary);
+      const index = {
+        index_id: entryId,
+        relative_path: `${entryId}.json`,
+        format,
+        index_version: INDEX_SCHEMA_VERSION,
+        built_at_unix_msec: importedAt,
+        message_count: metadata.total_messages,
+        covers_start_usec: metadata.start_usec,
+        covers_end_usec: metadata.end_usec,
+      };
+      await getBrowserPersistentStorage().putLogBytes({ entry_id: entryId, format, source, bytes });
+      await getBrowserPersistentStorage().putLogIndex({
+        index_id: entryId,
+        entry_id: entryId,
+        reference: index,
+        payload: { metadata, diagnostics: parsed.diagnostics },
+      });
+      const entry = await saveEntry({
+        entry_id: entryId,
+        status: statusFromIndexResult(metadata.total_messages, parsed.diagnostics),
+        imported_at_unix_msec: importedAt,
+        source: referencedFile(source),
+        metadata,
+        diagnostics: parsed.diagnostics,
+        index,
+      });
+      emitProgress("completed", operation, { entryId, completedItems: metadata.total_messages, totalItems: metadata.total_messages, percent: 100 });
+      return entry;
+    } finally {
+      parsed.free();
+    }
   } catch (error) {
     emitProgress("failed", operation, { entryId, message: errorMessage(error) });
     throw error;
@@ -225,6 +219,7 @@ async function removeEntry(entryId: string): Promise<LogLibraryCatalog> {
   await storage.deleteLogIndex(entryId);
   await storage.saveLogCatalog(catalog);
   if (activeLog?.entryId === entryId) {
+    closeLog(activeLog);
     activeLog = null;
     stopPlayback(false);
   }
@@ -279,12 +274,14 @@ async function openStoredLog(path: string) {
   if (!format) {
     throw new Error("unsupported log format");
   }
-  const parsed = await wasmLogParseSummary(stored.source.name, format, stored.bytes);
+  const parsed = await wasmOpenLog(stored.source.name, format, stored.bytes);
+  stopPlayback(false);
+  closeLog(activeLog);
   activeLog = {
     entryId: stored.entry_id,
-    sourcePath: stored.source.pseudo_path,
-    format,
-    bytes: stored.bytes,
+    leases: 0,
+    closed: false,
+    handle: parsed,
     summary: parsed.summary,
   };
   playback.state = playbackState("ready", "replay_open", parsed.summary.start_usec, false);
@@ -293,54 +290,36 @@ async function openStoredLog(path: string) {
 
 async function queryActiveLogMessages(args: LogQueryArgs) {
   const log = requireActiveLog();
-  return wasmLogQueryMessages({
-    path: log.sourcePath,
-    format: log.format,
-    bytes: log.bytes,
-    msgType: args.msgType,
-    startUsec: args.startUsec,
-    endUsec: args.endUsec,
-    maxPoints: args.maxPoints,
-  });
+  return log.handle.queryMessages(args.msgType, args.startUsec, args.endUsec, args.maxPoints);
 }
 
 async function queryRawMessages(request: RawMessageQuery) {
-  const log = await logForEntry(request.entry_id);
-  return wasmLogRawMessagesQuery(log.sourcePath, log.format, log.bytes, request);
+  return usingLogEntry(request.entry_id, (log) => log.handle.rawMessagesQuery(request));
 }
 
 async function queryChartSeries(request: ChartSeriesRequest) {
-  const log = await logForEntry(request.entry_id);
-  return wasmLogChartSeriesQuery(log.sourcePath, log.format, log.bytes, request);
+  return usingLogEntry(request.entry_id, (log) => log.handle.chartSeriesQuery(request));
 }
 
 async function getFlightPath(args: FlightPathArgs) {
-  const log = "entryId" in args ? await logForEntry(args.entryId) : requireActiveLog();
-  return wasmLogFlightPath({
-    path: log.sourcePath,
-    format: log.format,
-    bytes: log.bytes,
-    startUsec: "startUsec" in args ? args.startUsec : null,
-    endUsec: "endUsec" in args ? args.endUsec : null,
-    maxPoints: args.maxPoints,
-  });
+  if ("entryId" in args) return usingLogEntry(args.entryId, (log) => log.handle.flightPath(args.startUsec, args.endUsec, args.maxPoints));
+  return requireActiveLog().handle.flightPath(null, null, args.maxPoints);
 }
 
 async function getTelemetryTrack(args: TelemetryTrackArgs) {
   const log = requireActiveLog();
-  return wasmLogTelemetryTrack(log.sourcePath, log.format, log.bytes, args.maxPoints);
+  return log.handle.telemetryTrack(args.maxPoints);
 }
 
 async function getFlightSummary() {
   const log = requireActiveLog();
-  return wasmLogFlightSummary(log.sourcePath, log.format, log.bytes);
+  return log.handle.flightSummary();
 }
 
 async function exportLog(request: LogExportRequest) {
-  const log = await logForEntry(request.entry_id);
-  const result = await wasmLogExportCsvBytes(log.sourcePath, log.format, log.bytes, request);
+  const { result, fileName } = await usingLogEntry(request.entry_id, (log) => ({ result: log.handle.exportCsvBytes(request), fileName: log.summary.file_name }));
   const bytes = new Uint8Array(result.bytes);
-  const suggestedName = request.destination_path.split(/[\\/]/).pop() || `${log.summary.file_name}.csv`;
+  const suggestedName = request.destination_path.split(/[\\/]/).pop() || `${fileName}.csv`;
   await saveBrowserBytes(bytes, {
     suggested_name: suggestedName,
     mime_type: "text/csv",
@@ -404,7 +383,7 @@ async function seekPlayback(cursorUsec: number | null) {
 }
 
 async function setPlaybackSpeed(speed: number): Promise<ReplayState> {
-  if (!PLAYBACK_SPEEDS.includes(speed)) {
+  if (!PLAYBACK_SPEEDS.some((value) => value === speed)) {
     throw new Error(`unsupported playback speed ${speed}; expected one of ${PLAYBACK_SPEEDS.join(", ")}`);
   }
   const wasPlaying = playback.state.status === "playing";
@@ -446,38 +425,11 @@ async function emitPlaybackFrame(): Promise<void> {
   const log = requireActiveLog();
   const envelope = playback.envelope ?? playbackEnvelope();
   playback.envelope = envelope;
-  const telemetry = await wasmLogTelemetryAt(log.sourcePath, log.format, log.bytes, playback.state.cursor_usec);
-  emitWebEvent(EVENT_NAMES.SESSION_STATE, {
-    envelope,
-    value: {
-      available: true,
-      complete: true,
-      provenance: "playback",
-      value: {
-        status: "active",
-        connection: { kind: "disconnected" },
-        vehicle_state: telemetry.armed !== undefined && telemetry.custom_mode !== undefined
-          ? {
-              armed: telemetry.armed,
-              custom_mode: telemetry.custom_mode,
-              mode_name: `Mode ${telemetry.custom_mode}`,
-              system_status: "active",
-              vehicle_type: "unknown",
-              autopilot: "unknown",
-              system_id: 0,
-              component_id: 0,
-              heartbeat_received: false,
-              firmware_version: null,
-            }
-          : null,
-        home_position: null,
-      },
-    },
-  });
-  emitWebEvent(EVENT_NAMES.TELEMETRY_STATE, {
-    envelope,
-    value: { available: true, complete: true, provenance: "playback", value: telemetryStateFromSnapshot(telemetry) },
-  });
+  const frame = log.handle.playbackFrame(playback.state.cursor_usec);
+  emitWebEvent(EVENT_NAMES.SESSION_STATE, { envelope, value: { ...frame.session, value: frame.session.value ? { ...frame.session.value, home_position: null } : null } });
+  emitWebEvent(EVENT_NAMES.TELEMETRY_STATE, { envelope, value: frame.telemetry });
+  emitWebEvent(EVENT_NAMES.SUPPORT_STATE, { envelope, value: frame.support });
+  emitWebEvent(EVENT_NAMES.STATUS_TEXT_STATE, { envelope, value: { ...frame.status_text, value: frame.status_text.value ? { entries: frame.status_text.value.entries.map((entry) => ({ ...entry, timestamp_usec: entry.timestamp_usec ?? undefined })) } : null } });
   emitPlaybackState();
 }
 
@@ -506,6 +458,7 @@ async function storedLogForPath(path: string) {
 
 async function logForEntry(entryId: string): Promise<ActiveLog> {
   if (activeLog?.entryId === entryId) {
+    activeLog.leases += 1;
     return activeLog;
   }
   const stored = await getBrowserPersistentStorage().getLogBytes(entryId);
@@ -516,8 +469,24 @@ async function logForEntry(entryId: string): Promise<ActiveLog> {
   if (!format) {
     throw new Error("unsupported log format");
   }
-  const parsed = await wasmLogParseSummary(stored.source.name, format, stored.bytes);
-  return { entryId, sourcePath: stored.source.pseudo_path, format, bytes: stored.bytes, summary: parsed.summary };
+  const parsed = await wasmOpenLog(stored.source.name, format, stored.bytes);
+  return { entryId, leases: 1, closed: true, handle: parsed, summary: parsed.summary };
+}
+
+async function usingLogEntry<T>(entryId: string, query: (log: ActiveLog) => T): Promise<T> {
+  const log = await logForEntry(entryId);
+  try {
+    return query(log);
+  } finally {
+    log.leases -= 1;
+    if (log.closed && log.leases === 0) log.handle.free();
+  }
+}
+
+function closeLog(log: ActiveLog | null): void {
+  if (!log) return;
+  log.closed = true;
+  if (log.leases === 0) log.handle.free();
 }
 
 function requireActiveLog(): ActiveLog {
@@ -538,7 +507,7 @@ function playbackState(status: ReplayState["status"], operationId: ReplayState["
     end_usec: log.summary.end_usec,
     duration_secs: log.summary.duration_secs,
     speed: playback.state.speed,
-    available_speeds: PLAYBACK_SPEEDS,
+    available_speeds: [...PLAYBACK_SPEEDS],
     barrier_ready: barrierReady,
     readonly: true,
     diagnostic: null,
@@ -554,8 +523,8 @@ function idlePlaybackState(): ReplayState {
     start_usec: null,
     end_usec: null,
     duration_secs: null,
-    speed: 1,
-    available_speeds: PLAYBACK_SPEEDS,
+    speed: DEFAULT_PLAYBACK_SPEED,
+    available_speeds: [...PLAYBACK_SPEEDS],
     barrier_ready: false,
     readonly: true,
     diagnostic: null,
@@ -573,51 +542,6 @@ function playbackEnvelope(): SessionEnvelope {
 
 function clampCursor(log: ActiveLog, cursorUsec: number): number {
   return Math.max(log.summary.start_usec, Math.min(log.summary.end_usec, cursorUsec));
-}
-
-function telemetryStateFromSnapshot(snapshot: TelemetrySnapshot): TelemetryState {
-  return {
-    flight: {
-      altitude_m: snapshot.altitude_m ?? null,
-      speed_mps: snapshot.speed_mps ?? null,
-      climb_rate_mps: snapshot.climb_rate_mps ?? null,
-      throttle_pct: snapshot.throttle_pct ?? null,
-      airspeed_mps: snapshot.airspeed_mps ?? null,
-    },
-    navigation: {
-      latitude_deg: snapshot.latitude_deg ?? null,
-      longitude_deg: snapshot.longitude_deg ?? null,
-      heading_deg: snapshot.heading_deg ?? null,
-      wp_dist_m: snapshot.wp_dist_m ?? null,
-      nav_bearing_deg: snapshot.nav_bearing_deg ?? null,
-      target_bearing_deg: snapshot.target_bearing_deg ?? null,
-      xtrack_error_m: snapshot.xtrack_error_m ?? null,
-    },
-    attitude: {
-      roll_deg: snapshot.roll_deg ?? null,
-      pitch_deg: snapshot.pitch_deg ?? null,
-      yaw_deg: snapshot.yaw_deg ?? null,
-    },
-    power: {
-      battery_pct: snapshot.battery_pct ?? null,
-      battery_voltage_v: snapshot.battery_voltage_v ?? null,
-      battery_current_a: snapshot.battery_current_a ?? null,
-      battery_voltage_cells: null,
-      battery_time_remaining_s: null,
-      energy_consumed_wh: snapshot.energy_consumed_wh ?? null,
-    },
-    gps: {
-      fix_type: snapshot.gps_fix_type ?? null,
-      satellites: snapshot.gps_satellites ?? null,
-      hdop: snapshot.gps_hdop ?? null,
-    },
-    terrain: { terrain_height_m: null, height_above_terrain_m: null },
-    radio: {
-      rc_channels: snapshot.rc_channels ?? null,
-      rc_rssi: snapshot.rc_rssi ?? null,
-      servo_outputs: snapshot.servo_outputs ?? null,
-    },
-  };
 }
 
 function metadataFromSummary(summary: ActiveLog["summary"]): LogMetadata {
