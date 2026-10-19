@@ -1,7 +1,5 @@
 import { COMMON_CMD_REF, COPTER_CMD_LIST, FRAME_NONE, FRAME_RELATIVE_ALT } from "./shared";
-import type { CommandMetadata } from "./types";
-
-export const DO_CAMERA_COMMAND_IDS = [195, 197, 201, 202, 203, 205, 206, 531, 532, 534, 1000, 2000, 2001, 2500, 2501] as const;
+import type { CommandMetadata, TypedCommandMetadata } from "./types";
 
 export const DO_CAMERA_COMMAND_METADATA: Record<number, CommandMetadata> = {
     195: {
@@ -271,4 +269,4 @@ export const DO_CAMERA_COMMAND_METADATA: Record<number, CommandMetadata> = {
             stream_id: { label: "Stream ID", description: "Video stream identifier." },
         },
     },
-};
+} satisfies Partial<TypedCommandMetadata>;

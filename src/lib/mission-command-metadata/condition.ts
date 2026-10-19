@@ -1,7 +1,5 @@
 import { COPTER_CMD_LIST, FRAME_NONE, YAW_DIRECTION_VALUES } from "./shared";
-import type { CommandMetadata } from "./types";
-
-export const CONDITION_COMMAND_IDS = [112, 114, 115] as const;
+import type { CommandMetadata, TypedCommandMetadata } from "./types";
 
 export const CONDITION_COMMAND_METADATA: Record<number, CommandMetadata> = {
     112: {
@@ -97,4 +95,4 @@ export const CONDITION_COMMAND_METADATA: Record<number, CommandMetadata> = {
             },
         },
     },
-};
+} satisfies Partial<TypedCommandMetadata>;

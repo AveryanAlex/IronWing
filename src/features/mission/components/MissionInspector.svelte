@@ -5,7 +5,7 @@ import {
   commandPosition,
   defaultCommand,
   geoPoint3dLatLon,
-  withCommandField,
+  withDynamicCommandField,
   type MissionCommand,
   type MissionItem,
 } from "../../../lib/mavkit-types";
@@ -324,7 +324,7 @@ function updateField(fieldKey: string, value: unknown) {
     return;
   }
 
-  onUpdateCommand(item.index, withCommandField(missionItem.command, fieldKey, value));
+  onUpdateCommand(item.index, withDynamicCommandField(missionItem.command, fieldKey, value));
 }
 
 function updateNumberField(field: EditableField, rawValue: string) {

@@ -1,12 +1,12 @@
 <script lang="ts">
 import { NativeSelect } from "../../../components/ui";
-import { getCommandCatalog } from "../../../lib/mission-command-metadata";
+import { getCommandCatalog, type CatalogEntry } from "../../../lib/mission-command-metadata";
 import { missionWorkspaceTestIds } from "../mission-workspace-test-ids";
 
 type Props = {
   value: string;
   disabled?: boolean;
-  onSelect: (category: "Nav" | "Do" | "Condition", variant: string) => void;
+  onSelect: (category: CatalogEntry["category"], variant: CatalogEntry["variant"]) => void;
 };
 
 const commandCatalog = getCommandCatalog();
@@ -20,12 +20,8 @@ function entriesFor(category: (typeof categories)[number]) {
 
 function handleChange(event: Event) {
   const nextValue = (event.currentTarget as HTMLSelectElement).value;
-  const [category, variant] = nextValue.split(":");
-  if (!category || !variant) {
-    return;
-  }
-
-  onSelect(category as "Nav" | "Do" | "Condition", variant);
+  const entry = commandCatalog.find((entry) => `${entry.category}:${entry.variant}` === nextValue);
+  if (entry) onSelect(entry.category, entry.variant);
 }
 </script>
 

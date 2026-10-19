@@ -1,7 +1,5 @@
 import { COMMON_CMD_REF, COPTER_CMD_LIST, FRAME_NONE, FRAME_RELATIVE_ALT, SPEED_TYPE_VALUES } from "./shared";
-import type { CommandMetadata } from "./types";
-
-export const DO_MISSION_COMMAND_IDS = [177, 178, 179, 188, 189, 191, 193, 194, 215, 217, 218, 222, 223, 3000, 600, 601] as const;
+import type { CommandMetadata, TypedCommandMetadata } from "./types";
 
 export const DO_MISSION_COMMAND_METADATA: Record<number, CommandMetadata> = {
     177: {
@@ -345,4 +343,4 @@ export const DO_MISSION_COMMAND_METADATA: Record<number, CommandMetadata> = {
             },
         },
     },
-};
+} satisfies Partial<TypedCommandMetadata>;

@@ -7,8 +7,8 @@ export {
     commandDisplayName,
     commandHasPosition,
     commandPosition,
-    COMMAND_ENUM_OPTIONS,
     withCommandField,
+    withDynamicCommandField,
 } from "./mavkit-types/command-helpers";
 
 export {

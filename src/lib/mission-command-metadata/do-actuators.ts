@@ -7,9 +7,7 @@ import {
     PARACHUTE_ACTION_VALUES,
     WINCH_ACTION_VALUES,
 } from "./shared";
-import type { CommandMetadata } from "./types";
-
-export const DO_ACTUATOR_COMMAND_IDS = [181, 182, 183, 184, 207, 208, 210, 211, 212, 216, 42600] as const;
+import type { CommandMetadata, TypedCommandMetadata } from "./types";
 
 export const DO_ACTUATOR_COMMAND_METADATA: Record<number, CommandMetadata> = {
     181: {
@@ -269,4 +267,4 @@ export const DO_ACTUATOR_COMMAND_METADATA: Record<number, CommandMetadata> = {
             },
         },
     },
-};
+} satisfies Partial<TypedCommandMetadata>;

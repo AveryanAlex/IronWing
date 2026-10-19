@@ -1,3 +1,4 @@
+import type { COMMAND_DEFINITIONS, CommandCategory, CommandVariant, CommandKey, CommandField } from "../mission-command-definitions";
 /** Which MissionItem field a parameter descriptor maps to. */
 export type ParamSlot = "param1" | "param2" | "param3" | "param4" | "x" | "y" | "z";
 
@@ -47,12 +48,12 @@ export type FrameDescriptor = {
     description?: string;
 };
 
-export type CatalogEntry = {
-    variant: string;
-    category: "Nav" | "Do" | "Condition";
+export type CatalogEntry = { [C in CommandCategory]: {
+    variant: CommandVariant<C>;
+    category: C;
     id: number;
     label: string;
-};
+} }[CommandCategory];
 
 /**
  * Full metadata for a single MAV_CMD used in mission planning.
@@ -70,4 +71,12 @@ export type CommandMetadata = {
     typedFields?: Record<string, TypedFieldDescriptor>;
     frame?: FrameDescriptor;
     notes?: string[];
+};
+
+/** Enforces payload-field names for each command ID in the UI metadata tables. */
+export type TypedCommandMetadata = {
+  [K in CommandKey as typeof COMMAND_DEFINITIONS[K]["id"]]: Omit<CommandMetadata, "id" | "typedFields"> & {
+    id: typeof COMMAND_DEFINITIONS[K]["id"];
+    typedFields?: Partial<Record<CommandField<K>, TypedFieldDescriptor>>;
+  }
 };

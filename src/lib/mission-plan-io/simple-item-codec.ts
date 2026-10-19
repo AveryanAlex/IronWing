@@ -1,3 +1,4 @@
+import { isCommandKey, type CommandKey, type CommandField } from "../mission-command-definitions";
 import {
     commandPosition,
     defaultCommand,
@@ -10,6 +11,7 @@ import {
     type MissionItem,
     type YawDirection,
     withCommandField,
+    withDynamicCommandField,
 } from "../mavkit-types";
 import {
     ALT_CHANGE_ACTIONS,
@@ -37,17 +39,17 @@ import {
 type QgcSlot = "param1" | "param2" | "param3" | "param4" | "x" | "y" | "z";
 type QgcParams = [number, number, number, number, number, number, number];
 
-type FieldSpec = {
-    field: string;
+type FieldSpec<F extends string = CommandField> = {
+    field: F;
     slot: QgcSlot;
     decode?: (value: number, params: QgcParams) => unknown;
     encode?: (value: unknown, data: Record<string, unknown>, params: QgcParams) => number;
 };
 
-type GenericCommandCodec = {
+type GenericCommandCodec<F extends string = CommandField> = {
     kind: "generic";
     hasPosition: boolean;
-    fields: FieldSpec[];
+    fields: FieldSpec<F>[];
 };
 
 type CustomCommandCodec = {
@@ -69,11 +71,11 @@ const SLOT_INDEX: Record<QgcSlot, number> = {
     z: 6,
 };
 
-function numberField(field: string, slot: QgcSlot): FieldSpec {
+function numberField<F extends CommandField>(field: F, slot: QgcSlot): FieldSpec<F> {
     return { field, slot };
 }
 
-function boolField(field: string, slot: QgcSlot): FieldSpec {
+function boolField<F extends CommandField>(field: F, slot: QgcSlot): FieldSpec<F> {
     return {
         field,
         slot,
@@ -82,7 +84,7 @@ function boolField(field: string, slot: QgcSlot): FieldSpec {
     };
 }
 
-function enumIndexField<TValue extends string>(field: string, slot: QgcSlot, values: readonly TValue[]): FieldSpec {
+function enumIndexField<F extends CommandField, TValue extends string>(field: F, slot: QgcSlot, values: readonly TValue[]): FieldSpec<F> {
     return {
         field,
         slot,
@@ -91,11 +93,11 @@ function enumIndexField<TValue extends string>(field: string, slot: QgcSlot, val
     };
 }
 
-function genericCodec(hasPosition: boolean, fields: FieldSpec[]): GenericCommandCodec {
+function genericCodec<F extends CommandField>(hasPosition: boolean, fields: FieldSpec<F>[]): GenericCommandCodec<F> {
     return { kind: "generic", hasPosition, fields };
 }
 
-function unitCodec(hasPosition = false): GenericCommandCodec {
+function unitCodec(hasPosition = false): GenericCommandCodec<never> {
     return { kind: "generic", hasPosition, fields: [] };
 }
 
@@ -216,12 +218,12 @@ function parseKnownMissionCommand(
         return codec.parse(params, position);
     }
 
-    let command = defaultCommand(entry.category, entry.variant, position ?? undefined);
+    let command: MissionCommand = defaultCommand(entry.category, entry.variant, position ?? undefined);
     for (const field of codec.fields) {
         const rawValue = getParam(params, field.slot);
         const value = field.decode ? field.decode(rawValue, params) : rawValue;
         if (value === undefined) return null;
-        command = withCommandField(command, field.field, value);
+        command = withDynamicCommandField(command, field.field, value);
     }
     return command;
 }
@@ -271,18 +273,7 @@ export function exportMissionItem(item: MissionItem, index: number, warnings: st
     }
 
     const entry = resolveMissionCommandEntry(item.command);
-    if (!entry) {
-        const params = normalizeParams([]);
-        warnings.push(`${context} could not be mapped back to COMMAND_CATALOG and was exported as MAV_CMD 0.`);
-        return {
-            type: "SimpleItem",
-            autoContinue: item.autocontinue,
-            command: 0,
-            doJumpId: index + 1,
-            frame: MAV_FRAME_MISSION,
-            params,
-        };
-    }
+    if (!entry) throw new RangeError(`${context} has an unsupported typed command`);
 
     const codec = COMMAND_CODEC_BY_KEY[commandKey(entry.category, entry.variant)];
     const params = normalizeParams([]);
@@ -329,7 +320,7 @@ export function exportMissionItem(item: MissionItem, index: number, warnings: st
     return {
         type: "SimpleItem",
         autoContinue: item.autocontinue,
-        command: variantToCommandId(entry.category, entry.variant) ?? 0,
+        command: entry.id,
         doJumpId: index + 1,
         frame,
         params,
@@ -340,27 +331,27 @@ function resolveMissionCommandEntry(command: MissionCommand): CatalogEntry | nul
     if ("Nav" in command && command.Nav) {
         if (typeof command.Nav === "string") {
             const id = variantToCommandId("Nav", command.Nav);
-            return id === undefined ? null : { category: "Nav", variant: command.Nav, id, label: command.Nav };
+            return id === undefined ? null : commandIdToVariant(id) ?? null;
         }
         const variant = Object.keys(command.Nav)[0];
         const id = variantToCommandId("Nav", variant);
-        return id === undefined ? null : { category: "Nav", variant, id, label: variant };
+        return id === undefined ? null : commandIdToVariant(id) ?? null;
     }
 
     if ("Do" in command && command.Do) {
         if (typeof command.Do === "string") {
             const id = variantToCommandId("Do", command.Do);
-            return id === undefined ? null : { category: "Do", variant: command.Do, id, label: command.Do };
+            return id === undefined ? null : commandIdToVariant(id) ?? null;
         }
         const variant = Object.keys(command.Do)[0];
         const id = variantToCommandId("Do", variant);
-        return id === undefined ? null : { category: "Do", variant, id, label: variant };
+        return id === undefined ? null : commandIdToVariant(id) ?? null;
     }
 
     if ("Condition" in command && command.Condition) {
         const variant = Object.keys(command.Condition)[0];
         const id = variantToCommandId("Condition", variant);
-        return id === undefined ? null : { category: "Condition", variant, id, label: variant };
+        return id === undefined ? null : commandIdToVariant(id) ?? null;
     }
 
     return null;
@@ -392,11 +383,13 @@ function commandVariantPayload(
     return null;
 }
 
-function commandKey(category: CatalogEntry["category"], variant: string): string {
-    return `${category}:${variant}`;
+function commandKey(category: CatalogEntry["category"], variant: string): CommandKey {
+    const key = `${category}:${variant}`;
+    if (!isCommandKey(key)) throw new RangeError(`Unknown mission command ${key}`);
+    return key;
 }
 
-const COMMAND_CODEC_BY_KEY: Record<string, CommandCodec> = {
+const COMMAND_CODEC_BY_KEY: { [K in CommandKey]: CustomCommandCodec | GenericCommandCodec<CommandField<K>> } = {
     // Nav
     "Nav:Waypoint": genericCodec(true, [
         numberField("hold_time_s", "param1"),
@@ -720,15 +713,3 @@ const COMMAND_CODEC_BY_KEY: Record<string, CommandCodec> = {
         },
     },
 };
-
-const missingCommandCodecs = COMMAND_CATALOG.filter(
-    (entry) => !(commandKey(entry.category, entry.variant) in COMMAND_CODEC_BY_KEY),
-);
-
-if (missingCommandCodecs.length > 0) {
-    throw new Error(
-        `mission-plan-io missing command codecs for: ${missingCommandCodecs
-            .map((entry) => `${entry.category}:${entry.variant}`)
-            .join(", ")}`,
-    );
-}

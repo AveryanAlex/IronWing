@@ -6,9 +6,7 @@ import {
     FRAME_RELATIVE_ALT,
     LOITER_DIRECTION_VALUES,
 } from "./shared";
-import type { CommandMetadata } from "./types";
-
-export const NAVIGATION_COMMAND_IDS = [16, 82, 36, 22, 21, 17, 18, 19, 31, 30, 84, 85, 94, 20, 93, 92, 83, 213, 42702, 42703] as const;
+import type { CommandMetadata, TypedCommandMetadata } from "./types";
 
 export const NAVIGATION_COMMAND_METADATA: Record<number, CommandMetadata> = {
     16: {
@@ -565,4 +563,4 @@ export const NAVIGATION_COMMAND_METADATA: Record<number, CommandMetadata> = {
             },
         },
     },
-};
+} satisfies Partial<TypedCommandMetadata>;

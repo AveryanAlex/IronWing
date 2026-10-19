@@ -30,15 +30,6 @@ const COMMAND_METADATA: Record<number, CommandMetadata> = {
     ...DO_ACTUATOR_COMMAND_METADATA,
 };
 
-const MAPPED_COMMAND_IDS = [
-    16, 22, 21, 17, 18, 19, 20, 82, 93,
-    112, 114, 115,
-    177, 178, 179, 195, 197, 206,
-    30, 31, 36, 83, 84, 85, 92, 94, 213, 42702, 42703,
-    181, 182, 183, 184, 188, 189, 191, 193, 194, 201, 202, 203, 205,
-    207, 208, 210, 211, 212, 215, 216, 217, 218, 222, 223, 531, 532, 534,
-    600, 601, 1000, 2000, 2001, 2500, 2501, 3000, 42600,
-] as const;
 
 /**
  * Look up rich metadata for a mission command.
@@ -61,7 +52,7 @@ export function resolveCommandMetadata(cmd: number): CommandMetadata {
  * List all command IDs that have dedicated metadata entries.
  */
 export function mappedCommandIds(): number[] {
-    return [...MAPPED_COMMAND_IDS];
+    return Object.keys(COMMAND_METADATA).map(Number).sort((a, b) => a - b);
 }
 
 export { rawFallbackParams };

@@ -5,7 +5,7 @@ import {
   commandPosition,
   geoPoint3dAltitude,
   geoPoint3dLatLon,
-  withCommandField,
+  withDynamicCommandField,
   withGeoPoint3dAltitude,
   withGeoPoint3dPosition,
   type GeoPoint2d,
@@ -378,7 +378,7 @@ function updateGeneratedItemCoordinate(kind: "latitude" | "longitude" | "altitud
     activeGeneratedEntry.index,
     {
       ...activeGeneratedEntry.item,
-      command: withCommandField(activeGeneratedEntry.item.command, "position", nextPosition),
+      command: withDynamicCommandField(activeGeneratedEntry.item.command, "position", nextPosition),
     },
   );
   localMessage = null;
