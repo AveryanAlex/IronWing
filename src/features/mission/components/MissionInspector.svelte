@@ -153,7 +153,7 @@ function rawFields(command: MissionCommand) {
 function editableFields(command: MissionCommand): EditableField[] {
   if ("QgcPassthrough" in command) {
     return (command.QgcPassthrough.params ?? []).map((value, index) => ({
-      key: `param${index + 1}`, label: `File parameter ${index + 1}`, type: "number" as const, value,
+      key: `param${index + 1}`, label: `File parameter ${index + 1}`, type: "number" as const, value: value ?? "Unspecified",
     }));
   }
   if ("Other" in command) {
