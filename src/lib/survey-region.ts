@@ -1,6 +1,6 @@
 import type { TypedDraftItem } from "./mission-draft-typed";
 import type { ExportableSurveyRegion, ParsedSurveyRegion } from "./mission-plan-io";
-import type { StartCorner, TurnDirection } from "./mission-grid";
+import type { StartCorner, TurnDirection } from "./survey-geometry";
 import type { GeoPoint2d, MissionItem } from "./mavkit-types";
 import { findCamera, type CatalogCamera } from "./survey-camera-catalog";
 import type { CameraOrientation } from "./survey-camera";

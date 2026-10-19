@@ -5,11 +5,10 @@ import {
   type GeoRef,
 } from "./mission-coordinates";
 import type {
-  GridValidationError as MissionGridValidationError,
   PolygonVertex,
   StartCorner,
   TurnDirection,
-} from "./mission-grid";
+} from "./survey-geometry";
 import {
   groundSampleDistance,
   laneSpacing as computeLaneSpacing,
@@ -18,18 +17,13 @@ import {
   type CameraSpec,
 } from "./survey-camera";
 
-export type GridValidationError =
-  | MissionGridValidationError
-  | {
-      code:
-        | "invalid_camera"
-        | "invalid_overlap"
-        | "missing_terrain_lookup"
-        | "invalid_turnaround_distance"
-        | "invalid_capture_mode"
-        | "invalid_hover_hold_time";
-      message: string;
-    };
+export type GridValidationError = {
+  code:
+    | "too_few_points" | "zero_area" | "self_intersection" | "invalid_spacing"
+    | "invalid_altitude" | "invalid_coordinates" | "invalid_camera" | "invalid_overlap"
+    | "missing_terrain_lookup" | "invalid_turnaround_distance" | "invalid_capture_mode" | "invalid_hover_hold_time";
+  message: string;
+};
 
 export type SurveyCaptureMode = "distance" | "hover";
 export type TerrainLookup = (

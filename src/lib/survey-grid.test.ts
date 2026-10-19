@@ -422,3 +422,74 @@ describe("estimateSurveyWaypointCount", () => {
     ).toBeNull();
   });
 });
+
+const ODD_POLYGON_FIXTURES = [
+  {
+    name: "triangle",
+    polygon: polygonFromOffsets([
+      { x: -95, y: -60 },
+      { x: 105, y: -35 },
+      { x: 20, y: 120 },
+    ]),
+  },
+  {
+    name: "pentagon",
+    polygon: polygonFromOffsets([
+      { x: -95, y: -30 },
+      { x: -20, y: -105 },
+      { x: 85, y: -70 },
+      { x: 110, y: 20 },
+      { x: 0, y: 115 },
+    ]),
+  },
+  {
+    name: "odd concave polygon",
+    polygon: polygonFromOffsets([
+      { x: -110, y: -70 },
+      { x: 105, y: -60 },
+      { x: 35, y: 10 },
+      { x: 95, y: 100 },
+      { x: -85, y: 90 },
+    ]),
+  },
+];
+
+
+describe("survey polygon regressions", () => {
+  for (const { name, polygon } of ODD_POLYGON_FIXTURES) {
+    for (const trackAngle_deg of [0, 27, 74, 133]) {
+      for (const spacing_m of [16, 29]) {
+        it(`keeps ${name} transects inside at ${trackAngle_deg}° / ${spacing_m}m`, async () => {
+          const altitude_m = 50;
+          const width = imageFootprint(DJI_MAVIC_3E, altitude_m, "landscape").width_m;
+          const params = defaultParams({ polygon, trackAngle_deg, altitude_m, sideOverlap_pct: 100 * (1 - spacing_m / width) });
+          const result = assertSuccess(await generateSurvey(params));
+          const localPolygon = polygon.map((vertex) => {
+            const point = latLonToLocalXY(TEST_REF, vertex.latitude_deg, vertex.longitude_deg);
+            return { x: point.x_m, y: point.y_m };
+          });
+          expect(result.transects.length).toBeGreaterThan(0);
+          expect(navItems(result.items).every((item) => pointInsidePolygonInclusive(localPointOf(item), localPolygon))).toBe(true);
+          expect(estimateSurveyWaypointCount(params)).toBe(result.items.length);
+        });
+      }
+    }
+  }
+
+  it("honors different start corners", async () => {
+    const left = assertSuccess(await generateSurvey(defaultParams({ startCorner: "bottom_left", trackAngle_deg: 90 })));
+    const right = assertSuccess(await generateSurvey(defaultParams({ startCorner: "bottom_right", trackAngle_deg: 90 })));
+    expect(left.transects[0][0].longitude_deg).not.toBe(right.transects[0][0].longitude_deg);
+  });
+
+  it.each([
+    ["too_few_points", []],
+    ["invalid_coordinates", [{ latitude_deg: 91, longitude_deg: 0 }, { latitude_deg: 0, longitude_deg: 0 }, { latitude_deg: 1, longitude_deg: 1 }]],
+    ["zero_area", polygonFromOffsets([{ x: 0, y: 0 }, { x: 20, y: 20 }, { x: 40, y: 40 }])],
+    ["self_intersection", polygonFromOffsets([{ x: 0, y: 0 }, { x: 100, y: 100 }, { x: 100, y: 0 }, { x: 0, y: 100 }])],
+  ] as const)("rejects polygons with %s", async (code, polygon) => {
+    const result = await generateSurvey(defaultParams({ polygon: [...polygon] }));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.map((error) => error.code)).toContain(code);
+  });
+});
