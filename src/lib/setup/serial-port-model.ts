@@ -1,25 +1,8 @@
+import { ArduPilotSerialProtocol, isConfiguredSerialProtocol, serialPortBoardLabel } from "../ardupilot/serial";
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
 
 export const MAX_SERIAL_INDEX = 9;
-export const GPS_PROTOCOL = 5;
-export const RC_PROTOCOL = 23;
-
-export const SERIAL_PORT_LABELS: Record<number, string> = {
-  0: "USB",
-  1: "TELEM1",
-  2: "TELEM2",
-  3: "GPS1",
-  4: "GPS2",
-  5: "USER",
-};
-
-export const EXCLUSIVE_PROTOCOLS: Record<number, string> = {
-  5: "GPS",
-  23: "RCInput",
-  28: "Scripting",
-};
-
 export type SerialPortModelInput = {
   paramStore: ParamStore | null;
   metadata: ParamMetadataMap | null;
@@ -29,13 +12,6 @@ export type SerialPortModelInput = {
 export type SerialPortOption = {
   code: number;
   label: string;
-};
-
-export type SerialProtocolConflict = {
-  protocol: number;
-  protocolLabel: string;
-  ports: string[];
-  message: string;
 };
 
 export type SerialPortRow = {
@@ -62,7 +38,6 @@ export type SerialPortRow = {
 
 export type SerialPortModel = {
   ports: SerialPortRow[];
-  conflicts: SerialProtocolConflict[];
   gpsPorts: string[];
   rcPorts: string[];
   hasPendingChanges: boolean;
@@ -178,7 +153,7 @@ export function detectSerialPorts(input: SerialPortModelInput): SerialPortRow[] 
     const row: SerialPortRow = {
       index,
       prefix,
-      boardLabel: SERIAL_PORT_LABELS[index] ?? null,
+      boardLabel: serialPortBoardLabel(index),
       protocolParamName,
       baudParamName,
       hasProtocolParam: protocolPresent,
@@ -213,41 +188,12 @@ export function findPortsByProtocol(protocol: number, input: SerialPortModelInpu
     .map((row) => row.prefix);
 }
 
-export function detectSerialProtocolConflicts(rows: SerialPortRow[]): SerialProtocolConflict[] {
-  const usage = new Map<number, string[]>();
-
-  for (const row of rows) {
-    const protocol = row.protocolValue;
-    if (protocol === null || protocol === 0 || protocol === -1) {
-      continue;
-    }
-
-    if (EXCLUSIVE_PROTOCOLS[protocol] === undefined) {
-      continue;
-    }
-
-    const ports = usage.get(protocol) ?? [];
-    ports.push(row.prefix);
-    usage.set(protocol, ports);
-  }
-
-  return [...usage.entries()]
-    .filter(([, ports]) => ports.length > 1)
-    .map(([protocol, ports]) => ({
-      protocol,
-      protocolLabel: EXCLUSIVE_PROTOCOLS[protocol] ?? `Protocol ${protocol}`,
-      ports,
-      message: `${EXCLUSIVE_PROTOCOLS[protocol] ?? `Protocol ${protocol}`} is assigned to ${ports.join(", ")}. Keep this exclusive protocol on one port only before applying or rebooting.`,
-    }))
-    .sort((left, right) => left.protocol - right.protocol);
-}
-
-function buildModelSummary(rows: SerialPortRow[], gpsPorts: string[], rcPorts: string[], conflicts: SerialProtocolConflict[]): string {
+function buildModelSummary(rows: SerialPortRow[], gpsPorts: string[], rcPorts: string[]): string {
   if (rows.length === 0) {
     return "No SERIALn_* rows are available for this scope.";
   }
 
-  const configuredPortCount = rows.filter((row) => row.protocolValue !== null && row.protocolValue !== 0 && row.protocolValue !== -1).length;
+  const configuredPortCount = rows.filter((row) => isConfiguredSerialProtocol(row.protocolValue)).length;
   const parts = [`${rows.length} detected`, `${configuredPortCount} configured`];
 
   if (gpsPorts.length > 0) {
@@ -258,20 +204,15 @@ function buildModelSummary(rows: SerialPortRow[], gpsPorts: string[], rcPorts: s
     parts.push(`RCInput on ${rcPorts.join(", ")}`);
   }
 
-  if (conflicts.length > 0) {
-    parts.push(`${conflicts.length} conflict${conflicts.length === 1 ? "" : "s"}`);
-  }
-
   return parts.join(" · ");
 }
 
 export function buildSerialPortModel(input: SerialPortModelInput): SerialPortModel {
   const ports = detectSerialPorts(input);
-  const conflicts = detectSerialProtocolConflicts(ports);
-  const gpsPorts = ports.filter((row) => row.protocolValue === GPS_PROTOCOL).map((row) => row.prefix);
-  const rcPorts = ports.filter((row) => row.protocolValue === RC_PROTOCOL).map((row) => row.prefix);
+  const gpsPorts = ports.filter((row) => row.protocolValue === ArduPilotSerialProtocol.Gps).map((row) => row.prefix);
+  const rcPorts = ports.filter((row) => row.protocolValue === ArduPilotSerialProtocol.RcInput).map((row) => row.prefix);
   const hasPendingChanges = ports.some((row) => row.hasPendingChange);
-  const configuredPortCount = ports.filter((row) => row.protocolValue !== null && row.protocolValue !== 0 && row.protocolValue !== -1).length;
+  const configuredPortCount = ports.filter((row) => isConfiguredSerialProtocol(row.protocolValue)).length;
   const recoveryReasons = [
     ...new Set(
       ports.flatMap((row) => row.recoveryText ? [row.recoveryText] : []),
@@ -283,12 +224,11 @@ export function buildSerialPortModel(input: SerialPortModelInput): SerialPortMod
 
   return {
     ports,
-    conflicts,
     gpsPorts,
     rcPorts,
     hasPendingChanges,
     configuredPortCount,
-    summaryText: buildModelSummary(ports, gpsPorts, rcPorts, conflicts),
+    summaryText: buildModelSummary(ports, gpsPorts, rcPorts),
     rebootWarningText: hasPendingChanges
       ? "Queued serial protocol or baud changes require apply and reboot before the vehicle uses the new port map."
       : "Serial protocol and baud changes take effect after apply and vehicle reboot.",

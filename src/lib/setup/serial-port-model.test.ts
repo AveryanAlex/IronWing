@@ -1,12 +1,10 @@
+import { ArduPilotSerialProtocol } from "../ardupilot/serial";
 import { describe, expect, it } from "vitest";
 
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
 import {
-  GPS_PROTOCOL,
-  RC_PROTOCOL,
   buildSerialPortModel,
-  detectSerialProtocolConflicts,
   detectSerialPorts,
   findPortsByProtocol,
 } from "./serial-port-model";
@@ -40,8 +38,8 @@ function createMetadata(): ParamMetadataMap {
         values: [
           { code: 0, label: "None" },
           { code: 2, label: "MAVLink2" },
-          { code: GPS_PROTOCOL, label: "GPS" },
-          { code: RC_PROTOCOL, label: "RCInput" },
+          { code: ArduPilotSerialProtocol.Gps, label: "GPS" },
+          { code: ArduPilotSerialProtocol.RcInput, label: "RCInput" },
         ],
       },
     ],
@@ -64,8 +62,8 @@ function createMetadata(): ParamMetadataMap {
         values: [
           { code: 0, label: "None" },
           { code: 2, label: "MAVLink2" },
-          { code: GPS_PROTOCOL, label: "GPS" },
-          { code: RC_PROTOCOL, label: "RCInput" },
+          { code: ArduPilotSerialProtocol.Gps, label: "GPS" },
+          { code: ArduPilotSerialProtocol.RcInput, label: "RCInput" },
         ],
       },
     ],
@@ -88,8 +86,8 @@ function createMetadata(): ParamMetadataMap {
         values: [
           { code: 0, label: "None" },
           { code: 2, label: "MAVLink2" },
-          { code: GPS_PROTOCOL, label: "GPS" },
-          { code: RC_PROTOCOL, label: "RCInput" },
+          { code: ArduPilotSerialProtocol.Gps, label: "GPS" },
+          { code: ArduPilotSerialProtocol.RcInput, label: "RCInput" },
         ],
       },
     ],
@@ -108,36 +106,27 @@ function createMetadata(): ParamMetadataMap {
 }
 
 describe("serial-port-model", () => {
-  it("detects staged exclusive-protocol conflicts before apply", () => {
-    const rows = detectSerialPorts({
-      paramStore: createParamStore({
-        SERIAL1_PROTOCOL: GPS_PROTOCOL,
-        SERIAL1_BAUD: 115,
-        SERIAL2_PROTOCOL: 2,
-        SERIAL2_BAUD: 57,
-      }),
-      metadata: createMetadata(),
-      stagedEdits: {
-        SERIAL2_PROTOCOL: { nextValue: GPS_PROTOCOL },
-      },
-    });
-
-    expect(detectSerialProtocolConflicts(rows)).toEqual([
-      {
-        protocol: GPS_PROTOCOL,
-        protocolLabel: "GPS",
-        ports: ["SERIAL1", "SERIAL2"],
-        message: "GPS is assigned to SERIAL1, SERIAL2. Keep this exclusive protocol on one port only before applying or rebooting.",
-      },
-    ]);
-  });
+  it.each([ArduPilotSerialProtocol.Gps, ArduPilotSerialProtocol.RcInput, ArduPilotSerialProtocol.Scripting])(
+    "preserves multiple ports using protocol %s",
+    (protocol) => {
+      const model = buildSerialPortModel({
+        paramStore: createParamStore({ SERIAL3_PROTOCOL: protocol, SERIAL3_BAUD: 115, SERIAL4_PROTOCOL: 2, SERIAL4_BAUD: 115 }),
+        metadata: createMetadata(),
+        stagedEdits: { SERIAL4_PROTOCOL: { nextValue: protocol } },
+      });
+      expect(model.ports.map((port) => port.protocolValue)).toEqual([protocol, protocol]);
+      expect(model.configuredPortCount).toBe(2);
+      expect(model.ports.map((port) => port.boardLabel)).toEqual([null, null]);
+      expect(model.summaryText).not.toContain("conflict");
+    },
+  );
 
   it("exposes reboot-required pending changes and protocol summaries", () => {
     const model = buildSerialPortModel({
       paramStore: createParamStore({
         SERIAL1_PROTOCOL: 2,
         SERIAL1_BAUD: 57,
-        SERIAL3_PROTOCOL: GPS_PROTOCOL,
+        SERIAL3_PROTOCOL: ArduPilotSerialProtocol.Gps,
         SERIAL3_BAUD: 115,
       }),
       metadata: createMetadata(),
@@ -160,14 +149,14 @@ describe("serial-port-model", () => {
         {
           humanName: "SERIAL1 protocol",
           description: "Protocol selection for SERIAL1.",
-          values: [{ code: GPS_PROTOCOL, label: "GPS" }],
+          values: [{ code: ArduPilotSerialProtocol.Gps, label: "GPS" }],
         },
       ],
     ] satisfies Parameters<typeof Map>[0]);
 
     const model = buildSerialPortModel({
       paramStore: createParamStore({
-        SERIAL1_PROTOCOL: GPS_PROTOCOL,
+        SERIAL1_PROTOCOL: ArduPilotSerialProtocol.Gps,
         SERIAL1_BAUD: 115,
       }),
       metadata,
@@ -183,24 +172,24 @@ describe("serial-port-model", () => {
   it("tracks protocol summaries across sparse port sets", () => {
     const model = buildSerialPortModel({
       paramStore: createParamStore({
-        SERIAL1_PROTOCOL: RC_PROTOCOL,
+        SERIAL1_PROTOCOL: ArduPilotSerialProtocol.RcInput,
         SERIAL1_BAUD: 57,
-        SERIAL8_PROTOCOL: GPS_PROTOCOL,
+        SERIAL8_PROTOCOL: ArduPilotSerialProtocol.Gps,
         SERIAL8_BAUD: 115,
-        SERIAL9_PROTOCOL: GPS_PROTOCOL,
+        SERIAL9_PROTOCOL: ArduPilotSerialProtocol.Gps,
         SERIAL9_BAUD: 115,
       }),
       metadata: null,
       stagedEdits: {},
     });
 
-    expect(findPortsByProtocol(GPS_PROTOCOL, {
+    expect(findPortsByProtocol(ArduPilotSerialProtocol.Gps, {
       paramStore: createParamStore({
-        SERIAL1_PROTOCOL: RC_PROTOCOL,
+        SERIAL1_PROTOCOL: ArduPilotSerialProtocol.RcInput,
         SERIAL1_BAUD: 57,
-        SERIAL8_PROTOCOL: GPS_PROTOCOL,
+        SERIAL8_PROTOCOL: ArduPilotSerialProtocol.Gps,
         SERIAL8_BAUD: 115,
-        SERIAL9_PROTOCOL: GPS_PROTOCOL,
+        SERIAL9_PROTOCOL: ArduPilotSerialProtocol.Gps,
         SERIAL9_BAUD: 115,
       }),
       metadata: null,

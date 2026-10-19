@@ -133,12 +133,8 @@ function rowRecoveryVisible(row: SerialPortRow): boolean {
   return row.recoveryText !== null;
 }
 
-function conflictTone(): string {
-  if (model.conflicts.length > 0) {
-    return "Conflicts detected";
-  }
-
-  return model.ports.length === 0 ? "No ports detected" : "No conflicts";
+function portStatusText(): string {
+  return model.ports.length === 0 ? "No ports detected" : `${model.configuredPortCount} configured`;
 }
 
 function rebootTone(): string {
@@ -241,16 +237,6 @@ function rebootTone(): string {
       <p class="mt-2">{model.recoveryText}</p>
     </Alert>
   {/if}
-
-  {#each model.conflicts as conflict (conflict.protocol)}
-    <SetupNotice tone="warning" testId={`${setupWorkspaceTestIds.serialPortsBannerPrefix}-conflict-${conflict.protocol}`}>
-      <p>
-        <span class="font-medium">{conflict.protocolLabel}</span> (protocol {conflict.protocol}) is assigned to multiple ports:
-        <span class="font-mono font-medium"> {conflict.ports.join(", ")}</span>.
-        This protocol does not support sharing and may cause conflicts.
-      </p>
-    </SetupNotice>
-  {/each}
 
   {#each model.ports.filter(rowRecoveryVisible) as row (row.prefix)}
     <Alert

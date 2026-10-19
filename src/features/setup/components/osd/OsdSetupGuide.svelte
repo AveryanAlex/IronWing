@@ -1,4 +1,5 @@
 <script lang="ts">
+import { isMspOsdProtocol } from "../../../../lib/ardupilot/serial";
 import { Cable, CheckCircle2, Monitor, RadioTower, Tv } from "lucide-svelte";
 
 import { Button, NativeSelect, StagedBadge } from "../../../../components/ui";
@@ -22,7 +23,6 @@ import {
   OSD_VIDEO_SYSTEM_PROFILES,
   buildOsdConfigurationPlan,
   detectOsdConfiguration,
-  isMspOsdProtocol,
   type OsdSetupStageTarget,
   type OsdVideoSystemId,
 } from "../../../../lib/osd/ardupilot-osd-setup";
