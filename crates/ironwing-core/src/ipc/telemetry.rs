@@ -61,9 +61,9 @@ pub struct TelemetryTerrain {
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct TelemetryRadio {
-    pub rc_channels: Option<Vec<f64>>,
+    pub rc_channels: Option<Vec<Option<f64>>>,
     pub rc_rssi: Option<f64>,
-    pub servo_outputs: Option<Vec<f64>>,
+    pub servo_outputs: Option<Vec<Option<f64>>>,
 }
 
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
@@ -100,6 +100,13 @@ fn number_list(value: &Value, key: &str) -> Option<Vec<f64>> {
         .get(key)
         .and_then(Value::as_array)
         .map(|items| items.iter().filter_map(Value::as_f64).collect::<Vec<f64>>())
+}
+
+fn channel_list(value: &Value, key: &str) -> Option<Vec<Option<f64>>> {
+    value
+        .get(key)?
+        .as_array()
+        .map(|items| items.iter().map(Value::as_f64).collect())
 }
 
 pub fn telemetry_state_from_value(value: &Value) -> TelemetryState {
@@ -143,9 +150,9 @@ pub fn telemetry_state_from_value(value: &Value) -> TelemetryState {
             height_above_terrain_m: number(value, "height_above_terrain_m"),
         },
         radio: TelemetryRadio {
-            rc_channels: number_list(value, "rc_channels"),
+            rc_channels: channel_list(value, "rc_channels"),
             rc_rssi: number(value, "rc_rssi"),
-            servo_outputs: number_list(value, "servo_outputs"),
+            servo_outputs: channel_list(value, "servo_outputs"),
         },
     }
 }
@@ -155,4 +162,21 @@ pub fn telemetry_snapshot_from_value(
     provenance: DomainProvenance,
 ) -> TelemetrySnapshot {
     DomainValue::present(telemetry_state_from_value(value), provenance)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn radio_parser_does_not_renumber_sparse_channels() {
+        let state = telemetry_state_from_value(&serde_json::json!({
+            "rc_channels": [1100, null, 1900], "servo_outputs": [null, 1500]
+        }));
+        assert_eq!(
+            state.radio.rc_channels,
+            Some(vec![Some(1100.0), None, Some(1900.0)])
+        );
+        assert_eq!(state.radio.servo_outputs, Some(vec![None, Some(1500.0)]));
+    }
 }

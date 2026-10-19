@@ -97,6 +97,8 @@ describe("direct PWM output testing", () => {
     expect(clampServoCommandPwm(2200)).toBe(2000);
     expect(clampServoCommandPwm(1499.6)).toBe(1500);
     expect(readServoOutputPwm(1, { servo_outputs: [1501] })).toBe(1501);
+    expect(readServoOutputPwm(3, { servo_outputs: [1501, null, 1900] })).toBe(1900);
+    expect(readServoOutputPwm(2, { servo_outputs: [1501, null, 1900] })).toBeNull();
     expect(readServoOutputPwm(2, { servo_outputs: [1501, Number.NaN] })).toBeNull();
     expect(readServoOutputPwm(17, { servo_outputs: [1501] })).toBeNull();
   });

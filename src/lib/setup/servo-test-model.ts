@@ -1,3 +1,4 @@
+import { readChannelPwm, SERVO_TELEMETRY_CHANNEL_COUNT, SERVO_PARAMETER_OUTPUT_COUNT } from "../telemetry-channels";
 import type { FrameClass } from "../airframe";
 import { ArduPilotServoFunction, permitsDirectServoCommand } from "../ardupilot/servo-functions";
 import type { Telemetry } from "../../telemetry";
@@ -5,8 +6,8 @@ import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
 import { isPropulsionServoFunction, isTricopterYawFunction, outputFrameClass } from "./motor-functions";
 
-export const SERVO_OUTPUT_COUNT = 32;
-export const SERVO_LIVE_TEST_LIMIT = 16;
+export const SERVO_OUTPUT_COUNT = SERVO_PARAMETER_OUTPUT_COUNT;
+export const SERVO_LIVE_TEST_LIMIT = SERVO_TELEMETRY_CHANNEL_COUNT;
 export const SERVO_COMMAND_PWM_MIN = 1000;
 export const SERVO_COMMAND_PWM_MAX = 2000;
 
@@ -337,6 +338,6 @@ export function readServoOutputPwm(servoIndex: number, telemetry: Telemetry | nu
     return null;
   }
 
-  const value = telemetry?.servo_outputs?.[servoIndex - 1];
-  return isFiniteNumber(value) ? value : null;
+  const value = readChannelPwm(telemetry?.servo_outputs, servoIndex);
+  return value === null ? null : Math.round(value);
 }

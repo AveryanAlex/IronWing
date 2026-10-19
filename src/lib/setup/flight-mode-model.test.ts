@@ -76,6 +76,8 @@ describe("flight-mode-model", () => {
     expect(getActiveFlightModeSlotIndex([0, 0, 0, 0, 1495], 5)).toBe(3);
     expect(getActiveFlightModeSlotIndex([0, 0, 0, 0, 1800], 5)).toBe(5);
     expect(getActiveFlightModeSlotIndex([0, 0, 0, 0, 0], 5)).toBeNull();
+    expect(getActiveFlightModeSlotIndex([1100, null, 1800], 3)).toBe(5);
+    expect(getActiveFlightModeSlotIndex([1100, null, 1800], 2)).toBeNull();
   });
 
   it("keeps ArduPilot six-position PWM thresholds in one display model", () => {

@@ -1,3 +1,4 @@
+import { RC_TELEMETRY_CHANNEL_COUNT } from "../telemetry-channels";
 import { writable, type Readable } from "svelte/store";
 
 import type { AccelCalibrationPosition, CalibrationLifecycle } from "../../calibration";
@@ -424,7 +425,7 @@ function normalizeRcChannels(value: unknown, stale = false): {
   let malformed = false;
   const channels: SetupWorkspaceRcChannel[] = [];
 
-  for (const [index, entry] of value.slice(0, 18).entries()) {
+  for (const [index, entry] of value.slice(0, RC_TELEMETRY_CHANNEL_COUNT).entries()) {
     if (typeof entry === "number" && Number.isFinite(entry) && entry >= 500 && entry <= 3000) {
       channels.push({
         channel: index + 1,
@@ -435,7 +436,7 @@ function normalizeRcChannels(value: unknown, stale = false): {
       continue;
     }
 
-    malformed = true;
+    if (entry != null) malformed = true;
   }
 
   return { channels, malformed };

@@ -2,6 +2,9 @@ use crate::ipc::{
     DomainProvenance, TelemetrySnapshot, VehicleState, telemetry_snapshot_from_value,
 };
 
+const RC_TELEMETRY_CHANNEL_COUNT: usize = 18;
+const SERVO_TELEMETRY_CHANNEL_COUNT: usize = 16;
+
 pub fn telemetry_snapshot_from_vehicle(
     vehicle: &mavkit::Vehicle,
     provenance: DomainProvenance,
@@ -25,23 +28,19 @@ pub fn telemetry_snapshot_from_vehicle(
     let nav_guidance = telemetry.navigation().guidance();
     let terrain_clearance = telemetry.terrain().clearance();
     let rc = telemetry.rc();
-    let rc_channels: Vec<_> = (0..18)
-        .filter_map(|index| rc.channel_pwm_us(index))
-        .collect();
     let rc_rssi = rc.rssi_pct();
     let actuators = telemetry.actuators();
-    let servo_outputs: Vec<_> = (0..16)
-        .filter_map(|index| actuators.servo_pwm_us(index))
-        .collect();
-
-    let rc_channel_values: Vec<f64> = rc_channels
-        .iter()
-        .filter_map(|channel| channel.latest().map(|sample| f64::from(sample.value)))
-        .collect();
-    let servo_output_values: Vec<f64> = servo_outputs
-        .iter()
-        .filter_map(|servo| servo.latest().map(|sample| f64::from(sample.value)))
-        .collect();
+    let rc_channel_values = channel_samples(RC_TELEMETRY_CHANNEL_COUNT, |index| {
+        rc.channel_pwm_us(index)?
+            .latest()
+            .map(|sample| f64::from(sample.value))
+    });
+    let servo_output_values = channel_samples(SERVO_TELEMETRY_CHANNEL_COUNT, |index| {
+        actuators
+            .servo_pwm_us(index)?
+            .latest()
+            .map(|sample| f64::from(sample.value))
+    });
 
     let snapshot = serde_json::json!({
         "latitude_deg": position_global.latest().map(|sample| sample.value.latitude_deg),
@@ -70,12 +69,18 @@ pub fn telemetry_snapshot_from_vehicle(
         "xtrack_error_m": nav_guidance.latest().map(|sample| sample.value.cross_track_error_m),
         "terrain_height_m": terrain_clearance.latest().map(|sample| sample.value.terrain_height_m),
         "height_above_terrain_m": terrain_clearance.latest().map(|sample| sample.value.height_above_terrain_m),
-        "rc_channels": (!rc_channel_values.is_empty()).then_some(rc_channel_values),
+        "rc_channels": rc_channel_values,
         "rc_rssi": rc_rssi.latest().map(|sample| f64::from(sample.value)),
-        "servo_outputs": (!servo_output_values.is_empty()).then_some(servo_output_values),
+        "servo_outputs": servo_output_values,
     });
 
     telemetry_snapshot_from_value(&snapshot, provenance)
+}
+
+// Array position is the wire channel index. Never compact missing samples.
+fn channel_samples(count: usize, read: impl Fn(usize) -> Option<f64>) -> Option<Vec<Option<f64>>> {
+    let samples: Vec<_> = (0..count).map(read).collect();
+    samples.iter().any(Option::is_some).then_some(samples)
 }
 
 pub fn seeded_vehicle_state(vehicle: &mavkit::Vehicle) -> VehicleState {
@@ -116,6 +121,15 @@ pub fn mav_severity_name(severity: mavkit::MavSeverity) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn channel_samples_preserves_missing_channel_positions() {
+        assert_eq!(
+            channel_samples(3, |index| [Some(1100.0), None, Some(1900.0)][index]),
+            Some(vec![Some(1100.0), None, Some(1900.0)])
+        );
+        assert_eq!(channel_samples(18, |_| None), None);
+    }
 
     #[test]
     fn mav_severity_name_maps_all_variants_to_lowercase() {

@@ -1,3 +1,4 @@
+import type { PwmChannelSamples } from "./lib/telemetry-channels";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type { DomainValue } from "./lib/domain-status";
 import { typedInvoke, typedListen, type UnlistenFn } from "./lib/ipc/client";
@@ -50,11 +51,11 @@ export type Telemetry = {
   battery_time_remaining_s?: number;
 
   // RC_CHANNELS
-  rc_channels?: number[];
+  rc_channels?: PwmChannelSamples;
   rc_rssi?: number;
 
   // SERVO_OUTPUT_RAW
-  servo_outputs?: number[];
+  servo_outputs?: PwmChannelSamples;
 };
 
 export type TelemetryState = {
@@ -97,9 +98,9 @@ export type TelemetryState = {
     height_above_terrain_m?: number;
   };
   radio?: {
-    rc_channels?: number[];
+    rc_channels?: PwmChannelSamples;
     rc_rssi?: number;
-    servo_outputs?: number[];
+    servo_outputs?: PwmChannelSamples;
   };
 };
 

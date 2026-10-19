@@ -1,3 +1,4 @@
+import type { PwmChannelSamples } from "../telemetry-channels";
 import type { ParamStore } from "../../params";
 import type { FlightModeEntry } from "../../telemetry";
 import {
@@ -81,7 +82,7 @@ export type FlightModeModelInput = {
   availableModes: unknown;
   previousAvailableModes?: unknown;
   currentModeName?: string | null;
-  rcChannels?: number[] | null;
+  rcChannels?: PwmChannelSamples | null;
   liveConnected: boolean;
   sameScope: boolean;
   telemetrySettled: boolean;
@@ -231,7 +232,7 @@ export function modeNameForValue(
 }
 
 export function getActiveFlightModeSlotIndex(
-  rcChannels: number[] | null | undefined,
+  rcChannels: PwmChannelSamples | null | undefined,
   flightModeChannel: number | null,
 ): number | null {
   if (!Array.isArray(rcChannels) || flightModeChannel === null || !Number.isInteger(flightModeChannel) || flightModeChannel < 1) {

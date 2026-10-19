@@ -2,6 +2,8 @@
 import { Alert, Badge, BalancedGrid, Card, Eyebrow } from "../../../components/ui";
 import PwmVerticalBar, { type PwmBarState } from "./PwmVerticalBar.svelte";
 
+import type { PwmChannelSamples } from "../../../lib/telemetry-channels";
+
 const MIN_COLUMN_WIDTH_PX = 42;
 const GRID_GAP_PX = 6;
 
@@ -14,7 +16,7 @@ export type PwmChannelItem = {
 
 type Props = {
   title?: string;
-  values?: number[] | null;
+  values?: PwmChannelSamples | null;
   items?: PwmChannelItem[];
   labelPrefix?: string;
   maxVisible?: number;
@@ -39,7 +41,7 @@ let normalizedItems = $derived.by<PwmChannelItem[]>(() => {
   return values.slice(0, maxVisible).map((value, index) => ({
     index: index + 1,
     value: typeof value === "number" && Number.isFinite(value) ? value : null,
-    state: typeof value === "number" && Number.isFinite(value) ? "live" : "malformed",
+    state: typeof value === "number" && Number.isFinite(value) ? "live" : value == null ? "unavailable" : "malformed",
   }));
 });
 </script>
