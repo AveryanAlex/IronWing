@@ -1,18 +1,12 @@
+import { getVehicleDescriptor, type AttitudeModelKind, type MultirotorLayout } from "../../../lib/vehicle-descriptor";
+export type { AttitudeModelKind } from "../../../lib/vehicle-descriptor";
+
 export type QuaternionComponents = {
   x: number;
   y: number;
   z: number;
   w: number;
 };
-
-export type AttitudeModelKind =
-  | "fixed_wing"
-  | "vtol"
-  | "multirotor"
-  | "helicopter"
-  | "rover"
-  | "submarine"
-  | "generic";
 
 type Vector3Components = {
   x: number;
@@ -85,42 +79,9 @@ export function rotateVectorByQuaternion(
 }
 
 export function resolveAttitudeModelKind(vehicleType: string | null | undefined): AttitudeModelKind {
-  const normalized = vehicleType?.trim().toLowerCase().replace(/[- ]/g, "_") ?? "";
-
-  if (normalized === "fixed_wing" || normalized === "plane" || normalized.includes("arduplane")) {
-    return "fixed_wing";
-  }
-  if (normalized === "vtol" || normalized.includes("quadplane")) {
-    return "vtol";
-  }
-  if (normalized.includes("helicopter") || normalized === "heli") {
-    return "helicopter";
-  }
-  if (
-    normalized.includes("quad")
-    || normalized.includes("hex")
-    || normalized.includes("octo")
-    || normalized.includes("tri")
-    || normalized.includes("copter")
-    || normalized === "coaxial"
-  ) {
-    return "multirotor";
-  }
-  if (normalized.includes("rover") || normalized === "car") {
-    return "rover";
-  }
-  if (normalized.includes("submarine") || normalized === "sub" || normalized === "boat") {
-    return "submarine";
-  }
-
-  return "generic";
+  return getVehicleDescriptor(vehicleType).attitudeModel;
 }
 
-export function multirotorLayout(vehicleType: string | null | undefined): "tri" | "quad" | "hex" | "octo" | "coaxial" {
-  const normalized = vehicleType?.trim().toLowerCase() ?? "";
-  if (normalized.includes("tri")) return "tri";
-  if (normalized.includes("hex")) return "hex";
-  if (normalized.includes("octo")) return "octo";
-  if (normalized.includes("coaxial")) return "coaxial";
-  return "quad";
+export function multirotorLayout(vehicleType: string | null | undefined): MultirotorLayout {
+  return getVehicleDescriptor(vehicleType).multirotorLayout;
 }

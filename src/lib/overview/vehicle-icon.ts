@@ -1,26 +1,14 @@
-export type VehicleIconKind =
-  | "fixed_wing"
-  | "multirotor"
-  | "helicopter"
-  | "rover"
-  | "boat";
+import { getVehicleDescriptor, type VehicleIconKind } from "../vehicle-descriptor";
+export type { VehicleIconKind } from "../vehicle-descriptor";
 
-const MAV_TYPE_FIXED_WING = new Set([1, 7, 16, 22]);
-const MAV_TYPE_MULTIROTOR = new Set([2, 13, 14, 15]);
-const MAV_TYPE_HELICOPTER = new Set([4, 6, 19, 20]);
-const MAV_TYPE_ROVER = new Set([10]);
-const MAV_TYPE_BOAT = new Set([11, 12]);
-
-export function resolveVehicleIconKind(mavType: number | undefined): VehicleIconKind {
-  if (typeof mavType !== "number") return "fixed_wing";
-  if (MAV_TYPE_MULTIROTOR.has(mavType)) return "multirotor";
-  if (MAV_TYPE_HELICOPTER.has(mavType)) return "helicopter";
-  if (MAV_TYPE_ROVER.has(mavType)) return "rover";
-  if (MAV_TYPE_BOAT.has(mavType)) return "boat";
-  return "fixed_wing";
+export function resolveVehicleIconKind(vehicleType: string | null | undefined): VehicleIconKind {
+  return getVehicleDescriptor(vehicleType).icon;
 }
 
 export const VEHICLE_ICON_SVG: Record<VehicleIconKind, string> = {
+  generic: `<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <path d="M16 3 L27 27 L16 22 L5 27 Z" fill="var(--marker-vehicle)" stroke="var(--marker-vehicle-stroke)" stroke-width="1.5" stroke-linejoin="round"/>
+  </svg>`,
   fixed_wing: `<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
     <path d="M16 2 L19 14 L30 16 L30 18 L19 18 L19 24 L23 27 L23 28 L16 26 L9 28 L9 27 L13 24 L13 18 L2 18 L2 16 L13 14 Z" fill="var(--marker-vehicle)" stroke="var(--marker-vehicle-stroke)" stroke-width="1.5" stroke-linejoin="round"/>
   </svg>`,

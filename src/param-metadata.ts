@@ -1,3 +1,4 @@
+import { getVehicleDescriptor } from "./lib/vehicle-descriptor";
 import { fetchParamMetadataXml } from "./lib/param-metadata-cache";
 import type { SliderScale } from "./lib/slider-scale";
 
@@ -17,21 +18,6 @@ export type ParamMeta = {
 };
 
 export type ParamMetadataMap = Map<string, ParamMeta>;
-
-const SLUG_MAP: Record<string, string> = {
-  quadrotor: "ArduCopter",
-  hexarotor: "ArduCopter",
-  octorotor: "ArduCopter",
-  tricopter: "ArduCopter",
-  helicopter: "Heli",
-  coaxial: "ArduCopter",
-  fixed_wing: "ArduPlane",
-  vtol: "ArduPlane",
-  ground_rover: "Rover",
-  submarine: "ArduSub",
-  blimp: "Blimp",
-  antenna_tracker: "AntennaTracker",
-};
 
 const COMMON_LOG_SLIDER_PARAMS = ["FENCE_ALT_MAX", "FENCE_RADIUS"] as const;
 const LOG_SLIDER_PARAMS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
@@ -68,7 +54,7 @@ const LOG_SLIDER_PARAMS_BY_SLUG: Readonly<Record<string, readonly string[]>> = {
 };
 
 export function vehicleTypeToSlug(vehicleType: string): string | null {
-  return SLUG_MAP[vehicleType] ?? null;
+  return getVehicleDescriptor(vehicleType).metadataSlug;
 }
 
 export function normalizeFirmwareVersion(firmwareVersion: string | null | undefined): string | null {

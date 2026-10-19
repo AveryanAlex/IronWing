@@ -51,7 +51,7 @@ type Props = {
   vehicleLat?: number;
   vehicleLon?: number;
   vehicleHeading?: number;
-  mavType?: number;
+  vehicleType?: string;
   homeLat?: number;
   homeLon?: number;
   homeAltitude?: number;
@@ -92,7 +92,7 @@ let {
   vehicleLat,
   vehicleLon,
   vehicleHeading = 0,
-  mavType,
+  vehicleType,
   homeLat,
   homeLon,
   homeAltitude,
@@ -103,7 +103,7 @@ let {
   currentAltitudeM,
 }: Props = $props();
 
-const iconKind = $derived<VehicleIconKind>(resolveVehicleIconKind(mavType));
+const iconKind = $derived<VehicleIconKind>(resolveVehicleIconKind(vehicleType));
 const missionHome = $derived.by<HomePosition | null>(() => toHomePosition(homeLat, homeLon, homeAltitude));
 const missionRenderItems = $derived.by(() => missionPlanToDraftItems(missionPlan, missionPath));
 const missionRenderFeatures = $derived.by(() =>

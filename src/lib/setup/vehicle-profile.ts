@@ -1,13 +1,10 @@
+import { getVehicleDescriptor, type VehicleFamily } from "../vehicle-descriptor";
+export type { VehicleFamily } from "../vehicle-descriptor";
 import type { Airframe } from "../airframe";
 import { decodeArduPilotFrame } from "../ardupilot/airframe";
 import type { VehicleSlug } from "../../data/ardupilot-docs";
 import type { ParamStore } from "../../params";
 
-const COPTER_VEHICLE_TYPES = ["quadrotor", "hexarotor", "octorotor", "tricopter", "helicopter", "coaxial"] as const;
-
-const ROVER_VEHICLE_TYPES = ["rover", "ground_rover", "boat"] as const;
-
-export type VehicleFamily = "plane" | "copter" | "rover" | "unknown";
 export type VtolSubtype = "standard" | "tiltrotor" | "tailsitter" | "compound";
 export type PlaneVtolState = "plain-plane" | "enable-pending" | "awaiting-refresh" | "partial-refresh" | "vtol-ready";
 
@@ -44,10 +41,6 @@ export type VehicleProfileParamsInput = {
   stagedEdits: Record<string, { nextValue: number } | undefined>;
 };
 
-function normalizeVehicleType(vehicleType: string | null): string {
-  return vehicleType?.trim().toLowerCase() ?? "";
-}
-
 function hasStoreParam(input: VehicleProfileParamsInput, name: string): boolean {
   return input.paramStore?.params[name] !== undefined;
 }
@@ -70,18 +63,15 @@ function isEnabledFlag(value: number | null): boolean {
 }
 
 export function isPlaneVehicleType(vehicleType: string | null): boolean {
-  const normalized = normalizeVehicleType(vehicleType);
-  return normalized.includes("fixed_wing") || normalized === "vtol";
+  return getVehicleDescriptor(vehicleType).family === "plane";
 }
 
 export function isCopterVehicleType(vehicleType: string | null): boolean {
-  const normalized = normalizeVehicleType(vehicleType);
-  return COPTER_VEHICLE_TYPES.some((candidate) => normalized.includes(candidate));
+  return getVehicleDescriptor(vehicleType).family === "copter";
 }
 
 export function isRoverVehicleType(vehicleType: string | null): boolean {
-  const normalized = normalizeVehicleType(vehicleType);
-  return ROVER_VEHICLE_TYPES.some((candidate) => normalized.includes(candidate));
+  return getVehicleDescriptor(vehicleType).family === "rover";
 }
 
 export function deriveVehicleProfile(vehicleType: string | null, input: VehicleProfileParamsInput): VehicleProfile {
@@ -211,17 +201,5 @@ export function hasQuadPlaneParams(input: Pick<VehicleProfileParamsInput, "param
 }
 
 export function getVehicleSlug(vehicleType: string | null): VehicleSlug | null {
-  if (isCopterVehicleType(vehicleType)) {
-    return "copter";
-  }
-
-  if (isPlaneVehicleType(vehicleType)) {
-    return "plane";
-  }
-
-  if (isRoverVehicleType(vehicleType)) {
-    return "rover";
-  }
-
-  return null;
+  return getVehicleDescriptor(vehicleType).docsSlug;
 }

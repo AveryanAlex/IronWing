@@ -1,27 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { resolveVehicleIconKind, type VehicleIconKind } from "./vehicle-icon";
+import { resolveVehicleIconKind } from "./vehicle-icon";
+import { VEHICLE_DESCRIPTORS, getVehicleDescriptor } from "../vehicle-descriptor";
 
-describe("resolveVehicleIconKind", () => {
-  const cases: Array<[number, VehicleIconKind]> = [
-    [1, "fixed_wing"],     // FIXED_WING
-    [2, "multirotor"],     // QUADROTOR
-    [13, "multirotor"],    // HEXAROTOR
-    [14, "multirotor"],    // OCTOROTOR
-    [4, "helicopter"],     // HELICOPTER
-    [10, "rover"],         // GROUND_ROVER
-    [11, "boat"],          // SURFACE_BOAT
-    [12, "boat"],          // SUBMARINE
-    [0, "fixed_wing"],     // GENERIC default
-    [99, "fixed_wing"],    // unknown
-  ];
-
-  for (const [mavType, expected] of cases) {
-    it(`maps MAVLink type ${mavType} → ${expected}`, () => {
-      expect(resolveVehicleIconKind(mavType)).toBe(expected);
-    });
-  }
-
-  it("treats undefined as fixed_wing default", () => {
-    expect(resolveVehicleIconKind(undefined)).toBe("fixed_wing");
+describe("vehicle descriptors", () => {
+  it.each(Object.keys(VEHICLE_DESCRIPTORS))("provides consistent identity for %s", (type) => {
+    expect(resolveVehicleIconKind(type)).toBe(getVehicleDescriptor(type).icon);
+  });
+  it("uses the SDK identity and a neutral fallback", () => {
+    expect(resolveVehicleIconKind("coaxial")).toBe("multirotor");
+    expect(resolveVehicleIconKind("vtol")).toBe("fixed_wing");
+    expect(resolveVehicleIconKind("helicopter")).toBe("helicopter");
+    expect(resolveVehicleIconKind("ground_rover")).toBe("rover");
+    expect(resolveVehicleIconKind(undefined)).toBe("generic");
+    expect(resolveVehicleIconKind("gcs")).toBe("generic");
+    expect(getVehicleDescriptor("not_a_tricopter").family).toBe("unknown");
+    expect(getVehicleDescriptor("toString").family).toBe("unknown");
   });
 });

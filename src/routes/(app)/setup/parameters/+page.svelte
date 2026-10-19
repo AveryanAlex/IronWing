@@ -1,10 +1,11 @@
 <script lang="ts">
+import { getVehicleSlug } from "../../../../lib/setup/vehicle-profile";
 import { page } from "$app/state";
 import { fromStore } from "svelte/store";
 
 import { getParamsStoreContext } from "../../../../app/shell/runtime-context";
 import ParameterWorkspace from "../../../../features/params/components/ParameterWorkspace.svelte";
-import { resolveDocsUrl, type VehicleSlug } from "../../../../data/ardupilot-docs";
+import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { setupWorkspaceTestIds } from "../../../../features/setup/setup-workspace-test-ids";
 import SetupIntroCard from "../../../../features/setup/shared/SetupIntroCard.svelte";
 import type { ParameterCatalogFilter } from "../../../../lib/params/parameter-catalog-view";
@@ -13,7 +14,7 @@ const paramsStore = getParamsStoreContext();
 const paramsState = fromStore(paramsStore);
 
 let params = $derived(paramsState.current);
-let docsUrl = $derived(resolveDocsUrl("full_parameter_list", resolveVehicleSlug(params.vehicleType)));
+let docsUrl = $derived(resolveDocsUrl("full_parameter_list", getVehicleSlug(params.vehicleType)));
 let initialSearchText = $derived(page.url.searchParams.get("search") ?? "");
 let initialFilter = $derived(resolveInitialFilter(page.url.searchParams.get("filter")));
 
@@ -25,25 +26,6 @@ function resolveInitialFilter(value: string | null): ParameterCatalogFilter {
       return value;
     default:
       return "all";
-  }
-}
-
-function resolveVehicleSlug(vehicleType: string | null): VehicleSlug | null {
-  switch (vehicleType) {
-    case "quadrotor":
-    case "hexarotor":
-    case "octorotor":
-    case "tricopter":
-    case "helicopter":
-    case "coaxial":
-      return "copter";
-    case "fixed_wing":
-    case "vtol":
-      return "plane";
-    case "ground_rover":
-      return "rover";
-    default:
-      return null;
   }
 }
 </script>

@@ -173,6 +173,7 @@ function metricDimmed(metric: OperatorMetricView) {
     {#snippet first()}
       <div class="size-full">
         <OverviewMap
+          vehicleType={session.vehicleState?.vehicle_type}
           vehicleLat={vehiclePos?.latitude_deg}
           vehicleLon={vehiclePos?.longitude_deg}
           vehicleHeading={vehiclePos?.heading_deg}

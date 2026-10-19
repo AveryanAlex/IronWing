@@ -5,7 +5,7 @@ import {
 } from "../overview/vehicle-icon";
 
 export type VehicleMarkerElementOptions = {
-  mavType?: number;
+  vehicleType?: string;
   iconKind?: VehicleIconKind;
   headingDeg?: number;
   className?: string;
@@ -42,9 +42,9 @@ export function createVehicleMarkerElement(options: VehicleMarkerElementOptions 
 
 export function setVehicleMarkerIcon(
   element: HTMLElement,
-  options: Pick<VehicleMarkerElementOptions, "mavType" | "iconKind"> = {},
+  options: Pick<VehicleMarkerElementOptions, "vehicleType" | "iconKind"> = {},
 ): SVGSVGElement | null {
-  const iconKind = options.iconKind ?? resolveVehicleIconKind(options.mavType);
+  const iconKind = options.iconKind ?? resolveVehicleIconKind(options.vehicleType);
   element.dataset.iconKind = iconKind;
   element.innerHTML = VEHICLE_ICON_SVG[iconKind];
   return element.querySelector("svg");
