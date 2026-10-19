@@ -1,3 +1,4 @@
+import { gpsFixProfile } from "../gps-fix";
 import type { ParamStore } from "../../params";
 import type { HomePosition, Telemetry, VehicleState } from "../../telemetry";
 import type { StagedParameterEdit } from "../stores/params";
@@ -432,7 +433,7 @@ function renderKnownPanel(builder: PanelBuilder, key: string, context: OsdRender
       const satellites = finite(telemetry.gps_satellites);
       if (satellites === null) builder.partial();
       const value = satellites === null ? "--" : integer(satellites).padStart(2);
-      const badFix = !telemetry.gps_fix_type?.toLowerCase().match(/3d|rtk/);
+      const badFix = !gpsFixProfile(telemetry.gps_fix_type)?.has3dFix;
       builder.write(0, 0, [SYMBOL.SAT_L, SYMBOL.SAT_R, ...textTokens(value)], satellites !== null && (satellites < param(context, "OSD_W_NSAT", 9) || badFix));
       return;
     }

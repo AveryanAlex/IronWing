@@ -46,7 +46,7 @@ pub struct TelemetryPower {
 #[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
 pub struct TelemetryGps {
-    pub fix_type: Option<String>,
+    pub fix_type: Option<mavkit::GpsFixType>,
     pub satellites: Option<u64>,
     pub hdop: Option<f64>,
 }
@@ -86,13 +86,6 @@ fn number(value: &Value, key: &str) -> Option<f64> {
 
 fn integer(value: &Value, key: &str) -> Option<u64> {
     value.get(key).and_then(Value::as_u64)
-}
-
-fn string(value: &Value, key: &str) -> Option<String> {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .map(ToOwned::to_owned)
 }
 
 fn number_list(value: &Value, key: &str) -> Option<Vec<f64>> {
@@ -141,7 +134,9 @@ pub fn telemetry_state_from_value(value: &Value) -> TelemetryState {
             battery_time_remaining_s: number(value, "battery_time_remaining_s"),
         },
         gps: TelemetryGps {
-            fix_type: string(value, "gps_fix_type"),
+            fix_type: value
+                .get("gps_fix_type")
+                .and_then(|raw| serde_json::from_value(raw.clone()).ok()),
             satellites: integer(value, "gps_satellites"),
             hdop: number(value, "gps_hdop"),
         },
@@ -167,6 +162,22 @@ pub fn telemetry_snapshot_from_value(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn gps_fix_round_trips_using_the_sdk_enum() {
+        let state = telemetry_state_from_value(&serde_json::json!({"gps_fix_type": "fix3d"}));
+        assert_eq!(state.gps.fix_type, Some(mavkit::GpsFixType::Fix3d));
+        assert_eq!(
+            serde_json::to_value(state.gps).unwrap()["fix_type"],
+            "fix3d"
+        );
+        assert_eq!(
+            telemetry_state_from_value(&serde_json::json!({"gps_fix_type": "future_fix"}))
+                .gps
+                .fix_type,
+            None
+        );
+    }
 
     #[test]
     fn radio_parser_does_not_renumber_sparse_channels() {

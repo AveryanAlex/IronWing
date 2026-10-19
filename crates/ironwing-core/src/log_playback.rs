@@ -200,7 +200,7 @@ mod tests {
             "altitude_m": 12.3,
             "latitude_deg": 37.42,
             "longitude_deg": -122.08,
-            "gps_fix_type": "fix_3d",
+            "gps_fix_type": "fix3d",
             "gps_satellites": 12
         });
 
@@ -224,7 +224,7 @@ mod tests {
         assert_eq!(telemetry.flight.altitude_m, Some(12.3));
         assert_eq!(telemetry.navigation.latitude_deg, Some(37.42));
         assert_eq!(telemetry.navigation.longitude_deg, Some(-122.08));
-        assert_eq!(telemetry.gps.fix_type.as_deref(), Some("fix_3d"));
+        assert_eq!(telemetry.gps.fix_type, Some(mavkit::GpsFixType::Fix3d));
         assert_eq!(telemetry.gps.satellites, Some(12));
     }
 }

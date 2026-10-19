@@ -1,3 +1,5 @@
+import { gpsFixProfile } from "./gps-fix";
+import type { GpsFixType } from "./generated/mavkit";
 import type { Telemetry, TelemetryState } from "../telemetry";
 import {
     missingDomainValue,
@@ -67,45 +69,8 @@ function formatWholeMetric(connected: boolean, value: number | undefined, suffix
     return `${Math.round(value)}${suffix}`;
 }
 
-function formatGpsFix(value: string | undefined): string {
-    if (!value) {
-        return "--";
-    }
-
-    const fix = value.trim().toLowerCase();
-    if (!fix.length) {
-        return "--";
-    }
-
-    if (fix.includes("rtk") && fix.includes("fixed")) {
-        return "RTK fixed";
-    }
-
-    if (fix.includes("rtk") && fix.includes("float")) {
-        return "RTK float";
-    }
-
-    if (fix.includes("3d")) {
-        return "3D fix";
-    }
-
-    if (fix.includes("2d")) {
-        return "2D fix";
-    }
-
-    if (fix.includes("dgps") || fix.includes("differential")) {
-        return "DGPS";
-    }
-
-    if (fix.includes("no") || fix.includes("none") || fix.includes("unknown")) {
-        return "No fix";
-    }
-
-    return value
-        .replace(/[_-]+/g, " ")
-        .replace(/\s+/g, " ")
-        .trim()
-        .replace(/\b\w/g, (segment) => segment.toUpperCase());
+function formatGpsFix(value: GpsFixType | undefined): string {
+    return gpsFixProfile(value)?.label ?? "--";
 }
 
 function batteryTone(connected: boolean, value: number | undefined): TelemetrySummaryTone {
@@ -124,21 +89,8 @@ function batteryTone(connected: boolean, value: number | undefined): TelemetrySu
     return "critical";
 }
 
-function gpsTone(connected: boolean, value: string | undefined): TelemetrySummaryTone {
-    const fix = value?.toLowerCase() ?? "";
-    if (!connected || fix.length === 0 || fix === "--") {
-        return "neutral";
-    }
-
-    if (fix.includes("3d") || fix.includes("rtk")) {
-        return "positive";
-    }
-
-    if (fix.includes("2d")) {
-        return "caution";
-    }
-
-    return "critical";
+function gpsTone(connected: boolean, value: GpsFixType | undefined): TelemetrySummaryTone {
+    return connected ? gpsFixProfile(value)?.tone ?? "neutral" : "neutral";
 }
 
 function toneRank(tone: TelemetrySummaryTone): number {
@@ -217,7 +169,7 @@ function createNumberMetric(input: {
 }
 
 function createGpsMetric(input: {
-    fixType: string | null;
+    fixType: GpsFixType | null;
     satellites: number | null;
     previous?: OperatorMetricView | null;
     stale: boolean;
@@ -225,9 +177,9 @@ function createGpsMetric(input: {
 }): OperatorMetricView {
     const previousValue =
         input.previous?.value && typeof input.previous.value === "object"
-            ? input.previous.value as { fixType?: string | null; satellites?: number | null }
+            ? input.previous.value as { fixType?: GpsFixType | null; satellites?: number | null }
             : null;
-    const fixType = input.fixType ?? asTrimmedText(previousValue?.fixType);
+    const fixType = input.fixType ?? previousValue?.fixType ?? null;
     const satellites = input.satellites ?? asFiniteNumber(previousValue?.satellites);
     const hasValue = fixType != null || satellites != null;
     const fixText = formatGpsFix(fixType ?? undefined);
@@ -365,7 +317,7 @@ export function selectOperatorTelemetryView(input: {
             tone: (value) => batteryTone(true, value),
         }),
         gps: createGpsMetric({
-            fixType: asTrimmedText(telemetry.gps_fix_type),
+            fixType: telemetry.gps_fix_type ?? null,
             satellites: asFiniteNumber(telemetry.gps_satellites),
             previous: input.previous?.primary.gps,
             stale,

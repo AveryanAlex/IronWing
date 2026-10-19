@@ -60,7 +60,7 @@
         "battery_time_remaining_s": 720.0
       },
       "gps": {
-        "fix_type": "fix_3d",
+        "fix_type": "fix3d",
         "satellites": 17,
         "hdop": 0.8
       },

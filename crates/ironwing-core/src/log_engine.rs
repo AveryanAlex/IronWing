@@ -127,7 +127,7 @@ pub struct TelemetrySnapshot {
     pub battery_voltage_v: Option<f64>,
     pub battery_current_a: Option<f64>,
     pub energy_consumed_wh: Option<f64>,
-    pub gps_fix_type: Option<String>,
+    pub gps_fix_type: Option<mavkit::GpsFixType>,
     pub gps_satellites: Option<f64>,
     pub gps_hdop: Option<f64>,
     pub throttle_pct: Option<f64>,
@@ -1063,15 +1063,17 @@ fn apply_entry(log_type: LogType, snap: &mut TelemetrySnapshot, entry: &StoredEn
     }
 }
 
-fn gps_fix_type_name(val: f64) -> &'static str {
-    match val as u8 {
-        2 => "fix_2d",
-        3 => "fix_3d",
-        4 => "dgps",
-        5 => "rtk_float",
-        6 => "rtk_fixed",
-        _ => "no_fix",
-    }
+fn gps_fix_type(val: f64) -> Option<mavkit::GpsFixType> {
+    use mavkit::GpsFixType::*;
+    Some(match val {
+        0.0 | 1.0 => NoFix,
+        2.0 => Fix2d,
+        3.0 => Fix3d,
+        4.0 => Dgps,
+        5.0 => RtkFloat,
+        6.0 => RtkFixed,
+        _ => return None,
+    })
 }
 
 fn apply_tlog_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
@@ -1102,7 +1104,7 @@ fn apply_tlog_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
             snap.battery_pct = f.get("battery_remaining").copied();
         }
         "GPS_RAW_INT" => {
-            snap.gps_fix_type = f.get("fix_type").map(|v| gps_fix_type_name(*v).into());
+            snap.gps_fix_type = f.get("fix_type").and_then(|v| gps_fix_type(*v));
             snap.gps_satellites = f.get("satellites_visible").copied();
             snap.gps_hdop = f.get("eph").copied();
         }
@@ -1155,7 +1157,7 @@ fn apply_bin_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
             snap.longitude_deg = f.get("Lng").map(|v| v / 1e7);
             snap.speed_mps = f.get("Spd").copied();
             snap.heading_deg = f.get("GCrs").copied();
-            snap.gps_fix_type = f.get("Status").map(|v| gps_fix_type_name(*v).into());
+            snap.gps_fix_type = f.get("Status").and_then(|v| gps_fix_type(*v));
             snap.gps_satellites = f.get("NSats").copied();
             snap.gps_hdop = f.get("HDop").copied();
         }

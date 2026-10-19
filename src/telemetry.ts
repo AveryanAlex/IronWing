@@ -1,3 +1,4 @@
+import type { GpsFixType } from "./lib/generated/mavkit";
 import type { PwmChannelSamples } from "./lib/telemetry-channels";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type { DomainValue } from "./lib/domain-status";
@@ -15,7 +16,7 @@ export type Telemetry = {
   latitude_deg?: number;
   longitude_deg?: number;
   battery_pct?: number;
-  gps_fix_type?: string;
+  gps_fix_type?: GpsFixType;
 
   // VFR_HUD
   climb_rate_mps?: number;
@@ -89,7 +90,7 @@ export type TelemetryState = {
     battery_time_remaining_s?: number;
   };
   gps?: {
-    fix_type?: string;
+    fix_type?: GpsFixType;
     satellites?: number;
     hdop?: number;
   };

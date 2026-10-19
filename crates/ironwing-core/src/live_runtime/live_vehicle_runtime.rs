@@ -21,8 +21,7 @@ use crate::ipc::{
     DomainValue, OpenSessionSnapshot, ScopedEvent, SessionConnection, SessionEnvelope,
     SessionSnapshot, SourceKind, StatusTextEntry, TelemetrySnapshot,
     calibration_snapshot_from_sources, push_status_text_entry, sensor_health_snapshot_from_summary,
-    session_connection_from_link_state, status_text_entry_from_value,
-    status_text_snapshot_from_entries, support_snapshot,
+    session_connection_from_link_state, status_text_snapshot_from_entries, support_snapshot,
 };
 use crate::live::{
     LiveSnapshotInput, SessionContext, base_live_snapshot_from_caches,
@@ -33,9 +32,7 @@ use crate::live_runtime::task_set::{
     LocalTaskSpawner, LocalTimer, SendTaskSpawner, SendTimer, TelemetryIntervalProvider,
 };
 use crate::runtime::SessionRuntime;
-use crate::vehicle_snapshot::{
-    mav_severity_name, seeded_vehicle_state, telemetry_snapshot_from_vehicle,
-};
+use crate::vehicle_snapshot::{seeded_vehicle_state, telemetry_snapshot_from_vehicle};
 
 pub struct LiveVehicleRuntime<E>
 where
@@ -242,19 +239,15 @@ where
         self.session_runtime.close_playback_session()
     }
 
-    pub fn push_status_text_from_value(
+    pub fn push_status_text(
         &mut self,
-        value: &serde_json::Value,
+        mut entry: StatusTextEntry,
         provenance: DomainProvenance,
-    ) -> Option<crate::ipc::StatusTextSnapshot> {
-        let mut entry = status_text_entry_from_value(value)?;
+    ) -> crate::ipc::StatusTextSnapshot {
         entry.sequence = self.next_status_text_sequence;
         self.next_status_text_sequence = self.next_status_text_sequence.saturating_add(1);
         push_status_text_entry(&mut self.status_text_history, entry);
-        Some(status_text_snapshot_from_entries(
-            self.status_text_history.clone(),
-            provenance,
-        ))
+        status_text_snapshot_from_entries(self.status_text_history.clone(), provenance)
     }
 }
 
@@ -816,19 +809,15 @@ where
         vehicle.telemetry().messages().status_text().subscribe(),
         |handle, sample| {
             let message = sample.value;
-            let value = serde_json::json!({
-                "text": message.text,
-                "severity": mav_severity_name(message.severity),
-                "id": message.id,
-                "source_system": message.source_system,
-                "source_component": message.source_component,
-            });
-            let snapshot = handle.with_runtime(|runtime| {
-                runtime.push_status_text_from_value(&value, DomainProvenance::Stream)
-            });
-            if let Some(snapshot) = snapshot {
-                emit_scoped(handle, event_names::STATUS_TEXT_STATE, snapshot);
-            }
+            let entry = StatusTextEntry {
+                sequence: 0,
+                text: message.text,
+                severity: message.severity,
+                timestamp_usec: None,
+            };
+            let snapshot = handle
+                .with_runtime(|runtime| runtime.push_status_text(entry, DomainProvenance::Stream));
+            emit_scoped(handle, event_names::STATUS_TEXT_STATE, snapshot);
         },
     );
 }

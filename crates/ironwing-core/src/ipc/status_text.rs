@@ -7,7 +7,7 @@ use crate::ipc::{DomainProvenance, DomainValue};
 pub struct StatusTextEntry {
     pub sequence: u64,
     pub text: String,
-    pub severity: String,
+    pub severity: mavkit::MavSeverity,
     pub timestamp_usec: Option<u64>,
 }
 
@@ -26,9 +26,8 @@ pub fn status_text_entry_from_value(value: &Value) -> Option<StatusTextEntry> {
         text: value.get("text")?.as_str()?.to_string(),
         severity: value
             .get("severity")
-            .and_then(Value::as_str)
-            .unwrap_or("info")
-            .to_string(),
+            .and_then(|raw| serde_json::from_value(raw.clone()).ok())
+            .unwrap_or(mavkit::MavSeverity::Info),
         timestamp_usec: value.get("timestamp_usec").and_then(Value::as_u64),
     })
 }

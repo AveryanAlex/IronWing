@@ -1,4 +1,6 @@
 <script lang="ts">
+import { gpsFixProfile } from "../../../../lib/gps-fix";
+import type { GpsFixType } from "../../../../lib/generated/mavkit";
 import {
   Compass,
   Gauge,
@@ -46,7 +48,7 @@ let section = $derived(setupRouteSection(view, "navigation"));
 type TelemetryTone = "neutral" | "info" | "success" | "warning" | "danger";
 type NavigationLiveObservation = {
   scopeKey: string;
-  fixType: string | null;
+  fixType: GpsFixType | null;
   satellites: number | null;
   hdop: number | null;
   latitude: number | null;
@@ -201,7 +203,7 @@ let navigationTelemetryMetrics = $derived.by(() => {
       label: "Fix",
       value: observation ? formatFixType(observation.fixType) : "—",
       tone:
-        observation?.fixType && observation.fixType !== "no_gps" && observation.fixType !== "no_fix"
+        observation?.fixType && observation.fixType !== "no_fix"
           ? ("success" as TelemetryTone)
           : ("neutral" as TelemetryTone),
       stale: liveSummary.stale,
@@ -372,25 +374,8 @@ function resolveLiveObservation(
   };
 }
 
-function formatFixType(fixType: string | null): string {
-  switch (fixType) {
-    case "no_gps":
-      return "No receiver";
-    case "no_fix":
-      return "No Fix";
-    case "fix_2d":
-      return "2D Fix";
-    case "fix_3d":
-      return "3D Fix";
-    case "dgps":
-      return "DGPS";
-    case "rtk_float":
-      return "RTK Float";
-    case "rtk_fixed":
-      return "RTK Fixed";
-    default:
-      return fixType ?? "Unknown";
-  }
+function formatFixType(fixType: GpsFixType | null): string {
+  return gpsFixProfile(fixType)?.label ?? "Unknown";
 }
 
 function formatCoordinate(value: number | null): string {

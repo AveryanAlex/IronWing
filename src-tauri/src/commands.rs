@@ -1030,7 +1030,7 @@ mod tests {
         let status_entries = vec![StatusTextEntry {
             sequence: 7,
             text: "Live telemetry resumed".into(),
-            severity: "info".into(),
+            severity: mavkit::MavSeverity::Info,
             timestamp_usec: Some(42),
         }];
 

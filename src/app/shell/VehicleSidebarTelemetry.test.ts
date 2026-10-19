@@ -51,7 +51,7 @@ function createSessionState(): SessionStoreState {
       value: {
         flight: { altitude_m: 12.4, speed_mps: 4.8 },
         power: { battery_pct: 87.2 },
-        gps: { fix_type: "fix_3d", satellites: 14 },
+        gps: { fix_type: "fix3d", satellites: 14 },
       },
     },
     support: missingDomainValue("bootstrap"),

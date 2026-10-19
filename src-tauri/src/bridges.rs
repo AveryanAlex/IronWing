@@ -102,7 +102,6 @@ pub(crate) async fn spawn_event_bridges(
 #[cfg(test)]
 mod tests {
     use crate::ipc::session::VehicleState;
-    use ironwing_core::vehicle_snapshot::mav_severity_name;
     use mavkit::{AutopilotType, VehicleType};
 
     /// Guard against the serde wire format drifting — multi-word enum variants
@@ -126,18 +125,5 @@ mod tests {
         assert_eq!(json["autopilot"], "ardu_pilot_mega");
         assert_eq!(json["firmware_version"], serde_json::Value::Null);
         assert_eq!(json["system_status"], "standby");
-    }
-
-    #[test]
-    fn mav_severity_name_maps_all_variants_to_lowercase() {
-        use mavkit::MavSeverity::*;
-        assert_eq!(mav_severity_name(Emergency), "emergency");
-        assert_eq!(mav_severity_name(Alert), "alert");
-        assert_eq!(mav_severity_name(Critical), "critical");
-        assert_eq!(mav_severity_name(Error), "error");
-        assert_eq!(mav_severity_name(Warning), "warning");
-        assert_eq!(mav_severity_name(Notice), "notice");
-        assert_eq!(mav_severity_name(Info), "info");
-        assert_eq!(mav_severity_name(Debug), "debug");
     }
 }

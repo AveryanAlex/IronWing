@@ -202,7 +202,8 @@ struct Cursor {
 #[serde(deny_unknown_fields)]
 struct StatusTexts {
     cursor: Option<Cursor>,
-    severity: Option<Vec<String>>,
+    #[schemars(with = "Option<Vec<String>>")]
+    severity: Option<Vec<mavkit::MavSeverity>>,
 }
 
 fn definition<T: JsonSchema>(name: &'static str, description: &'static str, read: bool) -> Tool {

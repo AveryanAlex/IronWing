@@ -1,3 +1,4 @@
+import type { MavSeverity } from "./lib/generated/mavkit";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type { DomainValue } from "./lib/domain-status";
 import { typedListen, type UnlistenFn } from "./lib/ipc/client";
@@ -10,7 +11,7 @@ import type { SessionEvent } from "./session";
 export type StatusMessage = {
     sequence: number;
     text: string;
-    severity: string;
+    severity: MavSeverity;
     timestamp_usec?: number;
 };
 
@@ -91,33 +92,18 @@ function toTrimmedText(value: unknown): string | null {
     return typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
 }
 
-function severityProfile(value: unknown): {
-    severity: StatusNoticeSeverity;
-    tone: StatusNoticeTone;
-    rank: number;
-} {
-    const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
-
-    if (
-        normalized.includes("panic")
-        || normalized.includes("emerg")
-        || normalized.includes("alert")
-        || normalized.includes("critical")
-        || normalized.includes("error")
-        || normalized.includes("fault")
-    ) {
-        return { severity: "critical", tone: "critical", rank: 0 };
-    }
-
-    if (normalized.includes("warn")) {
-        return { severity: "warning", tone: "caution", rank: 1 };
-    }
-
-    if (normalized.includes("notice")) {
-        return { severity: "notice", tone: "neutral", rank: 2 };
-    }
-
-    return { severity: "info", tone: "neutral", rank: 3 };
+type SeverityProfile = { severity: StatusNoticeSeverity; tone: StatusNoticeTone; rank: number };
+const CRITICAL: SeverityProfile = { severity: "critical", tone: "critical", rank: 0 };
+const SEVERITY_PROFILES: Record<MavSeverity, SeverityProfile> = {
+    emergency: CRITICAL, alert: CRITICAL, critical: CRITICAL, error: CRITICAL,
+    warning: { severity: "warning", tone: "caution", rank: 1 },
+    notice: { severity: "notice", tone: "neutral", rank: 2 },
+    info: { severity: "info", tone: "neutral", rank: 3 },
+    debug: { severity: "info", tone: "neutral", rank: 3 },
+};
+function severityProfile(value: unknown): SeverityProfile {
+    return typeof value === "string" && Object.prototype.hasOwnProperty.call(SEVERITY_PROFILES, value)
+        ? SEVERITY_PROFILES[value as MavSeverity] : SEVERITY_PROFILES.info;
 }
 
 function normalizeNotice(entry: unknown): (CompactStatusNotice & { rank: number }) | null {

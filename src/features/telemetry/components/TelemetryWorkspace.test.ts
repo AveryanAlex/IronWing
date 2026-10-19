@@ -67,7 +67,7 @@ function createSessionState(): SessionStoreState {
           xtrack_error_m: 0,
         },
         power: { battery_pct: 76, battery_voltage_v: 15.8, battery_current_a: 2.1 },
-        gps: { fix_type: "fix_3d", satellites: 12, hdop: 0.8 },
+        gps: { fix_type: "fix3d", satellites: 12, hdop: 0.8 },
         radio: { rc_channels: [], servo_outputs: [] },
       },
     },

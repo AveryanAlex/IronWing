@@ -74,7 +74,7 @@ function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessi
       value: {
         flight: { altitude_m: 10, speed_mps: 4 },
         navigation: { latitude_deg: 47.1, longitude_deg: 8.5, heading_deg: 90 },
-        gps: { fix_type: "fix_3d" },
+        gps: { fix_type: "fix3d" },
       },
     },
     mission_state: { plan: null, current_index: 2, sync: "current", active_op: null },
@@ -330,7 +330,7 @@ describe("session store", () => {
           value: {
             flight: { altitude_m: 42 },
             navigation: { latitude_deg: 47.1, longitude_deg: 8.5, heading_deg: 90 },
-            gps: { fix_type: "fix_3d" },
+            gps: { fix_type: "fix3d" },
           },
         },
       }),
@@ -343,7 +343,7 @@ describe("session store", () => {
           value: {
             flight: { altitude_m: 5 },
             navigation: { latitude_deg: 47.1, longitude_deg: 8.5, heading_deg: 90 },
-            gps: { fix_type: "fix_3d" },
+            gps: { fix_type: "fix3d" },
           },
         },
       }),
@@ -389,7 +389,7 @@ describe("session store", () => {
     expect(state.activeEnvelope?.reset_revision).toBe(2);
     expect(state.activeSource).toBe("live");
     expect(telemetry.altitude_m).toBe(42);
-    expect(telemetry.gps_fix_type).toBe("fix_3d");
+    expect(telemetry.gps_fix_type).toBe("fix3d");
   });
 
   it("ignores stale events from previous session scopes", async () => {

@@ -1,3 +1,4 @@
+import type { GpsFixType } from "./lib/generated/mavkit";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type * as Generated from "./lib/generated/ironwing";
 import type * as GeneratedJson from "./lib/generated/ironwing-json";
@@ -30,7 +31,7 @@ export type TelemetrySnapshot = {
   battery_voltage_v?: number;
   battery_current_a?: number;
   energy_consumed_wh?: number;
-  gps_fix_type?: string;
+  gps_fix_type?: GpsFixType;
   gps_satellites?: number;
   gps_hdop?: number;
   throttle_pct?: number;

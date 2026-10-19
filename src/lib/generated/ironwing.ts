@@ -524,6 +524,9 @@ export type GeoPoint3dTerrain = {
 	altitude_terrain_m: number | null,
 };
 
+/**  GPS fix quality level. */
+export type GpsFixType = "no_fix" | "fix2d" | "fix3d" | "dgps" | "rtk_float" | "rtk_fixed";
+
 /**  Typed mission command API item used by plan serialization and validation. */
 export type GripperAction = "release" | "grab";
 
@@ -727,6 +730,15 @@ export type MagCalReport = {
 
 /**  Status of a magnetometer calibration. */
 export type MagCalStatus = "not_started" | "waiting_to_start" | "running_step_one" | "running_step_two" | "success" | "failed" | "bad_orientation" | "bad_radius";
+
+/**
+ *  Severity level from a STATUSTEXT message, following RFC 5424 (syslog) ordering.
+ *
+ *  `Emergency` is the most severe; `Debug` is the least. Most autopilot informational
+ *  messages are `Info` or `Notice`. `Warning` and above typically indicate a condition
+ *  that requires attention from the operator.
+ */
+export type MavSeverity = "emergency" | "alert" | "critical" | "error" | "warning" | "notice" | "info" | "debug";
 
 export type McpSettings = {
 	enabled: boolean,
@@ -1313,7 +1325,7 @@ export type StartGuidedSessionRequest = {
 export type StatusTextEntry = {
 	sequence: bigint,
 	text: string,
-	severity: string,
+	severity: MavSeverity,
 	timestamp_usec: bigint | null,
 };
 
@@ -1359,7 +1371,7 @@ export type TelemetryFlight = {
 };
 
 export type TelemetryGps = {
-	fix_type: string | null,
+	fix_type: GpsFixType | null,
 	satellites: bigint | null,
 	hdop: number | null,
 };

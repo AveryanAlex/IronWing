@@ -57,7 +57,7 @@ function createSnapshot(overrides: Partial<OpenSessionSnapshot> = {}): OpenSessi
                 flight: { altitude_m: 123, speed_mps: 12.3, climb_rate_mps: 1.8 },
                 navigation: { heading_deg: 186 },
                 power: { battery_pct: 18, battery_voltage_v: 22.7 },
-                gps: { fix_type: "fix_2d", satellites: 8 },
+                gps: { fix_type: "fix2d", satellites: 8 },
             },
         },
         mission_state: null,

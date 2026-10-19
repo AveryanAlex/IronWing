@@ -1,6 +1,8 @@
-use crate::ipc::{
-    DomainProvenance, TelemetrySnapshot, VehicleState, telemetry_snapshot_from_value,
+use crate::ipc::telemetry::{
+    TelemetryAttitude, TelemetryFlight, TelemetryGps, TelemetryNavigation, TelemetryPower,
+    TelemetryRadio, TelemetryState, TelemetryTerrain,
 };
+use crate::ipc::{DomainProvenance, DomainValue, TelemetrySnapshot, VehicleState};
 
 const RC_TELEMETRY_CHANNEL_COUNT: usize = 18;
 const SERVO_TELEMETRY_CHANNEL_COUNT: usize = 16;
@@ -42,39 +44,70 @@ pub fn telemetry_snapshot_from_vehicle(
             .map(|sample| f64::from(sample.value))
     });
 
-    let snapshot = serde_json::json!({
-        "latitude_deg": position_global.latest().map(|sample| sample.value.latitude_deg),
-        "longitude_deg": position_global.latest().map(|sample| sample.value.longitude_deg),
-        "altitude_m": position_global.latest().map(|sample| sample.value.altitude_msl_m),
-        "speed_mps": groundspeed.latest().map(|sample| sample.value),
-        "airspeed_mps": airspeed.latest().map(|sample| sample.value),
-        "climb_rate_mps": climb_rate.latest().map(|sample| sample.value),
-        "heading_deg": heading.latest().map(|sample| sample.value),
-        "throttle_pct": throttle.latest().map(|sample| sample.value),
-        "roll_deg": attitude.latest().map(|sample| sample.value.roll_deg),
-        "pitch_deg": attitude.latest().map(|sample| sample.value.pitch_deg),
-        "yaw_deg": attitude.latest().map(|sample| sample.value.yaw_deg),
-        "battery_pct": bat_remaining.latest().map(|sample| sample.value),
-        "battery_voltage_v": bat_voltage.latest().map(|sample| sample.value),
-        "battery_current_a": bat_current.latest().map(|sample| sample.value),
-        "battery_voltage_cells": bat_cells.latest().map(|sample| sample.value.voltages_v.clone()),
-        "energy_consumed_wh": bat_energy.latest().map(|sample| sample.value),
-        "battery_time_remaining_s": bat_time_remaining.latest().map(|sample| f64::from(sample.value)),
-        "gps_fix_type": gps_quality.latest().map(|sample| sample.value.fix_type),
-        "gps_satellites": gps_quality.latest().and_then(|sample| sample.value.satellites.map(|value| value as u64)),
-        "gps_hdop": gps_quality.latest().and_then(|sample| sample.value.hdop),
-        "wp_dist_m": nav_wp.latest().map(|sample| sample.value.distance_m),
-        "nav_bearing_deg": nav_wp.latest().map(|sample| sample.value.bearing_deg),
-        "target_bearing_deg": nav_guidance.latest().map(|sample| sample.value.bearing_deg),
-        "xtrack_error_m": nav_guidance.latest().map(|sample| sample.value.cross_track_error_m),
-        "terrain_height_m": terrain_clearance.latest().map(|sample| sample.value.terrain_height_m),
-        "height_above_terrain_m": terrain_clearance.latest().map(|sample| sample.value.height_above_terrain_m),
-        "rc_channels": rc_channel_values,
-        "rc_rssi": rc_rssi.latest().map(|sample| f64::from(sample.value)),
-        "servo_outputs": servo_output_values,
-    });
-
-    telemetry_snapshot_from_value(&snapshot, provenance)
+    let state = TelemetryState {
+        flight: TelemetryFlight {
+            altitude_m: position_global
+                .latest()
+                .map(|sample| sample.value.altitude_msl_m),
+            speed_mps: groundspeed.latest().map(|sample| sample.value),
+            climb_rate_mps: climb_rate.latest().map(|sample| sample.value),
+            throttle_pct: throttle.latest().map(|sample| sample.value),
+            airspeed_mps: airspeed.latest().map(|sample| sample.value),
+        },
+        navigation: TelemetryNavigation {
+            latitude_deg: position_global
+                .latest()
+                .map(|sample| sample.value.latitude_deg),
+            longitude_deg: position_global
+                .latest()
+                .map(|sample| sample.value.longitude_deg),
+            heading_deg: heading.latest().map(|sample| sample.value),
+            wp_dist_m: nav_wp.latest().map(|sample| sample.value.distance_m),
+            nav_bearing_deg: nav_wp.latest().map(|sample| sample.value.bearing_deg),
+            target_bearing_deg: nav_guidance.latest().map(|sample| sample.value.bearing_deg),
+            xtrack_error_m: nav_guidance
+                .latest()
+                .map(|sample| sample.value.cross_track_error_m),
+        },
+        attitude: TelemetryAttitude {
+            roll_deg: attitude.latest().map(|sample| sample.value.roll_deg),
+            pitch_deg: attitude.latest().map(|sample| sample.value.pitch_deg),
+            yaw_deg: attitude.latest().map(|sample| sample.value.yaw_deg),
+        },
+        power: TelemetryPower {
+            battery_pct: bat_remaining.latest().map(|sample| sample.value),
+            battery_voltage_v: bat_voltage.latest().map(|sample| sample.value),
+            battery_current_a: bat_current.latest().map(|sample| sample.value),
+            battery_voltage_cells: bat_cells
+                .latest()
+                .map(|sample| sample.value.voltages_v.clone()),
+            energy_consumed_wh: bat_energy.latest().map(|sample| sample.value),
+            battery_time_remaining_s: bat_time_remaining
+                .latest()
+                .map(|sample| f64::from(sample.value)),
+        },
+        gps: TelemetryGps {
+            fix_type: gps_quality.latest().map(|sample| sample.value.fix_type),
+            satellites: gps_quality
+                .latest()
+                .and_then(|sample| sample.value.satellites.map(|value| value as u64)),
+            hdop: gps_quality.latest().and_then(|sample| sample.value.hdop),
+        },
+        terrain: TelemetryTerrain {
+            terrain_height_m: terrain_clearance
+                .latest()
+                .map(|sample| sample.value.terrain_height_m),
+            height_above_terrain_m: terrain_clearance
+                .latest()
+                .map(|sample| sample.value.height_above_terrain_m),
+        },
+        radio: TelemetryRadio {
+            rc_channels: rc_channel_values,
+            rc_rssi: rc_rssi.latest().map(|sample| f64::from(sample.value)),
+            servo_outputs: servo_output_values,
+        },
+    };
+    DomainValue::present(state, provenance)
 }
 
 // Array position is the wire channel index. Never compact missing samples.
@@ -103,21 +136,6 @@ pub fn seeded_vehicle_state(vehicle: &mavkit::Vehicle) -> VehicleState {
     }
 }
 
-pub fn mav_severity_name(severity: mavkit::MavSeverity) -> &'static str {
-    use mavkit::MavSeverity::*;
-
-    match severity {
-        Emergency => "emergency",
-        Alert => "alert",
-        Critical => "critical",
-        Error => "error",
-        Warning => "warning",
-        Notice => "notice",
-        Info => "info",
-        Debug => "debug",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,19 +147,5 @@ mod tests {
             Some(vec![Some(1100.0), None, Some(1900.0)])
         );
         assert_eq!(channel_samples(18, |_| None), None);
-    }
-
-    #[test]
-    fn mav_severity_name_maps_all_variants_to_lowercase() {
-        use mavkit::MavSeverity::*;
-
-        assert_eq!(mav_severity_name(Emergency), "emergency");
-        assert_eq!(mav_severity_name(Alert), "alert");
-        assert_eq!(mav_severity_name(Critical), "critical");
-        assert_eq!(mav_severity_name(Error), "error");
-        assert_eq!(mav_severity_name(Warning), "warning");
-        assert_eq!(mav_severity_name(Notice), "notice");
-        assert_eq!(mav_severity_name(Info), "info");
-        assert_eq!(mav_severity_name(Debug), "debug");
     }
 }
