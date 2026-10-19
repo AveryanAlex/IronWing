@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 ironwing-core = { path = "../ironwing-core", features = ["typescript"] }
 ironwing-firmware = { path = "../ironwing-firmware", features = ["typescript"] }
-mavkit = { git = "https://github.com/AveryanAlex/mavkit.git", branch = "main", default-features = false, features = ["ardupilot", "typescript"] }
+mavkit = { workspace = true, features = ["ardupilot", "typescript"] }
 serde_json = "1"
 specta = { version = "=2.0.0-rc.25", features = ["derive", "serde_json"] }
 specta-serde = "0.0.12"
