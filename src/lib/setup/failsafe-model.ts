@@ -245,14 +245,6 @@ function selectedRtlRowNames(input: SafetyModelInput, requiredRows: { numeric: s
   ];
 }
 
-function rtlValue(
-  input: SafetyModelInput,
-  names: readonly string[],
-): { name: string; value: number | null } {
-  const name = firstPresentParamName(input.paramStore, names) ?? names[0];
-  return { name, value: readProposedParameter(input, name) };
-}
-
 function rtlValueForRole(input: SafetyModelInput, family: string, role: string) {
   const encoding = resolveRtlParameter(family, role, Object.keys(input.paramStore?.params ?? {}));
   return { name: encoding?.name ?? "", value: encoding ? readProposedParameter(input, encoding.name) : null };

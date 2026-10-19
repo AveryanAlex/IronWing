@@ -1,4 +1,3 @@
-import type { GpsFixType } from "./lib/generated/mavkit";
 import { EVENT_NAMES } from "./lib/generated/events";
 import type * as Generated from "./lib/generated/ironwing";
 import type * as GeneratedJson from "./lib/generated/ironwing-json";
