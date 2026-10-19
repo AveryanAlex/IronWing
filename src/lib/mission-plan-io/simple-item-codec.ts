@@ -107,14 +107,14 @@ function customCodec(
     return { kind: "custom", hasPosition, parse, export: exportCommand };
 }
 
-function enumFromIndex<TValue extends string>(value: number, values: readonly TValue[]): TValue {
-    const index = Math.round(value);
-    return values[index] ?? values[0];
+function enumFromIndex<TValue extends string>(value: number, values: readonly TValue[]): TValue | undefined {
+    return Number.isInteger(value) ? values[value] : undefined;
 }
 
 function enumToIndex<TValue extends string>(value: unknown, values: readonly TValue[]): number {
     const index = values.indexOf(value as TValue);
-    return index >= 0 ? index : 0;
+    if (index < 0) throw new RangeError(`Unsupported mission enum value: ${String(value)}`);
+    return index;
 }
 
 function directionFromSignedMagnitude(value: number): LoiterDirection {
@@ -182,38 +182,28 @@ export function parseSimpleItem(item: QgcSimpleItem, index: number, warnings: st
     const entry = commandIdToVariant(item.command);
     const context = `${label} (MAV_CMD ${item.command})`;
 
-    if (!entry) {
-        warnings.push(`${context} is not in COMMAND_CATALOG; imported as Other.`);
+    const rawItem = (reason: string): MissionItem => {
+        warnings.push(`${context} ${reason}; imported as Other without changing its parameters or frame.`);
         warnings.push(`${context} stores Other.x and Other.y as float degrees from QGC params[4] and params[5], not degE7 wire integers.`);
         return {
-            command: {
-                Other: {
-                    command: item.command,
-                    frame: missionFrameFromNumeric(numberOrZero(item.frame)),
-                    param1: params[0],
-                    param2: params[1],
-                    param3: params[2],
-                    param4: params[3],
-                    x: params[4],
-                    y: params[5],
-                    z: params[6],
-                },
-            },
-            current: index === 0,
-            autocontinue: item.autoContinue ?? true,
+            command: { Other: {
+                command: item.command, frame: missionFrameFromNumeric(numberOrZero(item.frame)),
+                param1: params[0], param2: params[1], param3: params[2], param4: params[3],
+                x: params[4], y: params[5], z: params[6],
+            } },
+            current: index === 0, autocontinue: item.autoContinue ?? true,
         };
-    }
+    };
+    if (!entry) return rawItem("is not in COMMAND_CATALOG");
 
     const codec = COMMAND_CODEC_BY_KEY[commandKey(entry.category, entry.variant)];
-    const position = codec.hasPosition
-        ? parsePositionFromParams(numberOrZero(item.frame), params, warnings, context)
-        : null;
-
-    return {
-        command: parseKnownMissionCommand(entry, codec, params, position),
-        current: index === 0,
-        autocontinue: item.autoContinue ?? true,
-    };
+    const frame = numberOrZero(item.frame);
+    if (typeof missionFrameFromNumeric(frame) === "object") return rawItem(`uses unsupported MAV_FRAME ${frame}`);
+    const position = codec.hasPosition ? parsePositionFromParams(frame, params) : null;
+    if (codec.hasPosition && position === null) return rawItem(`cannot represent a position in MAV_FRAME ${frame}`);
+    const command = parseKnownMissionCommand(entry, codec, params, position);
+    if (command === null) return rawItem("contains an unsupported enum value");
+    return { command, current: index === 0, autocontinue: item.autoContinue ?? true };
 }
 
 function parseKnownMissionCommand(
@@ -221,7 +211,7 @@ function parseKnownMissionCommand(
     codec: CommandCodec,
     params: QgcParams,
     position: GeoPoint3d | null,
-): MissionCommand {
+): MissionCommand | null {
     if (codec.kind === "custom") {
         return codec.parse(params, position);
     }
@@ -230,6 +220,7 @@ function parseKnownMissionCommand(
     for (const field of codec.fields) {
         const rawValue = getParam(params, field.slot);
         const value = field.decode ? field.decode(rawValue, params) : rawValue;
+        if (value === undefined) return null;
         command = withCommandField(command, field.field, value);
     }
     return command;
@@ -238,9 +229,7 @@ function parseKnownMissionCommand(
 function parsePositionFromParams(
     frame: number,
     params: QgcParams,
-    warnings: string[],
-    context: string,
-): GeoPoint3d {
+): GeoPoint3d | null {
     const latitude = params[4];
     const longitude = params[5];
     const altitude = params[6];
@@ -252,12 +241,8 @@ function parsePositionFromParams(
             return { RelHome: { latitude_deg: latitude, longitude_deg: longitude, relative_alt_m: altitude } };
         case MAV_FRAME_GLOBAL_TERRAIN_ALT:
             return { Terrain: { latitude_deg: latitude, longitude_deg: longitude, altitude_terrain_m: altitude } };
-        case MAV_FRAME_MISSION:
-            warnings.push(`${context} used MAV_FRAME_MISSION despite carrying a position; falling back to RelHome coordinates for import.`);
-            return defaultGeoPoint3d(latitude, longitude, altitude);
         default:
-            warnings.push(`${context} used unsupported MAV_FRAME ${frame}; falling back to RelHome coordinates for import.`);
-            return defaultGeoPoint3d(latitude, longitude, altitude);
+            return null;
     }
 }
 
