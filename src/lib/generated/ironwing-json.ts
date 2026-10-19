@@ -13,6 +13,8 @@ export type JsonWire<T> = T extends bigint
         : T;
 
 export type DomainValue<T> = JsonWire<Ironwing.DomainValue<T>>;
+export type LogTelemetrySnapshot = JsonWire<Ironwing.LogTelemetrySnapshot>;
+export type PlaybackFrame = JsonWire<Ironwing.PlaybackFrame>;
 export type SessionEnvelope = JsonWire<Ironwing.SessionEnvelope>;
 export type DemoVehiclePreset = JsonWire<Ironwing.DemoVehiclePreset>;
 export type ConnectTransport = JsonWire<Ironwing.ConnectTransport>;

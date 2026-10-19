@@ -706,6 +706,41 @@ export type LogOperationProgress = {
 	message: string | null,
 };
 
+export type LogTelemetrySnapshot = {
+	timestamp_usec: bigint,
+	latitude_deg: number | null,
+	longitude_deg: number | null,
+	altitude_m: number | null,
+	heading_deg: number | null,
+	speed_mps: number | null,
+	airspeed_mps: number | null,
+	climb_rate_mps: number | null,
+	roll_deg: number | null,
+	pitch_deg: number | null,
+	yaw_deg: number | null,
+	battery_pct: number | null,
+	battery_voltage_v: number | null,
+	battery_current_a: number | null,
+	battery_voltage_cells: (number | null)[] | null,
+	battery_time_remaining_s: number | null,
+	terrain_height_m: number | null,
+	height_above_terrain_m: number | null,
+	energy_consumed_wh: number | null,
+	gps_fix_type: GpsFixType | null,
+	gps_satellites: bigint | null,
+	gps_hdop: number | null,
+	throttle_pct: number | null,
+	wp_dist_m: number | null,
+	nav_bearing_deg: number | null,
+	target_bearing_deg: number | null,
+	xtrack_error_m: number | null,
+	armed: boolean | null,
+	custom_mode: number | null,
+	rc_channels: (number | null)[] | null,
+	rc_rssi: number | null,
+	servo_outputs: (number | null)[] | null,
+};
+
 /**  Typed mission command API item used by plan serialization and validation. */
 export type LoiterDirection = "clockwise" | "counter_clockwise";
 
@@ -1033,6 +1068,14 @@ export type ParamWriteResult = {
 	requested_value: number | null,
 	confirmed_value: number | null,
 	success: boolean,
+};
+
+export type PlaybackFrame = {
+	session: DomainValue<SessionSnapshot>,
+	telemetry: DomainValue<TelemetryState>,
+	support: DomainValue<SupportState>,
+	status_text: DomainValue<StatusTextState>,
+	playback: PlaybackSnapshot,
 };
 
 export type PlaybackSeekResult = {
@@ -1532,6 +1575,8 @@ export const OPERATION_IDS = [
 
 export const DEFAULT_TELEMETRY_RATE_HZ = 5;
 
+export const PLAYBACK_SPEEDS = [0.5,1.0,2.0,4.0,8.0,16.0] as const;
+export const DEFAULT_PLAYBACK_SPEED = 1;
 export const MESSAGE_RATE_CATALOG = [
   {
     "id": 33,

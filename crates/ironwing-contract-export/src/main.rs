@@ -234,6 +234,8 @@ fn generated_ironwing() -> Result<String, Box<dyn Error>> {
         .register_mut::<ipc::DisconnectRequest>()
         .register_mut::<live_runtime::Capability>()
         .register_mut::<live_runtime::RuntimeCapabilities>()
+        .register_mut::<ironwing_core::log_engine::LogTelemetrySnapshot>()
+        .register_mut::<ironwing_core::log_playback::PlaybackFrame>()
         .register_mut::<telemetry::MessageRateInfo>()
         .register_mut::<telemetry::MessageIntervalRequest>()
         .register_mut::<ipc::SourceKind>()
@@ -380,6 +382,14 @@ fn telemetry_constants_ts() -> Result<String, Box<dyn Error>> {
     body.push_str(&format!(
         "export const DEFAULT_TELEMETRY_RATE_HZ = {};\n\n",
         telemetry::DEFAULT_TELEMETRY_RATE_HZ
+    ));
+    body.push_str(&format!(
+        "export const PLAYBACK_SPEEDS = {} as const;\n",
+        serde_json::to_string(&ironwing_core::log_playback::AVAILABLE_PLAYBACK_SPEEDS)?
+    ));
+    body.push_str(&format!(
+        "export const DEFAULT_PLAYBACK_SPEED = {};\n",
+        ironwing_core::log_playback::DEFAULT_PLAYBACK_SPEED
     ));
     body.push_str("export const MESSAGE_RATE_CATALOG = ");
     body.push_str(&serde_json::to_string_pretty(

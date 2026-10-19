@@ -7,7 +7,8 @@ use tokio::task::AbortHandle;
 use tokio_util::sync::CancellationToken;
 
 pub(crate) use ironwing_core::log_engine::{
-    FlightPathPoint, FlightSummary, LogDataPoint, LogStore, LogSummary, LogType, TelemetrySnapshot,
+    FlightPathPoint, FlightSummary, LogDataPoint, LogStore, LogSummary, LogTelemetrySnapshot,
+    LogType,
 };
 pub(crate) use ironwing_core::log_playback::PlaybackFrame;
 use ironwing_core::{
@@ -1183,7 +1184,7 @@ pub(crate) async fn log_get_flight_path(
 pub(crate) async fn log_get_telemetry_track(
     state: tauri::State<'_, AppState>,
     max_points: Option<usize>,
-) -> Result<Vec<TelemetrySnapshot>, String> {
+) -> Result<Vec<LogTelemetrySnapshot>, String> {
     let store = helpers::with_log_store(&state).await?;
     Ok(log_engine::telemetry_track(&store, max_points))
 }

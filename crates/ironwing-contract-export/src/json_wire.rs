@@ -7,6 +7,14 @@ struct AliasSpec {
 
 const IRONWING_ALIASES: &[AliasSpec] = &[
     AliasSpec {
+        name: "LogTelemetrySnapshot",
+        source: "Ironwing.LogTelemetrySnapshot",
+    },
+    AliasSpec {
+        name: "PlaybackFrame",
+        source: "Ironwing.PlaybackFrame",
+    },
+    AliasSpec {
         name: "SessionEnvelope",
         source: "Ironwing.SessionEnvelope",
     },

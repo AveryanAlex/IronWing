@@ -110,8 +110,9 @@ pub struct FlightPathPoint {
     pub heading: f64,
 }
 
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
 #[derive(Debug, Clone, Default, Serialize)]
-pub struct TelemetrySnapshot {
+pub struct LogTelemetrySnapshot {
     pub timestamp_usec: u64,
     pub latitude_deg: Option<f64>,
     pub longitude_deg: Option<f64>,
@@ -126,9 +127,13 @@ pub struct TelemetrySnapshot {
     pub battery_pct: Option<f64>,
     pub battery_voltage_v: Option<f64>,
     pub battery_current_a: Option<f64>,
+    pub battery_voltage_cells: Option<Vec<f64>>,
+    pub battery_time_remaining_s: Option<f64>,
+    pub terrain_height_m: Option<f64>,
+    pub height_above_terrain_m: Option<f64>,
     pub energy_consumed_wh: Option<f64>,
     pub gps_fix_type: Option<mavkit::GpsFixType>,
-    pub gps_satellites: Option<f64>,
+    pub gps_satellites: Option<u64>,
     pub gps_hdop: Option<f64>,
     pub throttle_pct: Option<f64>,
     pub wp_dist_m: Option<f64>,
@@ -137,9 +142,9 @@ pub struct TelemetrySnapshot {
     pub xtrack_error_m: Option<f64>,
     pub armed: Option<bool>,
     pub custom_mode: Option<u32>,
-    pub rc_channels: Option<Vec<f64>>,
+    pub rc_channels: Option<Vec<Option<f64>>>,
     pub rc_rssi: Option<f64>,
-    pub servo_outputs: Option<Vec<f64>>,
+    pub servo_outputs: Option<Vec<Option<f64>>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -227,11 +232,7 @@ impl LogStore {
         let telemetry = telemetry_at(self, cursor_usec);
         let vehicle_state = vehicle_state_at(&telemetry);
 
-        playback_frame_from_parts(
-            vehicle_state,
-            &serde_json::to_value(telemetry).unwrap_or(serde_json::Value::Null),
-            cursor_usec,
-        )
+        playback_frame_from_parts(vehicle_state, (&telemetry).into(), cursor_usec)
     }
 
     fn resolve_cursor_usec(&self, cursor_usec: Option<u64>) -> Option<u64> {
@@ -244,7 +245,7 @@ impl LogStore {
     }
 }
 
-fn vehicle_state_at(telemetry: &TelemetrySnapshot) -> Option<VehicleState> {
+fn vehicle_state_at(telemetry: &LogTelemetrySnapshot) -> Option<VehicleState> {
     let armed = telemetry.armed?;
     let custom_mode = telemetry.custom_mode?;
 
@@ -447,8 +448,8 @@ pub fn flight_path_points(
     ))
 }
 
-pub fn telemetry_track(store: &LogStore, max_points: Option<usize>) -> Vec<TelemetrySnapshot> {
-    let mut running = TelemetrySnapshot::default();
+pub fn telemetry_track(store: &LogStore, max_points: Option<usize>) -> Vec<LogTelemetrySnapshot> {
+    let mut running = LogTelemetrySnapshot::default();
     let mut track = Vec::new();
     let mut last_emit = 0_u64;
     for entry in &store.entries {
@@ -463,11 +464,11 @@ pub fn telemetry_track(store: &LogStore, max_points: Option<usize>) -> Vec<Telem
     max_points.map_or(track.clone(), |max| downsample_if_needed(track, max))
 }
 
-pub fn telemetry_at(store: &LogStore, cursor_usec: Option<u64>) -> TelemetrySnapshot {
+pub fn telemetry_at(store: &LogStore, cursor_usec: Option<u64>) -> LogTelemetrySnapshot {
     let Some(cursor_usec) = cursor_usec else {
-        return TelemetrySnapshot::default();
+        return LogTelemetrySnapshot::default();
     };
-    let mut telemetry = TelemetrySnapshot::default();
+    let mut telemetry = LogTelemetrySnapshot::default();
     for entry in store
         .entries
         .iter()
@@ -657,6 +658,12 @@ fn parse_tlog_bytes(path: &str, bytes: &[u8]) -> Result<ParsedLog, String> {
     })
 }
 
+fn optional_field(fields: &mut HashMap<String, f64>, name: &str, value: Option<f64>) {
+    if let Some(value) = value {
+        fields.insert(name.into(), value);
+    }
+}
+
 fn extract_fields(msg: &MavMessage) -> (String, HashMap<String, f64>) {
     let name = msg.message_name().to_string();
     let mut fields = HashMap::new();
@@ -685,22 +692,36 @@ fn extract_fields(msg: &MavMessage) -> (String, HashMap<String, f64>) {
             fields.insert("vx".into(), d.vx as f64 / 100.0);
             fields.insert("vy".into(), d.vy as f64 / 100.0);
             fields.insert("vz".into(), d.vz as f64 / 100.0);
-            fields.insert("hdg".into(), d.hdg as f64 / 100.0);
+            optional_field(
+                &mut fields,
+                "hdg",
+                (d.hdg != u16::MAX).then_some(f64::from(d.hdg) / 100.0),
+            );
         }
         MavMessage::SYS_STATUS(d) => {
-            fields.insert("voltage_battery".into(), d.voltage_battery as f64 / 1000.0);
-            fields.insert("current_battery".into(), d.current_battery as f64 / 100.0);
-            fields.insert("battery_remaining".into(), d.battery_remaining as f64);
-            fields.insert("load".into(), d.load as f64 / 10.0);
+            let power = mavkit::telemetry::decode::system_power(d);
+            optional_field(&mut fields, "voltage_battery", power.voltage_v);
+            optional_field(&mut fields, "current_battery", power.current_a);
+            optional_field(&mut fields, "battery_remaining", power.remaining_pct);
+            fields.insert("load".into(), f64::from(d.load) / 10.0);
         }
         MavMessage::GPS_RAW_INT(d) => {
-            fields.insert("lat".into(), d.lat as f64 / 1e7);
-            fields.insert("lon".into(), d.lon as f64 / 1e7);
-            fields.insert("alt".into(), d.alt as f64 / 1000.0);
+            let quality = mavkit::telemetry::decode::gps_quality(d);
+            fields.insert("lat".into(), f64::from(d.lat) / 1e7);
+            fields.insert("lon".into(), f64::from(d.lon) / 1e7);
+            fields.insert("alt".into(), f64::from(d.alt) / 1000.0);
             fields.insert("fix_type".into(), d.fix_type as u8 as f64);
-            fields.insert("satellites_visible".into(), d.satellites_visible as f64);
-            fields.insert("eph".into(), d.eph as f64 / 100.0);
-            fields.insert("epv".into(), d.epv as f64 / 100.0);
+            optional_field(
+                &mut fields,
+                "satellites_visible",
+                quality.satellites.map(f64::from),
+            );
+            optional_field(&mut fields, "eph", quality.hdop);
+            optional_field(
+                &mut fields,
+                "epv",
+                (d.epv != u16::MAX).then_some(f64::from(d.epv) / 100.0),
+            );
         }
         MavMessage::HEARTBEAT(d) => {
             fields.insert("custom_mode".into(), d.custom_mode as f64);
@@ -708,46 +729,57 @@ fn extract_fields(msg: &MavMessage) -> (String, HashMap<String, f64>) {
             fields.insert("system_status".into(), d.system_status as u8 as f64);
         }
         MavMessage::RC_CHANNELS(d) => {
-            for (i, value) in [
-                d.chan1_raw,
-                d.chan2_raw,
-                d.chan3_raw,
-                d.chan4_raw,
-                d.chan5_raw,
-                d.chan6_raw,
-                d.chan7_raw,
-                d.chan8_raw,
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                fields.insert(format!("chan{}_raw", i + 1), value as f64);
+            let channels = mavkit::telemetry::decode::rc_channels(d);
+            fields.insert("chancount".into(), channels.len() as f64);
+            for (index, value) in channels.into_iter().enumerate() {
+                optional_field(
+                    &mut fields,
+                    &format!("chan{}_raw", index + 1),
+                    value.map(f64::from),
+                );
             }
-            fields.insert("chancount".into(), d.chancount as f64);
-            fields.insert("rssi".into(), d.rssi as f64);
+            optional_field(
+                &mut fields,
+                "rssi",
+                (d.rssi != u8::MAX).then_some(f64::from(d.rssi)),
+            );
         }
         MavMessage::SERVO_OUTPUT_RAW(d) => {
-            for (i, value) in [
-                d.servo1_raw,
-                d.servo2_raw,
-                d.servo3_raw,
-                d.servo4_raw,
-                d.servo5_raw,
-                d.servo6_raw,
-                d.servo7_raw,
-                d.servo8_raw,
-            ]
-            .into_iter()
-            .enumerate()
+            for (index, value) in mavkit::telemetry::decode::servo_outputs(d)
+                .into_iter()
+                .enumerate()
             {
-                fields.insert(format!("servo{}_raw", i + 1), value as f64);
+                fields.insert(format!("servo{}_raw", index + 1), f64::from(value));
             }
         }
         MavMessage::BATTERY_STATUS(d) => {
-            fields.insert("current_battery".into(), d.current_battery as f64 / 100.0);
-            fields.insert("current_consumed".into(), d.current_consumed as f64);
-            fields.insert("energy_consumed".into(), d.energy_consumed as f64);
-            fields.insert("battery_remaining".into(), d.battery_remaining as f64);
+            let battery = mavkit::telemetry::decode::battery_status(d);
+            fields.insert("id".into(), f64::from(d.id));
+            optional_field(&mut fields, "current_battery", battery.current_a);
+            optional_field(
+                &mut fields,
+                "current_consumed",
+                (d.current_consumed >= 0).then_some(f64::from(d.current_consumed)),
+            );
+            optional_field(&mut fields, "energy_consumed", battery.energy_consumed_wh);
+            optional_field(&mut fields, "battery_remaining", battery.remaining_pct);
+            optional_field(
+                &mut fields,
+                "time_remaining",
+                battery.time_remaining_s.map(f64::from),
+            );
+            for (index, value) in battery
+                .cell_voltages_v
+                .unwrap_or_default()
+                .into_iter()
+                .enumerate()
+            {
+                fields.insert(format!("cell{}_v", index + 1), value);
+            }
+        }
+        MavMessage::TERRAIN_REPORT(d) => {
+            fields.insert("terrain_height".into(), f64::from(d.terrain_height));
+            fields.insert("current_height".into(), f64::from(d.current_height));
         }
         MavMessage::NAV_CONTROLLER_OUTPUT(d) => {
             fields.insert("nav_roll".into(), d.nav_roll as f64);
@@ -1056,7 +1088,7 @@ fn downsample_if_needed<T: Clone>(items: Vec<T>, max_points: usize) -> Vec<T> {
         .collect()
 }
 
-fn apply_entry(log_type: LogType, snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
+fn apply_entry(log_type: LogType, snap: &mut LogTelemetrySnapshot, entry: &StoredEntry) {
     match log_type {
         LogType::Tlog => apply_tlog_entry(snap, entry),
         LogType::Bin => apply_bin_entry(snap, entry),
@@ -1076,7 +1108,7 @@ fn gps_fix_type(val: f64) -> Option<mavkit::GpsFixType> {
     })
 }
 
-fn apply_tlog_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
+fn apply_tlog_entry(snap: &mut LogTelemetrySnapshot, entry: &StoredEntry) {
     let f = &entry.fields;
     match entry.msg_name.as_str() {
         "ATTITUDE" => {
@@ -1095,8 +1127,8 @@ fn apply_tlog_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
         "GLOBAL_POSITION_INT" => {
             snap.latitude_deg = f.get("lat").copied();
             snap.longitude_deg = f.get("lon").copied();
-            snap.altitude_m = snap.altitude_m.or_else(|| f.get("relative_alt").copied());
-            snap.heading_deg = snap.heading_deg.or_else(|| f.get("hdg").copied());
+            snap.altitude_m = f.get("relative_alt").copied();
+            snap.heading_deg = f.get("hdg").copied().or(snap.heading_deg);
         }
         "SYS_STATUS" => {
             snap.battery_voltage_v = f.get("voltage_battery").copied();
@@ -1105,7 +1137,7 @@ fn apply_tlog_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
         }
         "GPS_RAW_INT" => {
             snap.gps_fix_type = f.get("fix_type").and_then(|v| gps_fix_type(*v));
-            snap.gps_satellites = f.get("satellites_visible").copied();
+            snap.gps_satellites = f.get("satellites_visible").map(|v| *v as u64);
             snap.gps_hdop = f.get("eph").copied();
         }
         "HEARTBEAT" => {
@@ -1119,8 +1151,9 @@ fn apply_tlog_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
             snap.xtrack_error_m = f.get("xtrack_error").copied();
         }
         "RC_CHANNELS" => {
-            let chans: Vec<f64> = (1..=8)
-                .filter_map(|i| f.get(&format!("chan{i}_raw")).copied())
+            let count = f.get("chancount").copied().unwrap_or(18.0).clamp(0.0, 18.0) as usize;
+            let chans: Vec<Option<f64>> = (1..=count)
+                .map(|i| f.get(&format!("chan{i}_raw")).copied())
                 .collect();
             if !chans.is_empty() {
                 snap.rc_channels = Some(chans);
@@ -1128,19 +1161,32 @@ fn apply_tlog_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
             snap.rc_rssi = f.get("rssi").copied();
         }
         "SERVO_OUTPUT_RAW" => {
-            let servos: Vec<f64> = (1..=8)
-                .filter_map(|i| f.get(&format!("servo{i}_raw")).copied())
+            let servos: Vec<Option<f64>> = (1..=16)
+                .map(|i| f.get(&format!("servo{i}_raw")).copied())
                 .collect();
             if !servos.is_empty() {
                 snap.servo_outputs = Some(servos);
             }
         }
-        "BATTERY_STATUS" => snap.energy_consumed_wh = f.get("energy_consumed").copied(),
+        "BATTERY_STATUS" if f.get("id").copied().unwrap_or(0.0) == 0.0 => {
+            snap.energy_consumed_wh = f.get("energy_consumed").copied();
+            snap.battery_current_a = f.get("current_battery").copied();
+            snap.battery_pct = f.get("battery_remaining").copied();
+            snap.battery_time_remaining_s = f.get("time_remaining").copied();
+            let cells: Vec<_> = (1..=10)
+                .filter_map(|i| f.get(&format!("cell{i}_v")).copied())
+                .collect();
+            snap.battery_voltage_cells = (!cells.is_empty()).then_some(cells);
+        }
+        "TERRAIN_REPORT" => {
+            snap.terrain_height_m = f.get("terrain_height").copied();
+            snap.height_above_terrain_m = f.get("current_height").copied();
+        }
         _ => {}
     }
 }
 
-fn apply_bin_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
+fn apply_bin_entry(snap: &mut LogTelemetrySnapshot, entry: &StoredEntry) {
     let f = &entry.fields;
     match entry.msg_name.as_str() {
         "ATT" => {
@@ -1158,7 +1204,7 @@ fn apply_bin_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
             snap.speed_mps = f.get("Spd").copied();
             snap.heading_deg = f.get("GCrs").copied();
             snap.gps_fix_type = f.get("Status").and_then(|v| gps_fix_type(*v));
-            snap.gps_satellites = f.get("NSats").copied();
+            snap.gps_satellites = f.get("NSats").map(|v| *v as u64);
             snap.gps_hdop = f.get("HDop").copied();
         }
         "BAT" => {
@@ -1168,16 +1214,24 @@ fn apply_bin_entry(snap: &mut TelemetrySnapshot, entry: &StoredEntry) {
         }
         "MODE" => snap.custom_mode = f.get("ModeNum").map(|v| *v as u32),
         "RCIN" => {
-            let chans: Vec<f64> = (1..=8)
-                .filter_map(|i| f.get(&format!("C{i}")).copied())
+            let count = (1..=32)
+                .rev()
+                .find(|i| f.contains_key(&format!("C{i}")))
+                .unwrap_or(0);
+            let chans: Vec<Option<f64>> = (1..=count)
+                .map(|i| f.get(&format!("C{i}")).copied())
                 .collect();
             if !chans.is_empty() {
                 snap.rc_channels = Some(chans);
             }
         }
         "RCOU" => {
-            let servos: Vec<f64> = (1..=8)
-                .filter_map(|i| f.get(&format!("C{i}")).copied())
+            let count = (1..=32)
+                .rev()
+                .find(|i| f.contains_key(&format!("C{i}")))
+                .unwrap_or(0);
+            let servos: Vec<Option<f64>> = (1..=count)
+                .map(|i| f.get(&format!("C{i}")).copied())
                 .collect();
             if !servos.is_empty() {
                 snap.servo_outputs = Some(servos);
@@ -1411,6 +1465,64 @@ mod tests {
             (actual - expected).abs() < 1e-5,
             "expected {expected}, got {actual}"
         );
+    }
+
+    #[test]
+    fn replay_uses_sdk_units_and_preserves_sparse_high_channels() {
+        let messages = [
+            MavMessage::BATTERY_STATUS(mavkit::dialect::BATTERY_STATUS_DATA {
+                energy_consumed: 3600,
+                ..Default::default()
+            }),
+            MavMessage::GPS_RAW_INT(mavkit::dialect::GPS_RAW_INT_DATA {
+                satellites_visible: 12,
+                ..Default::default()
+            }),
+            MavMessage::RC_CHANNELS(mavkit::dialect::RC_CHANNELS_DATA {
+                chancount: 18,
+                chan1_raw: 1500,
+                chan2_raw: u16::MAX,
+                chan18_raw: 1800,
+                ..Default::default()
+            }),
+            MavMessage::SERVO_OUTPUT_RAW(mavkit::dialect::SERVO_OUTPUT_RAW_DATA {
+                servo16_raw: 1600,
+                ..Default::default()
+            }),
+        ];
+        let entries = messages
+            .iter()
+            .enumerate()
+            .map(|(i, message)| {
+                let (name, fields) = extract_fields(message);
+                numeric_entry(i as u64, 100 + i as u64, &name, fields)
+            })
+            .collect();
+        let store = store_from_entries("replay.tlog", LogType::Tlog, entries);
+        let snapshot = telemetry_at(&store, Some(200));
+        assert_eq!(snapshot.energy_consumed_wh, Some(100.0));
+        let state: crate::ipc::telemetry::TelemetryState = (&snapshot).into();
+        assert_eq!(state.gps.satellites, Some(12));
+        let channels = state.radio.rc_channels.unwrap();
+        assert_eq!(channels.len(), 18);
+        assert_eq!(channels[1], None);
+        assert_eq!(channels[17], Some(1800.0));
+        assert_eq!(state.radio.servo_outputs.unwrap()[15], Some(1600.0));
+    }
+
+    #[test]
+    fn binlog_sparse_channels_keep_their_indices() {
+        let entry = numeric_entry(
+            0,
+            100,
+            "RCIN",
+            HashMap::from([("C1".into(), 1500.0), ("C18".into(), 1800.0)]),
+        );
+        let store = store_from_entries("radio.bin", LogType::Bin, vec![entry]);
+        let channels = telemetry_at(&store, Some(100)).rc_channels.unwrap();
+        assert_eq!(channels.len(), 18);
+        assert_eq!(channels[1], None);
+        assert_eq!(channels[17], Some(1800.0));
     }
 
     #[test]
@@ -1772,5 +1884,56 @@ mod tests {
         assert!(vehicle_state.armed);
         assert_eq!(vehicle_state.custom_mode, 4);
         assert_eq!(frame.playback.cursor_usec, Some(100));
+    }
+}
+
+impl From<&LogTelemetrySnapshot> for crate::ipc::telemetry::TelemetryState {
+    fn from(value: &LogTelemetrySnapshot) -> Self {
+        use crate::ipc::telemetry::*;
+        TelemetryState {
+            flight: TelemetryFlight {
+                altitude_m: value.altitude_m,
+                speed_mps: value.speed_mps,
+                climb_rate_mps: value.climb_rate_mps,
+                throttle_pct: value.throttle_pct,
+                airspeed_mps: value.airspeed_mps,
+            },
+            navigation: TelemetryNavigation {
+                latitude_deg: value.latitude_deg,
+                longitude_deg: value.longitude_deg,
+                heading_deg: value.heading_deg,
+                wp_dist_m: value.wp_dist_m,
+                nav_bearing_deg: value.nav_bearing_deg,
+                target_bearing_deg: value.target_bearing_deg,
+                xtrack_error_m: value.xtrack_error_m,
+            },
+            attitude: TelemetryAttitude {
+                roll_deg: value.roll_deg,
+                pitch_deg: value.pitch_deg,
+                yaw_deg: value.yaw_deg,
+            },
+            power: TelemetryPower {
+                battery_pct: value.battery_pct,
+                battery_voltage_v: value.battery_voltage_v,
+                battery_current_a: value.battery_current_a,
+                battery_voltage_cells: value.battery_voltage_cells.clone(),
+                energy_consumed_wh: value.energy_consumed_wh,
+                battery_time_remaining_s: value.battery_time_remaining_s,
+            },
+            gps: TelemetryGps {
+                fix_type: value.gps_fix_type,
+                satellites: value.gps_satellites,
+                hdop: value.gps_hdop,
+            },
+            terrain: TelemetryTerrain {
+                terrain_height_m: value.terrain_height_m,
+                height_above_terrain_m: value.height_above_terrain_m,
+            },
+            radio: TelemetryRadio {
+                rc_channels: value.rc_channels.clone(),
+                rc_rssi: value.rc_rssi,
+                servo_outputs: value.servo_outputs.clone(),
+            },
+        }
     }
 }

@@ -1,10 +1,8 @@
-use serde_json::Value;
-
 use crate::ipc::playback::PlaybackState;
 use crate::ipc::{
     DomainProvenance, DomainValue, OperationId, PlaybackSnapshot, ReplayStatus, SessionConnection,
     SessionSnapshot, StatusTextSnapshot, SupportSnapshot, TelemetrySnapshot, VehicleState,
-    status_text_snapshot_from_entries, telemetry_snapshot_from_value,
+    status_text_snapshot_from_entries,
 };
 
 pub const DEFAULT_PLAYBACK_SPEED: f32 = 1.0;
@@ -18,7 +16,8 @@ pub struct PlaybackLogBounds {
     pub duration_secs: f64,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "typescript", derive(specta::Type))]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct PlaybackFrame {
     pub session: DomainValue<SessionSnapshot>,
     pub telemetry: TelemetrySnapshot,
@@ -100,7 +99,7 @@ pub fn resolve_playback_cursor_usec(
 
 pub fn playback_frame_from_parts(
     vehicle_state: Option<VehicleState>,
-    telemetry_value: &Value,
+    telemetry_value: crate::ipc::telemetry::TelemetryState,
     cursor_usec: Option<u64>,
 ) -> PlaybackFrame {
     PlaybackFrame {
@@ -113,7 +112,7 @@ pub fn playback_frame_from_parts(
             },
             DomainProvenance::Playback,
         ),
-        telemetry: telemetry_snapshot_from_value(telemetry_value, DomainProvenance::Playback),
+        telemetry: DomainValue::present(telemetry_value, DomainProvenance::Playback),
         support: DomainValue::missing(DomainProvenance::Playback),
         status_text: status_text_snapshot_from_entries(Vec::new(), DomainProvenance::Playback),
         playback: PlaybackSnapshot { cursor_usec },
@@ -204,7 +203,11 @@ mod tests {
             "gps_satellites": 12
         });
 
-        let frame = playback_frame_from_parts(None, &telemetry, Some(123));
+        let frame = playback_frame_from_parts(
+            None,
+            crate::ipc::telemetry::telemetry_state_from_value(&telemetry),
+            Some(123),
+        );
 
         assert_eq!(frame.playback.cursor_usec, Some(123));
         assert!(frame.session.available);
