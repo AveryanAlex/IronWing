@@ -111,9 +111,17 @@ function renderSetupWorkspace(options: {
   };
 }
 
-afterEach(() => {
-  cleanup();
-  vi.clearAllMocks();
+afterEach(async () => {
+  // Bits UI defers releasing the body scroll lock during unmount.
+  // Finish that work while this test still owns its jsdom document.
+  vi.useFakeTimers({ shouldClearNativeTimers: true });
+  try {
+    cleanup();
+    await vi.runOnlyPendingTimersAsync();
+  } finally {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  }
 });
 
 describe("SetupWorkspace", () => {
