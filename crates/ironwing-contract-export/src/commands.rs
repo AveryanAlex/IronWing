@@ -84,6 +84,8 @@ const WASM_FACADE_COMMANDS: &[WasmFacadeSpec] = &[
     wasm_facade_command("mission_set_current", &["seq"]),
     wasm_facade_command("mission_upload", &["plan"]),
     wasm_facade_command("mission_validate", &["plan"]),
+    wasm_facade_command("mission_commands_decode", &["commands"]),
+    wasm_facade_command("mission_commands_encode", &["commands"]),
     wasm_facade_command("motor_test", &["motorSequence", "throttlePct", "durationS"]),
     wasm_facade_command("param_cancel", &[]),
     wasm_facade_command("param_apply_staged", &["names", "expectedRevision"]),
@@ -169,6 +171,8 @@ pub const COMMAND_NAMES: &[&str] = &[
     "mission_download",
     "mission_set_current",
     "mission_upload",
+    "mission_commands_decode",
+    "mission_commands_encode",
     "mission_validate",
     "motor_test",
     "open_session_snapshot",
@@ -489,6 +493,18 @@ pub const COMMAND_SPECS: &[CommandSpec] = &[
         "mission_upload",
         "{ plan: WireMissionPlan }",
         "void",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "mission_commands_decode",
+        "{ commands: RawMissionCommand[] }",
+        "SdkMissionCommand[]",
+        ALL_PLATFORMS,
+    ),
+    command(
+        "mission_commands_encode",
+        "{ commands: SdkMissionCommand[] }",
+        "RawMissionCommand[]",
         ALL_PLATFORMS,
     ),
     command(
@@ -831,6 +847,7 @@ import type {
   RawMessageQuery,
 } from "../../logs";
 import type { MissionDownload, MissionIssue } from "../../mission";
+import type { MissionCommand as SdkMissionCommand, RawMissionCommand } from "./mavkit-json";
 import type { FencePlan, RallyPlan, WireMissionPlan } from "../mavkit-types";
 import type { Param, ParamApplyOutcome, ParamStageChange, ParamStagingState, ParamStore, ParamWriteResult } from "../../params";
 import type { FlightPathPoint, PlaybackSeekResult, PlaybackStateSnapshot, TelemetrySnapshot } from "../../playback";

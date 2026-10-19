@@ -1,3 +1,4 @@
+import { wasmMissionCommandsDecode, wasmMissionCommandsEncode } from "../web/wasm";
 import {
   applyMockGuidedState,
   liveGuidedStreamEvent,
@@ -985,6 +986,8 @@ const mockMissionCommandHandlers = definePlatformCommandHandlers({
       },
     });
   },
+  mission_commands_decode: ({ commands }) => wasmMissionCommandsDecode(commands),
+  mission_commands_encode: ({ commands }) => wasmMissionCommandsEncode(commands),
   mission_validate: (args) => {
     requireConnectedVehicle();
     return missionValidateResult(args as CommandArgs);

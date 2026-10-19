@@ -40,6 +40,20 @@ jobs:
       - name: Check Svelte components
         run: pnpm run check:frontend:svelte
 
+      # File-format contract tests execute the real shared Rust codec in Node.
+      - name: Setup Rust for contract tests
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache contract-test Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: frontend-wasm
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --locked
+
       - name: Run frontend tests
         run: pnpm run test:frontend
 

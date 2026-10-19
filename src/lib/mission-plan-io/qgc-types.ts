@@ -59,7 +59,7 @@ export type QgcSimpleItem = {
     command: number;
     doJumpId?: number;
     frame?: number;
-    params?: number[];
+    params?: (number | null)[];
 };
 
 export type QgcComplexItem = {

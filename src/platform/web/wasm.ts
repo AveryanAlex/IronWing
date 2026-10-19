@@ -411,3 +411,10 @@ export async function wasmRequestPrearmChecks(): Promise<void> {
   const runtime = await ensureWasmRuntime();
   return wasmFacade.wasmRequestPrearmChecks(runtime);
 }
+
+export async function wasmMissionCommandsDecode(commands: import("../../lib/generated/mavkit-json").RawMissionCommand[]): Promise<import("../../lib/generated/mavkit-json").MissionCommand[]> {
+  return wasmFacade.wasmMissionCommandsDecode(await ensureWasmRuntime(), { commands });
+}
+export async function wasmMissionCommandsEncode(commands: import("../../lib/generated/mavkit-json").MissionCommand[]): Promise<import("../../lib/generated/mavkit-json").RawMissionCommand[]> {
+  return wasmFacade.wasmMissionCommandsEncode(await ensureWasmRuntime(), { commands });
+}

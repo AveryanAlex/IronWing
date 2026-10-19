@@ -33,6 +33,7 @@ import type {
   RawMessageQuery,
 } from "../../logs";
 import type { MissionDownload, MissionIssue } from "../../mission";
+import type { MissionCommand as SdkMissionCommand, RawMissionCommand } from "./mavkit-json";
 import type { FencePlan, RallyPlan, WireMissionPlan } from "../mavkit-types";
 import type { Param, ParamApplyOutcome, ParamStageChange, ParamStagingState, ParamStore, ParamWriteResult } from "../../params";
 import type { FlightPathPoint, PlaybackSeekResult, PlaybackStateSnapshot, TelemetrySnapshot } from "../../playback";
@@ -102,6 +103,8 @@ export const INVOKE_COMMAND_NAMES = [
   "mission_download",
   "mission_set_current",
   "mission_upload",
+  "mission_commands_decode",
+  "mission_commands_encode",
   "mission_validate",
   "motor_test",
   "open_session_snapshot",
@@ -226,6 +229,8 @@ export type InvokeCommandMap = {
   mission_download: CommandSpec<NoArgs, MissionDownload>;
   mission_set_current: CommandSpec<{ seq: number }, void>;
   mission_upload: CommandSpec<{ plan: WireMissionPlan }, void>;
+  mission_commands_decode: CommandSpec<{ commands: RawMissionCommand[] }, SdkMissionCommand[]>;
+  mission_commands_encode: CommandSpec<{ commands: SdkMissionCommand[] }, RawMissionCommand[]>;
   mission_validate: CommandSpec<{ plan: WireMissionPlan }, MissionIssue[]>;
   motor_test: CommandSpec<{ motorSequence: number; throttlePct: number; durationS: number }, void>;
   open_session_snapshot: CommandSpec<{ sourceKind: SourceKind }, OpenSessionSnapshot>;
@@ -340,6 +345,8 @@ export const COMMAND_PLATFORM_SUPPORT = {
   mission_download: ["native","web","remote","mock"] as const,
   mission_set_current: ["native","web","remote","mock"] as const,
   mission_upload: ["native","web","remote","mock"] as const,
+  mission_commands_decode: ["native","web","remote","mock"] as const,
+  mission_commands_encode: ["native","web","remote","mock"] as const,
   mission_validate: ["native","web","remote","mock"] as const,
   motor_test: ["native","web","remote","mock"] as const,
   open_session_snapshot: ["native","web","remote","mock"] as const,

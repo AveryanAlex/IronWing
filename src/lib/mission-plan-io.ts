@@ -75,7 +75,7 @@ function parseHomePosition(value: [number, number, number] | number[] | undefine
     };
 }
 
-function parseMissionItems(items: unknown[] | undefined, warnings: string[]): ParsedMissionItems {
+async function parseMissionItems(items: unknown[] | undefined, warnings: string[]): Promise<ParsedMissionItems> {
     if (!Array.isArray(items)) {
         return { items: [], surveyRegions: [] };
     }
@@ -102,7 +102,7 @@ function parseMissionItems(items: unknown[] | undefined, warnings: string[]): Pa
 
         if (itemType === "ComplexItem") {
             const complexItem = item as unknown as QgcComplexItem;
-            const parsedRegion = parseKnownComplexItem(complexItem, flattened.length, index, warnings);
+            const parsedRegion = await parseKnownComplexItem(complexItem, flattened.length, index, warnings);
             if (parsedRegion) {
                 surveyRegions.push(parsedRegion);
                 warnings.push(...parsedRegion.warnings);
@@ -117,17 +117,18 @@ function parseMissionItems(items: unknown[] | undefined, warnings: string[]): Pa
     }
 
     return {
-        items: flattened.map((item, index) => parseSimpleItem(item, index, warnings)),
+        items: await Promise.all(flattened.map((item, index) => parseSimpleItem(item, index, warnings))),
         surveyRegions,
     };
 }
 
-function exportMissionItemsWithSurveyRegions(
+async function exportMissionItemsWithSurveyRegions(
     missionItems: MissionItem[],
     surveyRegions: ExportableSurveyRegion[],
     warnings: string[],
-): Array<QgcSimpleItem | QgcComplexItem> {
-    const exportedSimpleItems = missionItems.map((item, index) => exportMissionItem(item, index, warnings));
+): Promise<Array<QgcSimpleItem | QgcComplexItem>> {
+    const exportedSimpleItems = await Promise.all(missionItems.map((item, index) => exportMissionItem(item, index, warnings)));
+    const exportedRegions = await Promise.all(surveyRegions.map((region) => exportSurveyRegion(region, warnings)));
     const orderedSurveyRegions = surveyRegions
         .map((region, index) => ({ region, index }))
         .sort((left, right) => normalizePosition(left.region.position) - normalizePosition(right.region.position) || left.index - right.index);
@@ -141,7 +142,7 @@ function exportMissionItemsWithSurveyRegions(
             if (!current || normalizePosition(current.region.position) !== position) {
                 break;
             }
-            combined.push(exportSurveyRegion(current.region, warnings));
+            combined.push(exportedRegions[current.index]);
             surveyRegionIndex += 1;
         }
     };
@@ -156,7 +157,7 @@ function exportMissionItemsWithSurveyRegions(
     while (surveyRegionIndex < orderedSurveyRegions.length) {
         const current = orderedSurveyRegions[surveyRegionIndex];
         if (current) {
-            combined.push(exportSurveyRegion(current.region, warnings));
+            combined.push(exportedRegions[current.index]);
         }
         surveyRegionIndex += 1;
     }
@@ -164,11 +165,11 @@ function exportMissionItemsWithSurveyRegions(
     return combined;
 }
 
-export function parsePlanFile(input: string | object): PlanParseResult {
+export async function parsePlanFile(input: string | object): Promise<PlanParseResult> {
     const warnings: string[] = [];
     const json = coercePlanJson(input, warnings);
     const missionSection = json?.mission ?? {};
-    const parsedMission = parseMissionItems(missionSection.items, warnings);
+    const parsedMission = await parseMissionItems(missionSection.items, warnings);
 
     return {
         mission: {
@@ -184,12 +185,12 @@ export function parsePlanFile(input: string | object): PlanParseResult {
     };
 }
 
-export function exportPlanFile({ mission, surveyRegions, home, fence, rally, cruiseSpeed, hoverSpeed, excludeDomains }: ExportPlanInput): PlanExportResult {
+export async function exportPlanFile({ mission, surveyRegions, home, fence, rally, cruiseSpeed, hoverSpeed, excludeDomains }: ExportPlanInput): Promise<PlanExportResult> {
     const warnings: string[] = [];
     const excluded = new Set(excludeDomains ?? []);
     const missionItems = excluded.has("mission")
         ? []
-        : exportMissionItemsWithSurveyRegions(mission.items, surveyRegions ?? [], warnings);
+        : await exportMissionItemsWithSurveyRegions(mission.items, surveyRegions ?? [], warnings);
     const plannedHomePosition: [number, number, number] = home && !excluded.has("mission")
         ? [home.latitude_deg, home.longitude_deg, home.altitude_m]
         : [0, 0, 0];

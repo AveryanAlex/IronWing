@@ -611,6 +611,15 @@ impl IronwingWasmRuntime {
         Ok(live_commands::param_format_file(&store))
     }
 
+    #[wasm_bindgen(js_name = missionCommandsDecode)]
+    pub fn mission_commands_decode(&self, commands: JsValue) -> Result<JsValue, JsValue> {
+        to_js(&ironwing_core::mission_codec::decode(from_js(commands)?))
+    }
+    #[wasm_bindgen(js_name = missionCommandsEncode)]
+    pub fn mission_commands_encode(&self, commands: JsValue) -> Result<JsValue, JsValue> {
+        to_js(&ironwing_core::mission_codec::encode(from_js(commands)?))
+    }
+
     #[wasm_bindgen(js_name = missionValidate)]
     pub fn mission_validate(&self, plan: JsValue) -> Result<JsValue, JsValue> {
         let plan: MissionPlan = from_js(plan)?;

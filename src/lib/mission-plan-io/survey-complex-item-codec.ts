@@ -57,8 +57,8 @@ function cloneJsonValue<T>(value: T): T {
     return JSON.parse(JSON.stringify(value)) as T;
 }
 
-function parseEmbeddedMissionItems(items: QgcSimpleItem[], warnings: string[], context: string): MissionItem[] {
-    return items.map((item, index) => parseSimpleItem(item, index, warnings, `${context} ${index + 1}`));
+async function parseEmbeddedMissionItems(items: QgcSimpleItem[], warnings: string[], context: string): Promise<MissionItem[]> {
+    return await Promise.all(items.map((item, index) => parseSimpleItem(item, index, warnings, `${context} ${index + 1}`)));
 }
 
 function parseCoordinatePairs(value: unknown, warnings: string[], context: string): GeoPoint2d[] {
@@ -419,11 +419,11 @@ function buildCameraCalc(
     };
 }
 
-function buildTransectStyleComplexItem(
+async function buildTransectStyleComplexItem(
     region: ExportableSurveyRegion,
     baseValue: unknown,
     warnings: string[],
-): QgcTransectStyleComplexItem {
+): Promise<QgcTransectStyleComplexItem> {
     const base: Record<string, unknown> = asRecord(baseValue)
         ? cloneJsonValue(baseValue as Record<string, unknown>)
         : {};
@@ -434,18 +434,18 @@ function buildTransectStyleComplexItem(
         CameraTriggerInTurnAround: booleanOrDefault(base.CameraTriggerInTurnAround, false),
         FollowTerrain: booleanOrDefault(region.params.terrainFollow, booleanOrDefault(base.FollowTerrain, false)),
         HoverAndCapture: resolveCaptureMode(region.params.captureMode, base.HoverAndCapture),
-        Items: region.embeddedItems.map((item, index) => exportMissionItem(item, index, warnings)),
+        Items: await Promise.all(region.embeddedItems.map((item, index) => exportMissionItem(item, index, warnings))),
         Refly90Degrees: booleanOrDefault(region.params.crosshatch, booleanOrDefault(base.Refly90Degrees, false)),
         TurnAroundDistance: pickFiniteNumber(region.params.turnaroundDistance_m, base.TurnAroundDistance, 0),
     };
 }
 
-function parseQgcSurveyComplexItem(
+async function parseQgcSurveyComplexItem(
     item: QgcSurveyComplexItem,
     position: number,
     index: number,
     warnings: string[],
-): ParsedSurveyRegion | null {
+): Promise<ParsedSurveyRegion | null> {
     const context = `Mission ComplexItem ${index + 1} (survey)`;
     const polygon = parseCoordinatePairs(item.polygon, warnings, `${context} polygon`);
     const transectStyle = item.TransectStyleComplexItem;
@@ -455,7 +455,7 @@ function parseQgcSurveyComplexItem(
         ...extractTransectStyleParams(transectStyle),
         ...extractSurveySpecificParams(item, warnings, context),
     } satisfies Partial<SurveyRegionParams>;
-    const embeddedItems = parseEmbeddedMissionItems(findEmbeddedSimpleItems(item), warnings, `${context} embedded item`);
+    const embeddedItems = await parseEmbeddedMissionItems(findEmbeddedSimpleItems(item), warnings, `${context} embedded item`);
     const regionWarnings = collectComplexItemWarnings(item, transectStyle, cameraCalc, context, {
         versionRange: [3, 5],
         itemType: "survey",
@@ -484,12 +484,12 @@ function parseQgcSurveyComplexItem(
     };
 }
 
-function parseQgcCorridorComplexItem(
+async function parseQgcCorridorComplexItem(
     item: QgcCorridorComplexItem,
     position: number,
     index: number,
     warnings: string[],
-): ParsedSurveyRegion | null {
+): Promise<ParsedSurveyRegion | null> {
     const context = `Mission ComplexItem ${index + 1} (CorridorScan)`;
     const polyline = parseCoordinatePairs(item.polyline, warnings, `${context} polyline`);
     const transectStyle = item.TransectStyleComplexItem;
@@ -500,7 +500,7 @@ function parseQgcCorridorComplexItem(
         ...extractTransectStyleParams(transectStyle),
         ...(corridorWidth > 0 ? { leftWidth_m: corridorWidth, rightWidth_m: corridorWidth } : {}),
     } satisfies Partial<SurveyRegionParams>;
-    const embeddedItems = parseEmbeddedMissionItems(findEmbeddedSimpleItems(item), warnings, `${context} embedded item`);
+    const embeddedItems = await parseEmbeddedMissionItems(findEmbeddedSimpleItems(item), warnings, `${context} embedded item`);
     const regionWarnings = collectComplexItemWarnings(item, transectStyle, cameraCalc, context, {
         versionRange: [2, 4],
         itemType: "CorridorScan",
@@ -528,12 +528,12 @@ function parseQgcCorridorComplexItem(
     };
 }
 
-function parseQgcStructureComplexItem(
+async function parseQgcStructureComplexItem(
     item: QgcStructureComplexItem,
     position: number,
     index: number,
     warnings: string[],
-): ParsedSurveyRegion | null {
+): Promise<ParsedSurveyRegion | null> {
     const context = `Mission ComplexItem ${index + 1} (StructureScan)`;
     const polygon = parseCoordinatePairs(item.polygon, warnings, `${context} polygon`);
     const cameraCalc = item.CameraCalc;
@@ -548,7 +548,7 @@ function parseQgcStructureComplexItem(
             ? { scanDistance_m: cameraCalc.DistanceToSurface }
             : {}),
     } satisfies Partial<SurveyRegionParams>;
-    const embeddedItems = parseEmbeddedMissionItems(findEmbeddedSimpleItems(item), warnings, `${context} embedded item`);
+    const embeddedItems = await parseEmbeddedMissionItems(findEmbeddedSimpleItems(item), warnings, `${context} embedded item`);
     const regionWarnings = collectComplexItemWarnings(item, undefined, cameraCalc, context, {
         versionRange: [1, 3],
         itemType: "StructureScan",
@@ -574,7 +574,7 @@ function parseQgcStructureComplexItem(
     };
 }
 
-function exportQgcSurveyComplexItem(region: ExportableSurveyRegion, warnings: string[]): QgcSurveyComplexItem {
+async function exportQgcSurveyComplexItem(region: ExportableSurveyRegion, warnings: string[]): Promise<QgcSurveyComplexItem> {
     const base = clonePassthrough(region.qgcPassthrough);
     warnOnPreservedUnsupportedFields(base, warnings, "survey");
     return {
@@ -586,11 +586,11 @@ function exportQgcSurveyComplexItem(region: ExportableSurveyRegion, warnings: st
         entryLocation: resolveEntryLocation(region.params.startCorner, base.entryLocation),
         flyAlternateTransects: booleanOrDefault(base.flyAlternateTransects, false),
         polygon: exportCoordinatePairs(region.polygon),
-        TransectStyleComplexItem: buildTransectStyleComplexItem(region, base.TransectStyleComplexItem, warnings),
+        TransectStyleComplexItem: await buildTransectStyleComplexItem(region, base.TransectStyleComplexItem, warnings),
     };
 }
 
-function exportQgcCorridorComplexItem(region: ExportableSurveyRegion, warnings: string[]): QgcCorridorComplexItem {
+async function exportQgcCorridorComplexItem(region: ExportableSurveyRegion, warnings: string[]): Promise<QgcCorridorComplexItem> {
     const base = clonePassthrough(region.qgcPassthrough);
     warnOnPreservedUnsupportedFields(base, warnings, "CorridorScan");
     return {
@@ -601,11 +601,11 @@ function exportQgcCorridorComplexItem(region: ExportableSurveyRegion, warnings: 
         CorridorWidth: resolveCorridorWidth(region, warnings),
         EntryPoint: typeof base.EntryPoint === "number" && Number.isFinite(base.EntryPoint) ? base.EntryPoint : 0,
         polyline: exportCoordinatePairs(region.polyline),
-        TransectStyleComplexItem: buildTransectStyleComplexItem(region, base.TransectStyleComplexItem, warnings),
+        TransectStyleComplexItem: await buildTransectStyleComplexItem(region, base.TransectStyleComplexItem, warnings),
     };
 }
 
-function exportQgcStructureComplexItem(region: ExportableSurveyRegion, warnings: string[]): QgcStructureComplexItem {
+async function exportQgcStructureComplexItem(region: ExportableSurveyRegion, warnings: string[]): Promise<QgcStructureComplexItem> {
     const base = clonePassthrough(region.qgcPassthrough);
     return {
         ...base,
@@ -618,23 +618,23 @@ function exportQgcStructureComplexItem(region: ExportableSurveyRegion, warnings:
         StructureHeight: pickFiniteNumber(region.params.structureHeight_m, base.StructureHeight, 0),
         altitudeRelative: booleanOrDefault(base.altitudeRelative, true),
         polygon: exportCoordinatePairs(region.polygon),
-        Items: region.embeddedItems.map((item, index) => exportMissionItem(item, index, warnings)),
+        Items: await Promise.all(region.embeddedItems.map((item, index) => exportMissionItem(item, index, warnings))),
     };
 }
 
-export function parseKnownComplexItem(
+export async function parseKnownComplexItem(
     complexItem: QgcComplexItem,
     position: number,
     index: number,
     warnings: string[],
-): ParsedSurveyRegion | null {
+): Promise<ParsedSurveyRegion | null> {
     switch (complexItem.complexItemType) {
         case "survey":
-            return parseQgcSurveyComplexItem(complexItem as QgcSurveyComplexItem, position, index, warnings);
+            return await parseQgcSurveyComplexItem(complexItem as QgcSurveyComplexItem, position, index, warnings);
         case "CorridorScan":
-            return parseQgcCorridorComplexItem(complexItem as QgcCorridorComplexItem, position, index, warnings);
+            return await parseQgcCorridorComplexItem(complexItem as QgcCorridorComplexItem, position, index, warnings);
         case "StructureScan":
-            return parseQgcStructureComplexItem(complexItem as QgcStructureComplexItem, position, index, warnings);
+            return await parseQgcStructureComplexItem(complexItem as QgcStructureComplexItem, position, index, warnings);
         default:
             return null;
     }
@@ -656,13 +656,13 @@ export function flattenComplexItem(
     flattened.push(...embeddedItems);
 }
 
-export function exportSurveyRegion(region: ExportableSurveyRegion, warnings: string[]): QgcComplexItem {
+export async function exportSurveyRegion(region: ExportableSurveyRegion, warnings: string[]): Promise<QgcComplexItem> {
     switch (region.patternType) {
         case "corridor":
-            return exportQgcCorridorComplexItem(region, warnings);
+            return await exportQgcCorridorComplexItem(region, warnings);
         case "structure":
-            return exportQgcStructureComplexItem(region, warnings);
+            return await exportQgcStructureComplexItem(region, warnings);
         default:
-            return exportQgcSurveyComplexItem(region, warnings);
+            return await exportQgcSurveyComplexItem(region, warnings);
     }
 }

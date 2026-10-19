@@ -66,6 +66,14 @@ export async function wasmMissionValidate(runtime: IronwingWasmRuntime, args: Co
   return await runtime.missionValidate(args.plan) as CommandResult<"mission_validate">;
 }
 
+export async function wasmMissionCommandsDecode(runtime: IronwingWasmRuntime, args: CommandArgs<"mission_commands_decode">): Promise<CommandResult<"mission_commands_decode">> {
+  return await runtime.missionCommandsDecode(args.commands) as CommandResult<"mission_commands_decode">;
+}
+
+export async function wasmMissionCommandsEncode(runtime: IronwingWasmRuntime, args: CommandArgs<"mission_commands_encode">): Promise<CommandResult<"mission_commands_encode">> {
+  return await runtime.missionCommandsEncode(args.commands) as CommandResult<"mission_commands_encode">;
+}
+
 export async function wasmMotorTest(runtime: IronwingWasmRuntime, args: CommandArgs<"motor_test">): Promise<CommandResult<"motor_test">> {
   return await runtime.motorTest(args.motorSequence, args.throttlePct, args.durationS) as CommandResult<"motor_test">;
 }

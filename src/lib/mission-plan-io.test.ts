@@ -1,3 +1,4 @@
+import "../test/mission-codec";
 import { describe, expect, it } from "vitest";
 
 import fenceFixtureJson from "../../tests/contracts/fence.plan.json";
@@ -59,19 +60,19 @@ function toExportableSurveyRegion(region: ParsedSurveyRegion): ExportableSurveyR
 }
 
 describe("mission-plan-io: parsePlanFile", () => {
-    it("returns explicit planning speeds from a QGC plan", () => {
-        const result = parsePlanFile(makePlanJson([], {
+    it("returns explicit planning speeds from a QGC plan", async () => {
+        const result = (await parsePlanFile(makePlanJson([], {
             mission: {
                 cruiseSpeed: 21,
                 hoverSpeed: 8,
             },
-        }));
+        })));
 
         expect(result.cruiseSpeed).toBe(21);
         expect(result.hoverSpeed).toBe(8);
     });
 
-    it("parses mission-only plans with typed commands and preserves unknown commands as Other", () => {
+    it("parses mission-only plans with typed commands and preserves unknown commands as Other", async () => {
         const input = makePlanJson([
             {
                 type: "SimpleItem",
@@ -99,7 +100,7 @@ describe("mission-plan-io: parsePlanFile", () => {
             },
         ]);
 
-        const result = parsePlanFile(input);
+        const result = (await parsePlanFile(input));
 
         expect(result.home).toEqual({ latitude_deg: 47.397742, longitude_deg: 8.545594, altitude_m: 488 });
         expect(result.fence).toEqual({ return_point: null, regions: [] });
@@ -167,12 +168,12 @@ describe("mission-plan-io: parsePlanFile", () => {
 
         expect(result.warnings).toEqual(
             expect.arrayContaining([
-                expect.stringContaining("not in COMMAND_CATALOG"),
+                expect.stringContaining("unknown command"),
             ]),
         );
     });
 
-    it("parses mission, fence, rally, and home sections together", () => {
+    it("parses mission, fence, rally, and home sections together", async () => {
         const input = makePlanJson(
             [
                 {
@@ -217,7 +218,7 @@ describe("mission-plan-io: parsePlanFile", () => {
             },
         );
 
-        const result = parsePlanFile(input);
+        const result = (await parsePlanFile(input));
 
         expect(result.home).toEqual({ latitude_deg: 47.397742, longitude_deg: 8.545594, altitude_m: 488 });
         expect(result.fence).toEqual({
@@ -250,8 +251,8 @@ describe("mission-plan-io: parsePlanFile", () => {
         expect(result.warnings).toEqual([]);
     });
 
-    it("parses survey ComplexItems into surveyRegions and preserves embedded mission items", () => {
-        const result = parsePlanFile(surveyComplexFixtureJson);
+    it("parses survey ComplexItems into surveyRegions and preserves embedded mission items", async () => {
+        const result = (await parsePlanFile(surveyComplexFixtureJson));
         const survey = result.surveyRegions[0];
 
         expect(result.mission.items).toHaveLength(2);
@@ -296,8 +297,8 @@ describe("mission-plan-io: parsePlanFile", () => {
         );
     });
 
-    it("imports manual-camera surveys as camera-less regions with explicit warnings", () => {
-        const result = parsePlanFile(surveyComplexFixtureJson);
+    it("imports manual-camera surveys as camera-less regions with explicit warnings", async () => {
+        const result = (await parsePlanFile(surveyComplexFixtureJson));
         const manualSurvey = result.surveyRegions[1];
 
         expect(manualSurvey).toMatchObject({
@@ -322,8 +323,8 @@ describe("mission-plan-io: parsePlanFile", () => {
         );
     });
 
-    it("parses corridor ComplexItems with polyline geometry and symmetric width mapping", () => {
-        const result = parsePlanFile(corridorComplexFixtureJson);
+    it("parses corridor ComplexItems with polyline geometry and symmetric width mapping", async () => {
+        const result = (await parsePlanFile(corridorComplexFixtureJson));
         const corridor = result.surveyRegions[0];
         const customCameraCorridor = result.surveyRegions[1];
 
@@ -357,8 +358,8 @@ describe("mission-plan-io: parsePlanFile", () => {
         );
     });
 
-    it("parses structure ComplexItems into structure survey regions", () => {
-        const result = parsePlanFile(structureComplexFixtureJson);
+    it("parses structure ComplexItems into structure survey regions", async () => {
+        const result = (await parsePlanFile(structureComplexFixtureJson));
         const structure = result.surveyRegions[0];
 
         expect(result.mission.items).toHaveLength(2);
@@ -387,7 +388,7 @@ describe("mission-plan-io: parsePlanFile", () => {
         expect(structure.embeddedItems).toHaveLength(2);
     });
 
-    it("still flattens unknown ComplexItems with embedded SimpleItems for backward compatibility", () => {
+    it("still flattens unknown ComplexItems with embedded SimpleItems for backward compatibility", async () => {
         const input = makePlanJson([
             {
                 type: "ComplexItem",
@@ -413,7 +414,7 @@ describe("mission-plan-io: parsePlanFile", () => {
             },
         ]);
 
-        const result = parsePlanFile(input);
+        const result = (await parsePlanFile(input));
 
         expect(result.surveyRegions).toEqual([]);
         expect(result.mission.items).toHaveLength(2);
@@ -426,8 +427,8 @@ describe("mission-plan-io: parsePlanFile", () => {
         );
     });
 
-    it("handles missing and malformed optional sections gracefully", () => {
-        const result = parsePlanFile({
+    it("handles missing and malformed optional sections gracefully", async () => {
+        const result = (await parsePlanFile({
             fileType: "Plan",
             version: 1,
             groundStation: "QGroundControl",
@@ -442,7 +443,7 @@ describe("mission-plan-io: parsePlanFile", () => {
                     },
                 ],
             },
-        });
+        }));
 
         expect(result.home).toBeNull();
         expect(result.fence).toEqual({ return_point: null, regions: [] });
@@ -455,7 +456,7 @@ describe("mission-plan-io: parsePlanFile", () => {
 });
 
 describe("mission-plan-io: exportPlanFile", () => {
-    it("roundtrips MSL, RelHome, and Terrain frames and exports sequential doJumpIds", () => {
+    it("roundtrips MSL, RelHome, and Terrain frames and exports sequential doJumpIds", async () => {
         const mission: MissionPlan = {
             items: [
                 {
@@ -518,12 +519,12 @@ describe("mission-plan-io: exportPlanFile", () => {
             ],
         };
 
-        const exported = exportPlanFile({
+        const exported = (await exportPlanFile({
             mission,
             home: { latitude_deg: 47.0, longitude_deg: 8.0, altitude_m: 450 },
             fence: { return_point: null, regions: [] },
             rally: { points: [] },
-        });
+        }));
 
         expect(exported.warnings).toEqual([]);
         expect(exported.json.fileType).toBe("Plan");
@@ -532,38 +533,38 @@ describe("mission-plan-io: exportPlanFile", () => {
         expect(exported.json.mission?.items?.map((item) => (item as { doJumpId?: number }).doJumpId)).toEqual([1, 2, 3]);
         expect(exported.json.mission?.items?.map((item) => (item as { frame?: number }).frame)).toEqual([0, 3, 10]);
 
-        const reparsed = parsePlanFile(exported.json);
+        const reparsed = (await parsePlanFile(exported.json));
         expect(reparsed.mission).toEqual(mission);
         expect(reparsed.home).toEqual({ latitude_deg: 47.0, longitude_deg: 8.0, altitude_m: 450 });
     });
 
-    it("writes custom planning speeds when provided for export", () => {
-        const exported = exportPlanFile({
+    it("writes custom planning speeds when provided for export", async () => {
+        const exported = (await exportPlanFile({
             mission: { items: [] },
             home: null,
             fence: { return_point: null, regions: [] },
             rally: { points: [] },
             cruiseSpeed: 19,
             hoverSpeed: 6,
-        });
+        }));
 
         expect(exported.json.mission?.cruiseSpeed).toBe(19);
         expect(exported.json.mission?.hoverSpeed).toBe(6);
     });
 
-    it("falls back to default planning speeds when export overrides are absent", () => {
-        const exported = exportPlanFile({
+    it("falls back to default planning speeds when export overrides are absent", async () => {
+        const exported = (await exportPlanFile({
             mission: { items: [] },
             home: null,
             fence: { return_point: null, regions: [] },
             rally: { points: [] },
-        });
+        }));
 
         expect(exported.json.mission?.cruiseSpeed).toBe(15);
         expect(exported.json.mission?.hoverSpeed).toBe(5);
     });
 
-    it("exports fixture-shaped mission/fence/rally state and surfaces lossy warnings where expected", () => {
+    it("exports fixture-shaped mission/fence/rally state and surfaces lossy warnings where expected", async () => {
         const missionFixture = JSON.parse(JSON.stringify(missionFixtureJson)) as MissionPlan;
         const fenceFixture = JSON.parse(JSON.stringify(fenceFixtureJson)) as FencePlan;
         const rallyFixture = JSON.parse(JSON.stringify(rallyFixtureJson)) as RallyPlan;
@@ -573,12 +574,12 @@ describe("mission-plan-io: exportPlanFile", () => {
         };
         raw.command.Other.frame = "global";
 
-        const exported = exportPlanFile({
+        const exported = (await exportPlanFile({
             mission: missionFixture,
             home: null,
             fence: fenceFixture,
             rally: rallyFixture,
-        });
+        }));
 
         expect(exported.json.mission?.items).toHaveLength(3);
         expect(exported.json.geoFence?.polygons).toHaveLength(1);
@@ -592,7 +593,7 @@ describe("mission-plan-io: exportPlanFile", () => {
         );
     });
 
-    it("roundtrips parse -> export -> parse for supported mission/fence/rally/home state", () => {
+    it("roundtrips parse -> export -> parse for supported mission/fence/rally/home state", async () => {
         const input = {
             mission: {
                 items: [
@@ -678,8 +679,8 @@ describe("mission-plan-io: exportPlanFile", () => {
             } satisfies RallyPlan,
         };
 
-        const exported = exportPlanFile(input);
-        const reparsed = parsePlanFile(exported.json);
+        const exported = (await exportPlanFile(input));
+        const reparsed = (await parsePlanFile(exported.json));
 
         expect(reparsed.mission).toEqual(input.mission);
         expect(reparsed.home).toEqual(input.home);
@@ -688,17 +689,17 @@ describe("mission-plan-io: exportPlanFile", () => {
         expect(exported.json.mission?.items?.map((item) => (item as { doJumpId?: number }).doJumpId)).toEqual([1, 2, 3]);
     });
 
-    it("exports survey regions back as interleaved ComplexItems alongside SimpleItems", () => {
-        const parsedSurvey = parsePlanFile(surveyComplexFixtureJson);
+    it("exports survey regions back as interleaved ComplexItems alongside SimpleItems", async () => {
+        const parsedSurvey = (await parsePlanFile(surveyComplexFixtureJson));
         const exportableSurvey = toExportableSurveyRegion(parsedSurvey.surveyRegions[0]!);
 
-        const exported = exportPlanFile({
+        const exported = (await exportPlanFile({
             mission: parsedSurvey.mission,
             surveyRegions: [exportableSurvey],
             home: parsedSurvey.home,
             fence: parsedSurvey.fence,
             rally: parsedSurvey.rally,
-        });
+        }));
 
         expect(exported.json.mission?.items?.map((item) => (item as { type?: string }).type)).toEqual([
             "SimpleItem",
@@ -714,10 +715,10 @@ describe("mission-plan-io: exportPlanFile", () => {
         });
     });
 
-    it("roundtrips survey, corridor, and structure ComplexItems with geometry, camera calc, and placement preserved", () => {
-        const survey = parsePlanFile(surveyComplexFixtureJson).surveyRegions[0]!;
-        const corridor = parsePlanFile(corridorComplexFixtureJson).surveyRegions[0]!;
-        const structure = parsePlanFile(structureComplexFixtureJson).surveyRegions[0]!;
+    it("roundtrips survey, corridor, and structure ComplexItems with geometry, camera calc, and placement preserved", async () => {
+        const survey = (await parsePlanFile(surveyComplexFixtureJson)).surveyRegions[0]!;
+        const corridor = (await parsePlanFile(corridorComplexFixtureJson)).surveyRegions[0]!;
+        const structure = (await parsePlanFile(structureComplexFixtureJson)).surveyRegions[0]!;
 
         const mission: MissionPlan = {
             items: [
@@ -750,7 +751,7 @@ describe("mission-plan-io: exportPlanFile", () => {
             ],
         };
 
-        const exported = exportPlanFile({
+        const exported = (await exportPlanFile({
             mission,
             surveyRegions: [
                 { ...toExportableSurveyRegion(survey), position: 0 },
@@ -760,8 +761,8 @@ describe("mission-plan-io: exportPlanFile", () => {
             home: null,
             fence: { return_point: null, regions: [] },
             rally: { points: [] },
-        });
-        const reparsed = parsePlanFile(exported.json);
+        }));
+        const reparsed = (await parsePlanFile(exported.json));
 
         expect(reparsed.mission.items).toHaveLength(2);
         expect(reparsed.surveyRegions.map((region) => region.patternType)).toEqual(["grid", "corridor", "structure"]);
@@ -783,17 +784,17 @@ describe("mission-plan-io: exportPlanFile", () => {
         });
     });
 
-    it("roundtrips imported camera-less surveys without fabricating a resolved camera", () => {
-        const manualSurvey = parsePlanFile(surveyComplexFixtureJson).surveyRegions[1]!;
+    it("roundtrips imported camera-less surveys without fabricating a resolved camera", async () => {
+        const manualSurvey = (await parsePlanFile(surveyComplexFixtureJson)).surveyRegions[1]!;
 
-        const exported = exportPlanFile({
+        const exported = (await exportPlanFile({
             mission: { items: [] },
             surveyRegions: [toExportableSurveyRegion(manualSurvey)],
             home: null,
             fence: { return_point: null, regions: [] },
             rally: { points: [] },
-        });
-        const reparsed = parsePlanFile(exported.json);
+        }));
+        const reparsed = (await parsePlanFile(exported.json));
 
         expect(exported.json.mission?.items?.[0]).toMatchObject({
             type: "ComplexItem",
@@ -806,11 +807,11 @@ describe("mission-plan-io: exportPlanFile", () => {
         });
     });
 
-    it("preserves same-slot survey block order when exporting multiple ComplexItems", () => {
-        const survey = parsePlanFile(surveyComplexFixtureJson).surveyRegions[0]!;
-        const corridor = parsePlanFile(corridorComplexFixtureJson).surveyRegions[0]!;
+    it("preserves same-slot survey block order when exporting multiple ComplexItems", async () => {
+        const survey = (await parsePlanFile(surveyComplexFixtureJson)).surveyRegions[0]!;
+        const corridor = (await parsePlanFile(corridorComplexFixtureJson)).surveyRegions[0]!;
 
-        const exported = exportPlanFile({
+        const exported = (await exportPlanFile({
             mission: { items: [] },
             surveyRegions: [
                 { ...toExportableSurveyRegion(survey), position: 0 },
@@ -819,8 +820,8 @@ describe("mission-plan-io: exportPlanFile", () => {
             home: null,
             fence: { return_point: null, regions: [] },
             rally: { points: [] },
-        });
-        const reparsed = parsePlanFile(exported.json);
+        }));
+        const reparsed = (await parsePlanFile(exported.json));
 
         expect(reparsed.surveyRegions.map((region) => region.patternType)).toEqual(["grid", "corridor"]);
         expect(reparsed.surveyRegions.map((region) => region.position)).toEqual([0, 0]);
@@ -836,17 +837,17 @@ describe("mission-plan-io: exportPlanFile", () => {
         expect(() => toSurveyRegionExportable(region, 0)).toThrow(/resolved camera/i);
     });
 
-    it("preserves unsupported survey passthrough fields on export and warns explicitly", () => {
-        const parsedSurvey = parsePlanFile(surveyComplexFixtureJson);
+    it("preserves unsupported survey passthrough fields on export and warns explicitly", async () => {
+        const parsedSurvey = (await parsePlanFile(surveyComplexFixtureJson));
         const exportableSurvey = toExportableSurveyRegion(parsedSurvey.surveyRegions[0]!);
 
-        const exported = exportPlanFile({
+        const exported = (await exportPlanFile({
             mission: parsedSurvey.mission,
             surveyRegions: [exportableSurvey],
             home: parsedSurvey.home,
             fence: parsedSurvey.fence,
             rally: parsedSurvey.rally,
-        });
+        }));
 
         const complex = exported.json.mission?.items?.[1] as {
             flyAlternateTransects?: boolean;
@@ -863,19 +864,19 @@ describe("mission-plan-io: exportPlanFile", () => {
         );
     });
 
-    it("warns when exporting asymmetric corridor widths to QGC's symmetric CorridorWidth", () => {
-        const parsedCorridor = parsePlanFile(corridorComplexFixtureJson);
+    it("warns when exporting asymmetric corridor widths to QGC's symmetric CorridorWidth", async () => {
+        const parsedCorridor = (await parsePlanFile(corridorComplexFixtureJson));
         const exportableCorridor = toExportableSurveyRegion(parsedCorridor.surveyRegions[0]!);
         exportableCorridor.params.leftWidth_m = 20;
         exportableCorridor.params.rightWidth_m = 60;
 
-        const exported = exportPlanFile({
+        const exported = (await exportPlanFile({
             mission: { items: [] },
             surveyRegions: [{ ...exportableCorridor, position: 0 }],
             home: null,
             fence: { return_point: null, regions: [] },
             rally: { points: [] },
-        });
+        }));
 
         expect(exported.json.mission?.items?.[0]).toMatchObject({
             type: "ComplexItem",
@@ -891,8 +892,8 @@ describe("mission-plan-io: exportPlanFile", () => {
 });
 
 describe("mission-plan-io: exportPlanFile domain exclusion", () => {
-    it("excludes fence from export when domain is disabled", () => {
-        const result = exportPlanFile({
+    it("excludes fence from export when domain is disabled", async () => {
+        const result = (await exportPlanFile({
             mission: { items: [] },
             home: null,
             fence: {
@@ -916,14 +917,14 @@ describe("mission-plan-io: exportPlanFile domain exclusion", () => {
                 ],
             },
             excludeDomains: ["fence"],
-        });
+        }));
 
         expect(result.json.geoFence).toBeUndefined();
         expect(result.json.rallyPoints?.points).toHaveLength(1);
     });
 
-    it("excludes rally from export when domain is disabled", () => {
-        const result = exportPlanFile({
+    it("excludes rally from export when domain is disabled", async () => {
+        const result = (await exportPlanFile({
             mission: { items: [] },
             home: null,
             fence: {
@@ -947,7 +948,7 @@ describe("mission-plan-io: exportPlanFile domain exclusion", () => {
                 ],
             },
             excludeDomains: ["rally"],
-        });
+        }));
 
         expect(result.json.geoFence?.polygons).toHaveLength(1);
         expect(result.json.rallyPoints).toBeUndefined();

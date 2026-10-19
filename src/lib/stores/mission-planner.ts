@@ -2459,7 +2459,7 @@ export function createMissionPlannerStore(
       }
 
       if (selected.source === "plan") {
-        return finishPlanImport(pending, parseMissionPlanImportSelection(selected));
+        return finishPlanImport(pending, await parseMissionPlanImportSelection(selected));
       }
 
       return finishKmlImport(pending, parseMissionKmlImportSelection(selected));

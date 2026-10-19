@@ -36,6 +36,19 @@ use crate::ipc::StatusTextEntry;
 use ironwing_core::live::{LiveSnapshotInput, base_live_snapshot_from_caches};
 
 #[tauri::command]
+pub(crate) fn mission_commands_decode(
+    commands: Vec<mavkit::RawMissionCommand>,
+) -> Vec<mavkit::MissionCommand> {
+    ironwing_core::mission_codec::decode(commands)
+}
+#[tauri::command]
+pub(crate) fn mission_commands_encode(
+    commands: Vec<mavkit::MissionCommand>,
+) -> Vec<mavkit::RawMissionCommand> {
+    ironwing_core::mission_codec::encode(commands)
+}
+
+#[tauri::command]
 pub(crate) fn mission_validate(plan: MissionPlan) -> Vec<MissionIssue> {
     live_commands::mission_validate(&plan)
 }

@@ -325,6 +325,8 @@ async fn dispatch_invoke(
             ok(commands::update_guided_session(state, app.clone(), arg(&args, "request")?).await?)
         }
         "stop_guided_session" => ok(commands::stop_guided_session(state, app.clone()).await?),
+        "mission_commands_decode" => ok(commands::mission_commands_decode(arg(&args, "commands")?)),
+        "mission_commands_encode" => ok(commands::mission_commands_encode(arg(&args, "commands")?)),
         "mission_validate" => ok(commands::mission_validate(arg(&args, "plan")?)),
         "mission_upload" => {
             commands::mission_upload(state, arg(&args, "plan")?).await?;

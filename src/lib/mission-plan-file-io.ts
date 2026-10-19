@@ -141,7 +141,7 @@ export function createMissionPlanFileIo(
 
     async exportToPicker(input: MissionPlanFileExportInput) {
       const suggestedName = input.suggestedName ?? DEFAULT_PLAN_FILE_NAME;
-      const exported = exportPlan({
+      const exported = await exportPlan({
         mission: input.mission,
         surveyRegions: input.surveyRegions,
         home: input.home,
@@ -210,13 +210,13 @@ export function createMissionPlanFileIo(
   }
 }
 
-export function parseMissionPlanImportSelection(
+export async function parseMissionPlanImportSelection(
   selected: { name: string | null; contents: string },
   dependencies: Pick<MissionPlanFileIoDependencies, "parsePlan"> = {},
-): Extract<MissionPlanFileImportResult, { status: "success" }> {
+): Promise<Extract<MissionPlanFileImportResult, { status: "success" }>> {
   const parsePlan = dependencies.parsePlan ?? parsePlanFile;
   const rawPlan = parsePlanJson(selected.contents);
-  const parsed = parsePlan(rawPlan);
+  const parsed = await parsePlan(rawPlan);
   const fatalWarning = parsed.warnings.find((warning) => FATAL_IMPORT_WARNING_PATTERNS.some((pattern) => pattern.test(warning)));
   if (fatalWarning) {
     throw new Error(toImportFailureMessage(fatalWarning));

@@ -5,6 +5,7 @@ pub mod live;
 pub mod live_runtime;
 pub mod log_engine;
 pub mod log_playback;
+pub mod mission_codec;
 pub mod runtime;
 pub mod telemetry;
 pub mod transport;

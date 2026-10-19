@@ -1,5 +1,7 @@
 // @vitest-environment jsdom
 
+import "../test/mission-codec";
+
 import { describe, expect, it, vi } from "vitest";
 
 import surveyComplexFixtureJson from "../../tests/contracts/survey-complex.plan.json";
