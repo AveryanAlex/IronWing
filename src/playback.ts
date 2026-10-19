@@ -15,36 +15,7 @@ export type FlightPathPoint = {
   heading: number;
 };
 
-export type TelemetrySnapshot = {
-  timestamp_usec: number;
-  latitude_deg?: number;
-  longitude_deg?: number;
-  altitude_m?: number;
-  heading_deg?: number;
-  speed_mps?: number;
-  airspeed_mps?: number;
-  climb_rate_mps?: number;
-  roll_deg?: number;
-  pitch_deg?: number;
-  yaw_deg?: number;
-  battery_pct?: number;
-  battery_voltage_v?: number;
-  battery_current_a?: number;
-  energy_consumed_wh?: number;
-  gps_fix_type?: GpsFixType;
-  gps_satellites?: number;
-  gps_hdop?: number;
-  throttle_pct?: number;
-  wp_dist_m?: number;
-  nav_bearing_deg?: number;
-  target_bearing_deg?: number;
-  xtrack_error_m?: number;
-  armed?: boolean;
-  custom_mode?: number;
-  rc_channels?: number[];
-  rc_rssi?: number;
-  servo_outputs?: number[];
-};
+export type TelemetrySnapshot = GeneratedJson.LogTelemetrySnapshot;
 
 export type ReplayStatus = Generated.ReplayStatus;
 
@@ -101,12 +72,12 @@ export async function subscribePlaybackState(
 }
 
 function lerpOpt(
-  a: number | undefined,
-  b: number | undefined,
+  a: number | null | undefined,
+  b: number | null | undefined,
   t: number,
-): number | undefined {
-  if (a === undefined) return b;
-  if (b === undefined) return a;
+): number | null {
+  if (a == null) return b ?? null;
+  if (b == null) return a;
   return a + (b - a) * t;
 }
 
@@ -149,6 +120,7 @@ export function interpolateLogTelemetry(
       (timeUsec - a.timestamp_usec) / (b.timestamp_usec - a.timestamp_usec);
 
     snap = {
+      ...a,
       timestamp_usec: timeUsec,
       latitude_deg: lerpOpt(a.latitude_deg, b.latitude_deg, t),
       longitude_deg: lerpOpt(a.longitude_deg, b.longitude_deg, t),
@@ -189,35 +161,39 @@ export function interpolateLogTelemetry(
   }
 
   const telemetry: Telemetry = {
-    altitude_m: snap.altitude_m,
-    speed_mps: snap.speed_mps,
-    heading_deg: snap.heading_deg,
-    latitude_deg: snap.latitude_deg,
-    longitude_deg: snap.longitude_deg,
-    battery_pct: snap.battery_pct,
-    gps_fix_type: snap.gps_fix_type,
-    climb_rate_mps: snap.climb_rate_mps,
-    throttle_pct: snap.throttle_pct,
-    airspeed_mps: snap.airspeed_mps,
-    battery_voltage_v: snap.battery_voltage_v,
-    battery_current_a: snap.battery_current_a,
-    gps_satellites: snap.gps_satellites,
-    gps_hdop: snap.gps_hdop,
-    roll_deg: snap.roll_deg,
-    pitch_deg: snap.pitch_deg,
-    yaw_deg: snap.yaw_deg,
-    wp_dist_m: snap.wp_dist_m,
-    nav_bearing_deg: snap.nav_bearing_deg,
-    target_bearing_deg: snap.target_bearing_deg,
-    xtrack_error_m: snap.xtrack_error_m,
-    energy_consumed_wh: snap.energy_consumed_wh,
-    rc_channels: snap.rc_channels,
-    rc_rssi: snap.rc_rssi,
-    servo_outputs: snap.servo_outputs,
+    altitude_m: snap.altitude_m ?? undefined,
+    speed_mps: snap.speed_mps ?? undefined,
+    heading_deg: snap.heading_deg ?? undefined,
+    latitude_deg: snap.latitude_deg ?? undefined,
+    longitude_deg: snap.longitude_deg ?? undefined,
+    battery_pct: snap.battery_pct ?? undefined,
+    gps_fix_type: snap.gps_fix_type ?? undefined,
+    climb_rate_mps: snap.climb_rate_mps ?? undefined,
+    throttle_pct: snap.throttle_pct ?? undefined,
+    airspeed_mps: snap.airspeed_mps ?? undefined,
+    battery_voltage_v: snap.battery_voltage_v ?? undefined,
+    battery_current_a: snap.battery_current_a ?? undefined,
+    gps_satellites: snap.gps_satellites ?? undefined,
+    gps_hdop: snap.gps_hdop ?? undefined,
+    roll_deg: snap.roll_deg ?? undefined,
+    pitch_deg: snap.pitch_deg ?? undefined,
+    yaw_deg: snap.yaw_deg ?? undefined,
+    wp_dist_m: snap.wp_dist_m ?? undefined,
+    nav_bearing_deg: snap.nav_bearing_deg ?? undefined,
+    target_bearing_deg: snap.target_bearing_deg ?? undefined,
+    xtrack_error_m: snap.xtrack_error_m ?? undefined,
+    energy_consumed_wh: snap.energy_consumed_wh ?? undefined,
+    battery_voltage_cells: snap.battery_voltage_cells?.filter((value): value is number => value !== null),
+    battery_time_remaining_s: snap.battery_time_remaining_s ?? undefined,
+    terrain_height_m: snap.terrain_height_m ?? undefined,
+    height_above_terrain_m: snap.height_above_terrain_m ?? undefined,
+    rc_channels: snap.rc_channels ?? undefined,
+    rc_rssi: snap.rc_rssi ?? undefined,
+    servo_outputs: snap.servo_outputs ?? undefined,
   };
 
   const vehicleState: VehicleState | null =
-    snap.armed !== undefined && snap.custom_mode !== undefined
+    snap.armed != null && snap.custom_mode != null
       ? {
           armed: snap.armed,
           custom_mode: snap.custom_mode,
