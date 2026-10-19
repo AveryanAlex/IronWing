@@ -11,4 +11,4 @@ default-members = ["src-tauri"]
 resolver = "2"
 
 [workspace.dependencies]
-mavkit = { git = "https://github.com/AveryanAlex/mavkit.git", rev = "b49dfd0", default-features = false }
+mavkit = { git = "https://github.com/AveryanAlex/mavkit.git", branch = "main", default-features = false }
