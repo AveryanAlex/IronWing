@@ -1,4 +1,11 @@
 <script lang="ts">
+import { hasBit, normalizeBitmaskOptions, setBit, toggleBit, toBitmask32 } from "../../../../lib/bitmask";
+import {
+  gpsSource,
+  primaryGpsParameter,
+  PRIMARY_GPS_TYPE_NAMES,
+  PRIMARY_GNSS_MODE_NAMES,
+} from "../../../../lib/setup/ardupilot-parameters";
 import { gpsFixProfile } from "../../../../lib/gps-fix";
 import type { GpsFixType } from "../../../../lib/generated/mavkit";
 import {
@@ -130,15 +137,16 @@ let checkpointAvailability = $derived(
 let liveConnected = $derived(session.sessionDomain.value?.connection.kind === "connected");
 let primaryTypeParamName = $derived(resolvePrimaryReceiverTypeParam(params.paramStore, params.stagedEdits));
 let primaryTypeItem = $derived(primaryTypeParamName ? (itemIndex.get(primaryTypeParamName) ?? null) : null);
-let gnssModeItem = $derived(itemIndex.get("GPS_GNSS_MODE") ?? null);
+let gnssModeName = $derived(primaryGpsParameter(PRIMARY_GNSS_MODE_NAMES, itemIndex.keys()));
+let gnssModeItem = $derived(gnssModeName ? (itemIndex.get(gnssModeName) ?? null) : null);
 let gnssMaskAvailability = $derived(
   combineSetupControlAvailability(
     checkpointAvailability,
-    gnssModeItem?.readOnly ? setupReadOnlyAvailability("GPS_GNSS_MODE") : SETUP_CONTROL_AVAILABLE,
+    gnssModeItem?.readOnly ? setupReadOnlyAvailability(gnssModeItem.name) : SETUP_CONTROL_AVAILABLE,
   ),
 );
 let gnssCurrentValue = $derived(resolveCurrentGnssMask(gnssModeItem, params.stagedEdits));
-let gnssItems = $derived(buildGnssItems(params.metadata?.get("GPS_GNSS_MODE"), gnssCurrentValue));
+let gnssItems = $derived(buildGnssItems(params.metadata?.get(gnssModeName ?? ""), gnssCurrentValue));
 let liveObservation = $derived(resolveLiveObservation(telemetry, view.activeScopeKey));
 let liveSummary = $derived.by(() => {
   if (liveObservation && liveConnected) {
@@ -171,11 +179,18 @@ let liveSummary = $derived.by(() => {
     observation: null,
   };
 });
-let primaryReceiverEnabled = $derived(isReceiverEnabled(primaryTypeItem, params.stagedEdits));
+let primarySourceValue = $derived(
+  primaryTypeItem ? (params.stagedEdits[primaryTypeItem.name]?.nextValue ?? primaryTypeItem.value) : null,
+);
+let primarySource = $derived(gpsSource(typeof primarySourceValue === "number" ? primarySourceValue : null));
+let primaryReceiverEnabled = $derived(typeof primarySourceValue === "number" && primarySourceValue > 0);
+let primaryNeedsSerial = $derived(primaryReceiverEnabled && primarySource?.requires_uart === true);
 let portStateText = $derived.by(() => {
   if (!primaryReceiverEnabled) {
     return "GNSS receiver disabled";
   }
+
+  if (!primaryNeedsSerial) return primarySource?.name ?? "Unknown receiver source";
 
   if (serialModel.gpsPorts.length === 0) {
     return "No GNSS serial port assigned";
@@ -187,6 +202,11 @@ let portDetailText = $derived.by(() => {
   if (!primaryReceiverEnabled) {
     return "Enable a GNSS receiver type before checking fix quality.";
   }
+
+  if (!primaryNeedsSerial)
+    return primarySource
+      ? `${primarySource.name} does not require a GNSS serial port.`
+      : "Serial requirements are unknown for this receiver type.";
 
   if (serialModel.gpsPorts.length === 0) {
     return "Set a SERIAL port to protocol 5 before relying on navigation.";
@@ -239,7 +259,7 @@ let navigationTelemetryMetrics = $derived.by(() => {
       value: portStateText,
       detail: portDetailText,
       tone:
-        primaryReceiverEnabled && serialModel.gpsPorts.length > 0
+        primaryReceiverEnabled && primarySource && (!primaryNeedsSerial || serialModel.gpsPorts.length > 0)
           ? ("success" as TelemetryTone)
           : primaryReceiverEnabled
             ? ("warning" as TelemetryTone)
@@ -260,45 +280,26 @@ function resolvePrimaryReceiverTypeParam(
   paramStore: typeof params.paramStore,
   stagedEdits: typeof params.stagedEdits,
 ): string | null {
-  if (paramStore?.params.GPS1_TYPE !== undefined || stagedEdits.GPS1_TYPE) {
-    return "GPS1_TYPE";
-  }
-
-  if (paramStore?.params.GPS_TYPE !== undefined || stagedEdits.GPS_TYPE) {
-    return "GPS_TYPE";
-  }
-
-  return null;
+  return primaryGpsParameter(PRIMARY_GPS_TYPE_NAMES, [
+    ...Object.keys(paramStore?.params ?? {}),
+    ...Object.keys(stagedEdits),
+  ]);
 }
 
 function buildGnssItems(meta: ParamMeta | undefined, currentMask: number | null) {
-  const bitmask = meta?.bitmask;
-  if (!Array.isArray(bitmask) || currentMask === null || !Number.isInteger(currentMask) || currentMask < 0) {
-    return [];
-  }
-
-  return bitmask
-    .filter(
-      (entry) => Number.isInteger(entry.bit) && entry.bit >= 0 && entry.bit <= 31 && entry.label.trim().length > 0,
-    )
-    .map((entry) => ({
-      key: String(entry.bit),
-      bit: entry.bit,
-      label: entry.label,
-      checked: (currentMask & (1 << entry.bit)) !== 0,
-    }));
+  if (currentMask === null) return [];
+  return normalizeBitmaskOptions(meta?.bitmask).map((entry) => ({
+    key: String(entry.bit),
+    ...entry,
+    checked: hasBit(currentMask, entry.bit),
+  }));
 }
 
 function resolveCurrentGnssMask(
   item: ParameterItemModel | null,
   stagedEdits: typeof params.stagedEdits,
 ): number | null {
-  const stagedValue = stagedEdits.GPS_GNSS_MODE?.nextValue;
-  if (typeof stagedValue === "number" && Number.isInteger(stagedValue) && stagedValue >= 0) {
-    return stagedValue;
-  }
-
-  return item && Number.isInteger(item.value) && item.value >= 0 ? item.value : null;
+  return item ? toBitmask32(stagedEdits[item.name]?.nextValue ?? item.value) : null;
 }
 
 function toggleGnssBit(bit: number) {
@@ -307,7 +308,7 @@ function toggleGnssBit(bit: number) {
   }
 
   const currentMask = gnssCurrentValue ?? gnssModeItem.value;
-  const nextMask = currentMask ^ (1 << bit);
+  const nextMask = toggleBit(currentMask, bit);
   paramsStore.stageParameterEdit(gnssModeItem, nextMask);
 }
 
@@ -316,18 +317,10 @@ function setGnssMask(checked: boolean) {
     return;
   }
 
-  const nextMask = checked ? gnssItems.reduce((mask, item) => mask | (1 << item.bit), 0) : 0;
+  const nextMask = checked
+    ? gnssItems.reduce((mask, item) => setBit(mask, item.bit, true), gnssCurrentValue ?? 0)
+    : gnssItems.reduce((mask, item) => setBit(mask, item.bit, false), gnssCurrentValue ?? 0);
   paramsStore.stageParameterEdit(gnssModeItem, nextMask);
-}
-
-function isReceiverEnabled(item: ParameterItemModel | null, stagedEdits: typeof params.stagedEdits): boolean {
-  if (!item) {
-    return false;
-  }
-
-  const stagedValue = stagedEdits[item.name]?.nextValue;
-  const value = typeof stagedValue === "number" ? stagedValue : item.value;
-  return value > 0;
 }
 
 function resolveLiveObservation(
@@ -408,7 +401,7 @@ function formatHdop(value: number | null): string {
     testId={setupWorkspaceTestIds.navigationSummary}
   />
 
-  {#if primaryReceiverEnabled && serialModel.gpsPorts.length === 0}
+  {#if primaryNeedsSerial && serialModel.gpsPorts.length === 0}
     <SetupNotice tone="warning" testId={`${setupWorkspaceTestIds.navigationBannerPrefix}-serial`}>
       No GNSS serial port is configured yet. Use Serial Ports before relying on navigation checks.
     </SetupNotice>
@@ -431,9 +424,9 @@ function formatHdop(value: number | null): string {
     compact
     testId={setupWorkspaceTestIds.navigationGnssChecklist}
   >
-      {#if params.stagedEdits.GPS_GNSS_MODE}
-        <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.navigationStagedPrefix}-GPS_GNSS_MODE`}>
-          Queued · {params.stagedEdits.GPS_GNSS_MODE.nextValueText}
+      {#if params.stagedEdits[gnssModeName ?? ""]}
+        <p class="mt-1 text-xs text-accent" data-testid={`${setupWorkspaceTestIds.navigationStagedPrefix}-${gnssModeName}`}>
+          Queued · {params.stagedEdits[gnssModeName ?? ""]?.nextValueText}
         </p>
       {/if}
 
