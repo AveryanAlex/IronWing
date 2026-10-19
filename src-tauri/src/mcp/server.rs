@@ -449,14 +449,14 @@ mod tests {
         let tools = client.list_all_tools().await.unwrap();
         assert_eq!(tools.len(), 17);
         assert!(tools.iter().all(|t| t.output_schema.is_some()
-            == (!matches!(
+            != matches!(
                 t.name.as_ref(),
                 "telemetry_read"
                     | "telemetry_catalog"
                     | "parameters_search"
                     | "parameters_read"
                     | "status_text_read"
-            ))));
+            )));
         let result = client
             .call_tool(CallToolRequestParams::new("connection_status"))
             .await
