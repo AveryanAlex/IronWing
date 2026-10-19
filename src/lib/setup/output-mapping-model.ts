@@ -1,8 +1,12 @@
+import type { FrameClass } from "../airframe";
+import { ArduPilotServoFunction } from "../ardupilot/servo-functions";
 import { getMotorLayout } from "../../data/motor-layouts";
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
 import {
   isPropulsionServoFunction,
+  isTricopterYawFunction,
+  outputFrameClass,
   motorNumberForServoFunction,
   propulsionFunctionLabel,
   servoFunctionForMotor,
@@ -91,27 +95,31 @@ type Requirement = {
 };
 
 const OUTPUT_FUNCTION_PARAM = /^SERVO(\d+)_FUNCTION$/;
-const PLANE_RECOMMENDATIONS = [4, 19, 21] as const;
-const CONVENTIONAL_PLANE_THROTTLE = 70;
+const PLANE_RECOMMENDATIONS = [
+  ArduPilotServoFunction.Aileron,
+  ArduPilotServoFunction.Elevator,
+  ArduPilotServoFunction.Rudder,
+] as const;
+const CONVENTIONAL_PLANE_THROTTLE = ArduPilotServoFunction.Throttle;
 const KNOWN_FUNCTION_LABELS = new Map<number, string>([
-  [-1, "GPIO"],
-  [4, "Aileron"],
-  [19, "Elevator"],
-  [21, "Rudder"],
-  [41, "Tilt motors front"],
-  [45, "Tilt motors rear"],
-  [46, "Tilt motor rear left"],
-  [47, "Tilt motor rear right"],
-  [70, "Throttle"],
-  [73, "Throttle left"],
-  [74, "Throttle right"],
-  [75, "Tilt motor front left"],
-  [76, "Tilt motor front right"],
-  [77, "Elevon left"],
-  [78, "Elevon right"],
-  [79, "V-tail left"],
-  [80, "V-tail right"],
-  [81, "Boost throttle"],
+  [ArduPilotServoFunction.Gpio, "GPIO"],
+  [ArduPilotServoFunction.Aileron, "Aileron"],
+  [ArduPilotServoFunction.Elevator, "Elevator"],
+  [ArduPilotServoFunction.Rudder, "Rudder"],
+  [ArduPilotServoFunction.TiltCollective, "Tilt motors front"],
+  [ArduPilotServoFunction.TiltRearCollective, "Tilt motors rear"],
+  [ArduPilotServoFunction.TiltRearLeft, "Tilt motor rear left"],
+  [ArduPilotServoFunction.TiltRearRight, "Tilt motor rear right"],
+  [ArduPilotServoFunction.Throttle, "Throttle"],
+  [ArduPilotServoFunction.ThrottleLeft, "Throttle left"],
+  [ArduPilotServoFunction.ThrottleRight, "Throttle right"],
+  [ArduPilotServoFunction.TiltFrontLeft, "Tilt motor front left"],
+  [ArduPilotServoFunction.TiltFrontRight, "Tilt motor front right"],
+  [ArduPilotServoFunction.ElevonLeft, "Elevon left"],
+  [ArduPilotServoFunction.ElevonRight, "Elevon right"],
+  [ArduPilotServoFunction.VTailLeft, "V-tail left"],
+  [ArduPilotServoFunction.VTailRight, "V-tail right"],
+  [ArduPilotServoFunction.BoostThrottle, "Boost throttle"],
 ]);
 
 function currentValue(input: Pick<OutputMappingInput, "paramStore">, paramName: string): number | null {
@@ -152,16 +160,20 @@ function metadataFunctionValues(input: Pick<OutputMappingInput, "paramStore" | "
   return values;
 }
 
-function functionLabel(functionValue: number, labels: ReadonlyMap<number, string>): string {
-  return labels.get(functionValue)
-    ?? propulsionFunctionLabel(functionValue)
-    ?? `Function ${functionValue}`;
+function functionLabel(
+  functionValue: number,
+  labels: ReadonlyMap<number, string>,
+  frameClass: FrameClass | null,
+): string {
+  if (isTricopterYawFunction(functionValue, frameClass)) return "Tricopter yaw servo";
+  return labels.get(functionValue) ?? propulsionFunctionLabel(functionValue) ?? `Function ${functionValue}`;
 }
 
 export function discoverPhysicalOutputs(
   input: Pick<OutputMappingInput, "paramStore" | "metadata" | "stagedEdits">,
 ): PhysicalOutput[] {
   const labels = metadataFunctionLabels(input);
+  const frameClass = outputFrameClass(input.paramStore);
   return Object.keys(input.paramStore?.params ?? {})
     .flatMap((paramName) => {
       const match = paramName.match(OUTPUT_FUNCTION_PARAM);
@@ -170,25 +182,23 @@ export function discoverPhysicalOutputs(
       const index = Number(match[1]);
       if (!Number.isInteger(index) || index < 1) return [];
       const proposedFunctionValue = proposedValue(input, paramName) ?? appliedFunctionValue;
-      return [{
-        index,
-        paramName,
-        appliedFunctionValue,
-        proposedFunctionValue,
-        appliedFunctionLabel: functionLabel(appliedFunctionValue, labels),
-        proposedFunctionLabel: functionLabel(proposedFunctionValue, labels),
-        hasStagedChange: proposedFunctionValue !== appliedFunctionValue,
-        readOnly: input.metadata?.get(paramName)?.readOnly === true,
-      } satisfies PhysicalOutput];
+      return [
+        {
+          index,
+          paramName,
+          appliedFunctionValue,
+          proposedFunctionValue,
+          appliedFunctionLabel: functionLabel(appliedFunctionValue, labels, frameClass),
+          proposedFunctionLabel: functionLabel(proposedFunctionValue, labels, frameClass),
+          hasStagedChange: proposedFunctionValue !== appliedFunctionValue,
+          readOnly: input.metadata?.get(paramName)?.readOnly === true,
+        } satisfies PhysicalOutput,
+      ];
     })
     .sort((left, right) => left.index - right.index);
 }
 
-function addRequirement(
-  requirements: Map<number, Requirement>,
-  value: number | null,
-  requirement: Requirement,
-) {
+function addRequirement(requirements: Map<number, Requirement>, value: number | null, requirement: Requirement) {
   if (value === null || requirements.has(value)) return;
   requirements.set(value, requirement);
 }
@@ -199,22 +209,31 @@ function buildRequirements(input: OutputMappingInput): {
 } {
   const profile = deriveVehicleProfile(input.vehicleType, input);
   const requirements = new Map<number, Requirement>();
-  let topologyMappingLocked = profile.stagedFrameClassChange
-    || profile.stagedFrameTypeChange
-    || profile.stagedEnableChange
-    || (profile.isCopter && ["FRAME_CLASS", "FRAME_TYPE"].some((name) => {
-      const staged = input.stagedEdits[name]?.nextValue;
-      const applied = currentValue(input, name);
-      return typeof staged === "number" && applied !== null && staged !== applied;
-    }));
+  let topologyMappingLocked =
+    profile.stagedFrameClassChange ||
+    profile.stagedFrameTypeChange ||
+    profile.stagedEnableChange ||
+    (profile.isCopter &&
+      ["FRAME_CLASS", "FRAME_TYPE"].some((name) => {
+        const staged = input.stagedEdits[name]?.nextValue;
+        const applied = currentValue(input, name);
+        return typeof staged === "number" && applied !== null && staged !== applied;
+      }));
 
-  if (profile.isCopter && profile.frameClassValue !== null && profile.frameTypeValue !== null) {
-    const layout = getMotorLayout(profile.frameClassValue, profile.frameTypeValue);
+  if (profile.isCopter && profile.frame !== null) {
+    const layout = getMotorLayout(profile.frame);
     for (const motor of layout?.motors ?? []) {
       addRequirement(requirements, servoFunctionForMotor(motor.motorNumber), {
         label: `Motor ${motor.motorNumber}`,
         detail: `${layout?.className ?? "Copter"} ${layout?.typeName ?? "frame"} motor layout`,
         category: "propulsion",
+      });
+    }
+    if (layout?.yawServo) {
+      addRequirement(requirements, ArduPilotServoFunction.TricopterYaw, {
+        label: layout.yawServo.label,
+        detail: "Tricopter yaw actuator",
+        category: "servo",
       });
     }
   }
@@ -270,10 +289,13 @@ function compareRows(left: OutputFunctionRow, right: OutputFunctionRow): number 
 export function buildOutputMappingModel(input: OutputMappingInput): OutputMappingModel {
   const outputs = discoverPhysicalOutputs(input);
   const labels = metadataFunctionLabels(input);
+  const frameClass = outputFrameClass(input.paramStore);
   const { requirements, topologyMappingLocked } = buildRequirements(input);
   const recommendations = recommendedValues(input);
-  const configuredValues = new Set(outputs.flatMap((output) => [output.appliedFunctionValue, output.proposedFunctionValue]));
-  configuredValues.delete(0);
+  const configuredValues = new Set(
+    outputs.flatMap((output) => [output.appliedFunctionValue, output.proposedFunctionValue]),
+  );
+  configuredValues.delete(ArduPilotServoFunction.Disabled);
   const visibleValues = new Set<number>([
     ...configuredValues,
     ...requirements.keys(),
@@ -285,58 +307,67 @@ export function buildOutputMappingModel(input: OutputMappingInput): OutputMappin
   for (const value of configuredValues) catalogValues.add(value);
   for (const value of requirements.keys()) catalogValues.add(value);
   for (const value of recommendations.keys()) catalogValues.add(value);
-  catalogValues.delete(0);
+  catalogValues.delete(ArduPilotServoFunction.Disabled);
 
   const catalog = [...catalogValues]
     .filter(Number.isFinite)
-    .map((value) => ({
-      value,
-      label: functionLabel(value, labels),
-      category: requirements.get(value)?.category
-        ?? (isPropulsionServoFunction(value) ? "propulsion" : "servo"),
-    } satisfies OutputFunctionCatalogItem))
+    .map(
+      (value) =>
+        ({
+          value,
+          label: functionLabel(value, labels, frameClass),
+          category:
+            requirements.get(value)?.category ??
+            (isPropulsionServoFunction(value, frameClass) ? "propulsion" : "servo"),
+        }) satisfies OutputFunctionCatalogItem,
+    )
     .sort((left, right) => left.label.localeCompare(right.label) || left.value - right.value);
   const catalogByValue = new Map(catalog.map((item) => [item.value, item]));
 
-  const rows = [...visibleValues].flatMap((value) => {
-    if (!Number.isFinite(value) || value === 0) return [];
-    const requirement = requirements.get(value);
-    const recommendation = recommendations.get(value);
-    const appliedOutputIndexes = outputs
-      .filter((output) => output.appliedFunctionValue === value)
-      .map((output) => output.index);
-    const proposedOutputIndexes = outputs
-      .filter((output) => output.proposedFunctionValue === value)
-      .map((output) => output.index);
-    const catalogItem = catalogByValue.get(value) ?? {
-      value,
-      label: requirement?.label ?? functionLabel(value, labels),
-      category: requirement?.category ?? (isPropulsionServoFunction(value) ? "propulsion" : "servo"),
-    };
-    const source: OutputFunctionSource = requirement
-      ? "required"
-      : recommendation
-        ? "recommended"
-        : configuredValues.has(value)
-          ? "configured"
-          : "catalog";
-    return [{
-      ...catalogItem,
-      label: requirement?.label ?? catalogItem.label,
-      source,
-      sourceDetail: requirement?.detail ?? recommendation ?? "Firmware output function",
-      required: Boolean(requirement),
-      recommended: Boolean(recommendation),
-      topologyDependent: Boolean(requirement),
-      mappingLocked: Boolean(requirement) && topologyMappingLocked,
-      appliedOutputIndexes,
-      proposedOutputIndexes,
-      hasStagedChange: appliedOutputIndexes.join(",") !== proposedOutputIndexes.join(","),
-      mirroredMotor: catalogItem.category === "propulsion"
-        && motorNumberForServoFunction(value) !== null
-        && proposedOutputIndexes.length > 1,
-    } satisfies OutputFunctionRow];
-  }).sort(compareRows);
+  const rows = [...visibleValues]
+    .flatMap((value) => {
+      if (!Number.isFinite(value) || value === ArduPilotServoFunction.Disabled) return [];
+      const requirement = requirements.get(value);
+      const recommendation = recommendations.get(value);
+      const appliedOutputIndexes = outputs
+        .filter((output) => output.appliedFunctionValue === value)
+        .map((output) => output.index);
+      const proposedOutputIndexes = outputs
+        .filter((output) => output.proposedFunctionValue === value)
+        .map((output) => output.index);
+      const catalogItem = catalogByValue.get(value) ?? {
+        value,
+        label: requirement?.label ?? functionLabel(value, labels, frameClass),
+        category: requirement?.category ?? (isPropulsionServoFunction(value, frameClass) ? "propulsion" : "servo"),
+      };
+      const source: OutputFunctionSource = requirement
+        ? "required"
+        : recommendation
+          ? "recommended"
+          : configuredValues.has(value)
+            ? "configured"
+            : "catalog";
+      return [
+        {
+          ...catalogItem,
+          label: requirement?.label ?? catalogItem.label,
+          source,
+          sourceDetail: requirement?.detail ?? recommendation ?? "Firmware output function",
+          required: Boolean(requirement),
+          recommended: Boolean(recommendation),
+          topologyDependent: Boolean(requirement),
+          mappingLocked: Boolean(requirement) && topologyMappingLocked,
+          appliedOutputIndexes,
+          proposedOutputIndexes,
+          hasStagedChange: appliedOutputIndexes.join(",") !== proposedOutputIndexes.join(","),
+          mirroredMotor:
+            catalogItem.category === "propulsion" &&
+            motorNumberForServoFunction(value) !== null &&
+            proposedOutputIndexes.length > 1,
+        } satisfies OutputFunctionRow,
+      ];
+    })
+    .sort(compareRows);
 
   return {
     outputs,
@@ -344,7 +375,8 @@ export function buildOutputMappingModel(input: OutputMappingInput): OutputMappin
     propulsionRows: rows.filter((row) => row.category === "propulsion"),
     servoRows: rows.filter((row) => row.category === "servo"),
     requiredFunctionValues: [...requirements.keys()],
-    assignedOutputCount: outputs.filter((output) => output.proposedFunctionValue !== 0).length,
+    assignedOutputCount: outputs.filter((output) => output.proposedFunctionValue !== ArduPilotServoFunction.Disabled)
+      .length,
     missingRequiredCount: [...requirements.keys()].filter(
       (value) => !outputs.some((output) => output.proposedFunctionValue === value),
     ).length,
@@ -362,7 +394,7 @@ export function planOutputFunctionAssignment(
     category?: OutputFunctionCategory;
   } = {},
 ): OutputAssignmentPlan | null {
-  if (!Number.isFinite(functionValue) || functionValue === 0) return null;
+  if (!Number.isFinite(functionValue) || functionValue === ArduPilotServoFunction.Disabled) return null;
 
   const outputs = discoverPhysicalOutputs(input);
   const outputIndexes = new Set(outputs.map((output) => output.index));
@@ -380,9 +412,9 @@ export function planOutputFunctionAssignment(
     const wasAssigned = output.proposedFunctionValue === functionValue;
     const shouldBeAssigned = desiredSet.has(output.index);
     if (wasAssigned && !shouldBeAssigned) {
-      edits.push({ paramName: output.paramName, nextValue: 0 });
+      edits.push({ paramName: output.paramName, nextValue: ArduPilotServoFunction.Disabled });
     } else if (!wasAssigned && shouldBeAssigned) {
-      if (output.proposedFunctionValue !== 0) {
+      if (output.proposedFunctionValue !== ArduPilotServoFunction.Disabled) {
         displacedAssignments.push({
           outputIndex: output.index,
           previousFunctionValue: output.proposedFunctionValue,
@@ -398,11 +430,11 @@ export function planOutputFunctionAssignment(
     const index = Number(edit.paramName.match(OUTPUT_FUNCTION_PARAM)?.[1]);
     if (Number.isInteger(index)) nextValues.set(index, edit.nextValue);
   }
-  const newlyMissingRequiredFunctionValues = [...new Set(options.requiredFunctionValues ?? [])]
-    .filter((requiredValue) => (
-      outputs.some((output) => output.proposedFunctionValue === requiredValue)
-      && ![...nextValues.values()].some((value) => value === requiredValue)
-    ));
+  const newlyMissingRequiredFunctionValues = [...new Set(options.requiredFunctionValues ?? [])].filter(
+    (requiredValue) =>
+      outputs.some((output) => output.proposedFunctionValue === requiredValue) &&
+      ![...nextValues.values()].some((value) => value === requiredValue),
+  );
 
   return {
     functionValue,
@@ -411,8 +443,7 @@ export function planOutputFunctionAssignment(
     edits,
     displacedAssignments,
     newlyMissingRequiredFunctionValues,
-    mirroredMotor: options.category === "propulsion"
-      && motorNumberForServoFunction(functionValue) !== null
-      && desired.length > 1,
+    mirroredMotor:
+      options.category === "propulsion" && motorNumberForServoFunction(functionValue) !== null && desired.length > 1,
   };
 }

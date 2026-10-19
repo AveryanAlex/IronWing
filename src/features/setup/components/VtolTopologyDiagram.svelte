@@ -1,4 +1,5 @@
 <script lang="ts">
+import { projectMotorPositions } from "../../../lib/setup/motor-diagram-projection";
 import type { VtolPropulsor, VtolTopologySnapshot } from "../../../lib/setup/vtol-topology-model";
 import {
   resolveSetupControlAvailability,
@@ -14,49 +15,21 @@ type Props = {
   onMotorToggle?: (motorNumber: number) => void;
 };
 
-let {
-  topology,
-  selectableMask = null,
-  disabled = false,
-  availability,
-  onMotorToggle,
-}: Props = $props();
+let { topology, selectableMask = null, disabled = false, availability, onMotorToggle }: Props = $props();
 
-let selectionAvailability = $derived(resolveSetupControlAvailability({
-  availability,
-  disabled,
-  disabledDescription: "Motor selection is locked until the VTOL topology requirements are met.",
-}));
+let selectionAvailability = $derived(
+  resolveSetupControlAvailability({
+    availability,
+    disabled,
+    disabledDescription: "Motor selection is locked until the VTOL topology requirements are met.",
+  }),
+);
 let selectionDisabled = $derived(selectionAvailability.state === "locked");
 
-const WIDTH = 260;
-const HEIGHT = 230;
+const WIDTH = 320;
+const HEIGHT = 300;
 const CENTER_X = WIDTH / 2;
-const CENTER_Y = 104;
-const SPREAD_X = 82;
-const SPREAD_Y = 72;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-function position(propulsor: VtolPropulsor) {
-  return {
-    x: clamp(CENTER_X + propulsor.rollFactor * SPREAD_X, 35, WIDTH - 35),
-    y: clamp(CENTER_Y - propulsor.pitchFactor * SPREAD_Y, 38, 174),
-  };
-}
-
-function positionedPropulsors(propulsors: VtolPropulsor[]) {
-  const basePositions = propulsors.map((propulsor) => ({ propulsor, ...position(propulsor) }));
-  return basePositions.map((entry) => {
-    const group = basePositions.filter((candidate) => candidate.x === entry.x && candidate.y === entry.y);
-    if (group.length === 1) return entry;
-    const groupIndex = group.findIndex((candidate) => candidate.propulsor.id === entry.propulsor.id);
-    const offset = (groupIndex - (group.length - 1) / 2) * 24;
-    return { ...entry, x: clamp(entry.x + offset, 30, WIDTH - 30) };
-  });
-}
+const CENTER_Y = HEIGHT / 2;
 
 function selected(propulsor: VtolPropulsor): boolean {
   if (selectableMask === "tilt") return propulsor.tilts;
@@ -85,29 +58,34 @@ function ownerLabel(propulsor: VtolPropulsor): string {
   return propulsor.outputOwners.map((owner) => `SERVO${owner.outputIndex}`).join(", ");
 }
 
-let diagramPropulsors = $derived(positionedPropulsors(topology.propulsors));
+let diagramPropulsors = $derived(projectMotorPositions(topology.propulsors, WIDTH, HEIGHT));
 </script>
 
 {#snippet motorGlyph(propulsor: VtolPropulsor, point: { x: number; y: number })}
   {#if selected(propulsor)}
-    <circle cx={point.x} cy={point.y} r={30} class="fill-accent/10 stroke-accent" stroke-width={2} stroke-dasharray="4 3" />
+    <circle cx={point.x} cy={point.y} r={21} class="fill-accent/10 stroke-accent" stroke-width={2} stroke-dasharray="4 3" />
   {/if}
   <circle
     cx={point.x}
     cy={point.y}
-    r={23}
+    r={17}
     class={propulsor.tilts ? "fill-accent/15 stroke-accent" : "fill-bg-secondary stroke-border-light"}
     stroke-width={2}
   />
-  <text x={point.x} y={point.y + 1} text-anchor="middle" dominant-baseline="middle" class="fill-text-primary" font-size={11} font-weight={700}>
+  <text x={point.x} y={point.y - (propulsor.position.layer ? 5 : 0)} text-anchor="middle" dominant-baseline="middle" class="fill-text-primary" font-size={11} font-weight={700}>
     {propulsor.motorNumber === null ? propulsor.label.replace(" motor", "") : `M${propulsor.motorNumber}`}
   </text>
-  {#if propulsor.tilts}
-    <text x={point.x} y={point.y - 31} text-anchor="middle" class="fill-accent" font-size={8} font-weight={700}>TILTS</text>
-  {:else if propulsor.forwardActive}
-    <text x={point.x} y={point.y - 31} text-anchor="middle" class="fill-success" font-size={8} font-weight={700}>FORWARD</text>
+  {#if propulsor.position.layer}
+    <text x={point.x} y={point.y + 10} text-anchor="middle" class="fill-text-muted" font-size={10}>{propulsor.position.layer}</text>
   {/if}
-  <text x={point.x} y={point.y + 34} text-anchor="middle" class="fill-text-muted" font-size={8}>{ownerLabel(propulsor)}</text>
+  {#if propulsor.tilts && !propulsor.position.layer}
+    <text x={point.x} y={point.y - 27} text-anchor="middle" class="fill-accent" font-size={8} font-weight={700}>TILTS</text>
+  {:else if propulsor.forwardActive && !propulsor.position.layer}
+    <text x={point.x} y={point.y - 27} text-anchor="middle" class="fill-success" font-size={8} font-weight={700}>FORWARD</text>
+  {/if}
+  {#if !propulsor.position.layer}
+  <text x={point.x} y={point.y + 29} text-anchor="middle" class="fill-text-muted" font-size={8}>{ownerLabel(propulsor)}</text>
+  {/if}
 {/snippet}
 
 {#if !topology.supportedDiagram}
@@ -125,17 +103,16 @@ let diagramPropulsors = $derived(positionedPropulsors(topology.propulsors));
     >
       <div class="flex min-h-64 items-center justify-center rounded-lg border border-border bg-bg-primary/70 p-3">
         <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} class="h-auto w-full max-w-80 select-none" aria-label={`${topology.architectureLabel}, ${topology.frameClassLabel} ${topology.frameTypeLabel} diagram`}>
-        <path d="M 130 12 L 121 28 L 139 28 Z" class="fill-accent/70" />
-        <text x={CENTER_X} y={10} text-anchor="middle" class="fill-text-muted" font-size={9}>FRONT</text>
+        <text x={CENTER_X} y={10} text-anchor="middle" class="fill-text-muted" font-size={9}>FRONT · TOP VIEW</text>
 
-        {#each diagramPropulsors as entry (entry.propulsor.id)}
-          <line x1={CENTER_X} y1={CENTER_Y} x2={entry.x} y2={entry.y} class="stroke-border-light" stroke-width={7} stroke-linecap="round" />
+        {#each diagramPropulsors as entry (entry.motor.id)}
+          <line x1={CENTER_X} y1={CENTER_Y} x2={entry.cx} y2={entry.cy} class="stroke-border-light" stroke-width={7} stroke-linecap="round" />
         {/each}
 
-        <path d={`M ${CENTER_X} 70 L ${CENTER_X - 18} 118 L ${CENTER_X} 110 L ${CENTER_X + 18} 118 Z`} class="fill-bg-tertiary stroke-border" stroke-width={2} />
+        <path d={`M ${CENTER_X} ${CENTER_Y - 30} L ${CENTER_X - 18} ${CENTER_Y + 18} L ${CENTER_X} ${CENTER_Y + 10} L ${CENTER_X + 18} ${CENTER_Y + 18} Z`} class="fill-bg-tertiary stroke-border" stroke-width={2} />
 
-        {#each diagramPropulsors as { propulsor, x, y } (propulsor.id)}
-          {@const point = { x, y }}
+        {#each diagramPropulsors as { motor: propulsor, cx, cy } (propulsor.id)}
+          {@const point = { x: cx, y: cy }}
           {#if canSelect(propulsor)}
             <g
               role="button"

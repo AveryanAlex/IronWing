@@ -11,6 +11,7 @@ import type { StagedParameterEdit } from "../../../../lib/stores/params";
 
 type Props = {
   outputIndex: number;
+  showReversal?: boolean;
   itemIndex: ReadonlyMap<string, ParameterItemModel>;
   stagedEdits: Record<string, StagedParameterEdit | undefined>;
   actionsBlocked: boolean;
@@ -18,7 +19,7 @@ type Props = {
   onUnstage: (name: string) => void;
 };
 
-let { outputIndex, itemIndex, stagedEdits, actionsBlocked, onStage, onUnstage }: Props = $props();
+let { outputIndex, showReversal = true, itemIndex, stagedEdits, actionsBlocked, onStage, onUnstage }: Props = $props();
 let errors = $state<Record<string, string | undefined>>({});
 let points = $derived(buildServoOutputSettings(outputIndex, itemIndex, stagedEdits));
 let reverseName = $derived(`SERVO${outputIndex}_REVERSED`);
@@ -49,8 +50,8 @@ function stageNumber(setting: ServoPwmSetting, event: Event) {
 }
 </script>
 
-<div class="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-  {#if reverseItem}
+<div class={`grid min-w-0 gap-3 sm:grid-cols-2 ${showReversal ? "xl:grid-cols-4" : "xl:grid-cols-3"}`}>
+  {#if reverseItem && showReversal}
     <SetupParamEditCard
       item={reverseItem}
       label="Reversed"

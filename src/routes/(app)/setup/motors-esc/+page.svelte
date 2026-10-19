@@ -1,4 +1,5 @@
 <script lang="ts">
+import { MotorRotation } from "../../../../lib/airframe";
 import { page } from "$app/state";
 import { Fan, Power } from "lucide-svelte";
 import { fromStore } from "svelte/store";
@@ -7,14 +8,12 @@ import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/s
 import { motorTest } from "../../../../calibration";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { notifyUnknownError } from "../../../../lib/notifications";
-import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
 import {
   MOTOR_TEST_BRIDGE_LIMIT,
   buildMotorTestRows,
   findMotorTestFailureStatus,
   latestStatusTextSequence,
   resolveMotorTestUnlockDisabledReason,
-  type MotorDirection,
   type MotorTestRow,
 } from "../../../../lib/setup/motor-test-model";
 import { readLiveStatusText } from "../../../../statustext";
@@ -37,7 +36,7 @@ import {
 } from "../../../../features/setup/shared";
 import SetupNoticeList from "../../../../features/setup/shared/SetupNoticeList.svelte";
 import type { SetupParamRef } from "../../../../features/setup/shared/setup-param-refs";
-import { Alert, Badge, Button, Card, Eyebrow, HelperText } from "../../../../components/ui";
+import { Alert, Badge, Button, Card, Eyebrow, ExternalLink, HelperText } from "../../../../components/ui";
 import {
   getSetupWorkspaceRouteContext,
   setupRouteSection,
@@ -49,7 +48,6 @@ const viewStore = fromStore(route.viewStore);
 let view = $derived(viewStore.current);
 let section = $derived(setupRouteSection(view, "motors_esc"));
 
-type DirectionResult = "correct" | "reversed";
 type Tone = "info" | "warning" | "danger";
 type BadgeVariant = "accent" | "destructive" | "muted" | "success";
 type Banner = { id: string; tone: Tone; text: string };
@@ -92,7 +90,6 @@ let testUnlocked = $state(false);
 let activeMotorNumber = $state<number | null>(null);
 let selectedMotorNumber = $state<number | null>(requestedMotorNumber());
 let testSuccessByMotor = $state<Record<number, boolean>>({});
-let directionResultByMotor = $state<Record<number, DirectionResult>>({});
 let commandErrorByMotor = $state<Record<number, string>>({});
 let trackedScopeKey = $state<string | null>(null);
 let lastScopedGoodLayoutSummary = $state<ScopedLayoutSummary | null>(null);
@@ -100,7 +97,6 @@ let lastScopedGoodLayoutSummary = $state<ScopedLayoutSummary | null>(null);
 let params = $derived(paramsState.current);
 let session = $derived(sessionState.current);
 let vehicleType = $derived(params.vehicleType ?? session.sessionDomain.value?.vehicle_state?.vehicle_type ?? null);
-let itemIndex = $derived(buildParameterItemIndex(params.paramStore, params.metadata));
 let appliedProfile = $derived(
   deriveVehicleProfile(vehicleType, {
     paramStore: params.paramStore,
@@ -122,12 +118,6 @@ let statusTextEntries = $derived(readLiveStatusText(session.statusText));
 let testableCount = $derived(rows.filter((row) => row.testStatus === "available").length);
 let bridgeLimitedCount = $derived(rows.filter((row) => row.testStatus === "unsupported-bridge").length);
 let resolvedOwnerCount = $derived(rows.filter((row) => row.ownerStatus === "resolved").length);
-let pendingReversalCount = $derived(
-  rows.filter((row) => row.reversalParamName && params.stagedEdits[row.reversalParamName]).length,
-);
-let retainedReversalFailures = $derived(
-  Object.values(params.retainedFailures).filter((failure) => /SERVO\d+_REVERSED/.test(failure.name)),
-);
 let unlockDisabledReason = $derived(
   resolveMotorTestUnlockDisabledReason({
     checkpointBlocked: view.checkpoint.blocksActions,
@@ -166,7 +156,7 @@ let safetyStateLabel = $derived.by(() => {
 });
 let safetyStateDetail = $derived.by(() => {
   if (view.checkpoint.blocksActions) {
-    return "The reboot or reconnect checkpoint is unresolved, so unlock, test, and reversal actions stay disabled in this section.";
+    return "The reboot or reconnect checkpoint is unresolved, so unlock and test actions stay disabled in this section.";
   }
 
   if (!liveConnected) {
@@ -180,24 +170,6 @@ let safetyStateDetail = $derived.by(() => {
   return testUnlocked
     ? `Direct row actions are live. Each test sends a ${MOTOR_TEST_THROTTLE_PCT}% pulse for ${MOTOR_TEST_DURATION_S} seconds.`
     : "Use the single safety unlock once, then test rows directly without extra confirmation prompts.";
-});
-let reversalStateLabel = $derived.by(() => {
-  if (pendingReversalCount > 0) {
-    return `${pendingReversalCount} queued`;
-  }
-
-  return `${resolvedOwnerCount}/${rows.length} outputs mapped`;
-});
-let reversalStateDetail = $derived.by(() => {
-  if (rows.length === 0) {
-    return "Reversal staging appears after motor rows and mapped outputs are available.";
-  }
-
-  if (pendingReversalCount > 0) {
-    return "Queued SERVOx_REVERSED edits are waiting in staged changes and still require review + apply outside this section.";
-  }
-
-  return `${resolvedOwnerCount} rows can stage one-click SERVOx_REVERSED fixes. The rest stay diagnosis-only because mapped outputs or reverse settings are unavailable.`;
 });
 let hasQueuedLayoutChange = $derived(
   appliedProfile.frameParamFamily === "quadplane"
@@ -234,7 +206,7 @@ let banners = $derived.by(() => {
     next.push({
       id: "layout-unsupported",
       tone: "danger",
-      text: `${layoutModel.message ?? "The current layout is unsupported."} Motor rows stay locked and one-click fixes stop at manual guidance.`,
+      text: `${layoutModel.message ?? "The current layout is unsupported."} Motor rows stay locked.`,
     });
   }
 
@@ -268,7 +240,6 @@ $effect(() => {
     activeMotorNumber = null;
     selectedMotorNumber = requestedMotorNumber();
     testSuccessByMotor = {};
-    directionResultByMotor = {};
     commandErrorByMotor = {};
   }
 
@@ -290,8 +261,8 @@ function resolveAppliedLayoutModel(profile: VehicleProfile): MotorDiagramModel |
     return getVtolTopologyDiagramModel(topology.applied);
   }
 
-  if (profile.frameParamFamily === "copter" && profile.frameClassValue !== null && profile.frameTypeValue !== null) {
-    return getApMotorDiagramModel(profile.frameClassValue, profile.frameTypeValue);
+  if (profile.frameParamFamily === "copter") {
+    return getApMotorDiagramModel(profile.frame);
   }
 
   return null;
@@ -358,14 +329,14 @@ function unresolvedLayoutDetail(profile: VehicleProfile): string {
   return "The active scope does not currently expose a supported motor layout.";
 }
 
-function directionBadge(direction: MotorDirection): { label: string; variant: BadgeVariant } {
+function directionBadge(direction: MotorRotation): { label: string; variant: BadgeVariant } {
   switch (direction) {
-    case "cw":
+    case MotorRotation.Clockwise:
       return {
         label: "CW ↻",
         variant: "accent",
       };
-    case "ccw":
+    case MotorRotation.CounterClockwise:
       return {
         label: "CCW ↺",
         variant: "success",
@@ -419,42 +390,6 @@ function rowOwnerText(row: MotorTestRow): string {
   }
 
   return row.ownerReason ?? "Output mapping unavailable";
-}
-
-function directionControlsVisible(row: MotorTestRow): boolean {
-  if (!testUnlocked || layoutModel?.status !== "supported" || view.checkpoint.blocksActions) {
-    return false;
-  }
-
-  if (row.testStatus === "unsupported-bridge") {
-    return true;
-  }
-
-  return testSuccessByMotor[row.motorNumber] === true;
-}
-
-function canStageReversal(row: MotorTestRow): boolean {
-  if (directionResultByMotor[row.motorNumber] !== "reversed") {
-    return false;
-  }
-
-  if (row.ownerStatus !== "resolved" || !row.reversalParamName || view.checkpoint.blocksActions) {
-    return false;
-  }
-
-  const item = itemIndex.get(row.reversalParamName) ?? null;
-  return Boolean(item && item.readOnly !== true && !params.stagedEdits[row.reversalParamName]);
-}
-
-function reversalButtonLabel(row: MotorTestRow): string {
-  if (!row.reversalParamName) {
-    return "Manual guidance only";
-  }
-
-  const item = itemIndex.get(row.reversalParamName) ?? null;
-  const nextValue = item?.value === 1 ? 0 : 1;
-  const verb = nextValue === 1 ? "Stage reversal" : "Stage normal direction";
-  return `${verb} for review`;
 }
 
 function selectRow(motorNumber: number) {
@@ -521,57 +456,13 @@ async function runMotorTest(row: MotorTestRow) {
     activeMotorNumber = null;
   }
 }
-
-function markDirection(row: MotorTestRow, result: DirectionResult) {
-  if (!directionControlsVisible(row)) {
-    return;
-  }
-
-  directionResultByMotor = {
-    ...directionResultByMotor,
-    [row.motorNumber]: result,
-  };
-}
-
-function stageReversal(row: MotorTestRow) {
-  if (!canStageReversal(row) || !row.reversalParamName) {
-    return;
-  }
-
-  const item = itemIndex.get(row.reversalParamName) ?? null;
-  if (!item) {
-    return;
-  }
-
-  paramsStore.stageParameterEdit(item, item.value === 1 ? 0 : 1);
-}
-
-function resultVariant(result: DirectionResult | undefined): BadgeVariant {
-  if (result === "correct") {
-    return "success";
-  }
-
-  if (result === "reversed") {
-    return "destructive";
-  }
-
-  return "muted";
-}
-
-function reverseItem(row: MotorTestRow): ParameterItemModel | null {
-  if (!row.reversalParamName) {
-    return null;
-  }
-
-  return itemIndex.get(row.reversalParamName) ?? null;
-}
 </script>
 
 <SetupSectionShell
   sectionId={section.id}
   eyebrow={section.title}
   title="Motor, ESC, and lift-powertrain setup"
-  description="Configure QuadPlane ESC output and thrust response, then remove props before confirming motor order, expected spin direction, and SERVOx_REVERSED staging from the applied layout."
+  description="Configure QuadPlane ESC output and thrust response, then remove props before confirming motor order, expected spin direction from the applied layout."
   testId={setupWorkspaceTestIds.motorsEscSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.motorsEscDocsLink }]}
 >
@@ -579,7 +470,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
     <SetupSectionCard
       icon={Fan}
       title="Motor test readiness"
-      description="Verify motor order and direction against the applied ArduPilot layout before staging any direction changes."
+      description="Verify motor order and direction against the applied ArduPilot layout with all propellers removed."
       surface="elevated"
       testId={setupWorkspaceTestIds.motorsEscSummary}
     >
@@ -593,7 +484,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
 
           {#if layoutModel}
             <div class="mt-4 flex justify-center">
-              <MotorDiagram model={layoutModel} activeMotor={activeMotorNumber ?? selectedMotorNumber} size={160} />
+              <MotorDiagram model={layoutModel} activeMotor={activeMotorNumber ?? selectedMotorNumber} size={240} />
             </div>
           {/if}
         </div>
@@ -605,30 +496,14 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
           <HelperText class="mt-1">{safetyStateDetail}</HelperText>
         </div>
         <div>
-          <Eyebrow tracking="widest">Direction changes</Eyebrow>
-          <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.motorsEscReversalState}>
-            {reversalStateLabel}
+          <Eyebrow tracking="widest">Output mapping</Eyebrow>
+          <p class="mt-2 text-sm font-semibold text-text-primary" data-testid="setup-workspace-motors-esc-mapping-state">
+            {resolvedOwnerCount}/{rows.length} outputs mapped
           </p>
-          <HelperText class="mt-1">{reversalStateDetail}</HelperText>
+          <HelperText class="mt-1">Motor numbers follow ArduPilot; SERVO connectors follow the applied output assignments.</HelperText>
         </div>
       </div>
     </SetupSectionCard>
-
-  {#if retainedReversalFailures.length > 0}
-      <Alert
-        variant="danger"
-        density="compact"
-        shadow={false}
-      title="Some staged reversal changes still need attention."
-      testId={setupWorkspaceTestIds.motorsEscFailure}
-    >
-      <ul class="mt-2 list-disc space-y-1 pl-5">
-        {#each retainedReversalFailures as failure (failure.name)}
-          <li>{failure.name} · {failure.message}</li>
-        {/each}
-      </ul>
-    </Alert>
-  {/if}
 
   <SetupNoticeList notices={banners} testIdPrefix={setupWorkspaceTestIds.motorsEscBannerPrefix} />
 
@@ -688,7 +563,7 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
     {:else if !testUnlocked}
       <HelperText>Keep props removed, confirm the vehicle is disarmed, and release the hardware safety switch before unlocking.</HelperText>
     {:else}
-      <HelperText>Motor test is unlocked for this session. Use the row actions below, confirm the observed direction, and stage any reversal fix for review.</HelperText>
+      <HelperText>Motor test is unlocked for this session. Use the row actions below and compare the observed rotation with the diagram.</HelperText>
     {/if}
     </SetupFieldStack>
   </SetupSectionCard>
@@ -701,10 +576,6 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
     <div class="space-y-3">
       {#each rows as row (row.motorNumber)}
         {@const badge = directionBadge(row.expectedDirection)}
-        {@const directionResult = directionResultByMotor[row.motorNumber]}
-        {@const reversalQueued = row.reversalParamName ? Boolean(params.stagedEdits[row.reversalParamName]) : false}
-        {@const reversalFailure = row.reversalParamName ? params.retainedFailures[row.reversalParamName] : null}
-        {@const reverseParamItem = reverseItem(row)}
         <Card.Root
           as="article"
           id={`motor-${row.motorNumber}`}
@@ -760,67 +631,8 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
             </Alert>
           {/if}
 
-          {#if directionControlsVisible(row)}
-            <Card.Root class="mt-4" surface="secondary" density="default">
-              <div class="flex flex-wrap items-center gap-2">
-                <Eyebrow tracking="widest">Observed direction</Eyebrow>
-                <Badge variant={resultVariant(directionResult)} size="sm" case="normal" shape="pill" testId={`${setupWorkspaceTestIds.motorsEscRowResultPrefix}-${row.motorNumber}`}>
-                  {directionResult ?? "Awaiting confirmation"}
-                </Badge>
-              </div>
-              <HelperText class="mt-2">
-                {row.testStatus === "unsupported-bridge"
-                  ? `This row is outside the current 1..=${MOTOR_TEST_BRIDGE_LIMIT} bridge window. Verify it manually, then record the observed direction here before queueing a reversal.`
-                  : `Compare the observed spin with ${badge.label}, then mark the result below.`}
-              </HelperText>
-              <div class="mt-3 flex flex-wrap gap-2">
-                <Button
-                  tone="success"
-                  variant={directionResult === "correct" ? "soft" : "outline"}
-                  testId={`${setupWorkspaceTestIds.motorsEscRowCorrectPrefix}-${row.motorNumber}`}
-                  onclick={() => markDirection(row, "correct")}
-                >
-                  Correct
-                </Button>
-                <Button
-                  tone="danger"
-                  variant={directionResult === "reversed" ? "soft" : "outline"}
-                  testId={`${setupWorkspaceTestIds.motorsEscRowReversedPrefix}-${row.motorNumber}`}
-                  onclick={() => markDirection(row, "reversed")}
-                >
-                  Reversed
-                </Button>
-              </div>
-
-              {#if directionResult === "reversed"}
-                <Card.Root class="mt-4" surface="primary" density="default">
-                  {#if row.ownerStatus === "resolved" && row.reversalParamName && reverseParamItem}
-                    <p class="text-sm leading-6 text-text-secondary">
-                      Stage a reversal fix for {row.reversalParamName}. The section does not apply it directly.
-                    </p>
-                    <Button
-                      class="mt-3"
-                      variant="secondary"
-                      testId={`${setupWorkspaceTestIds.motorsEscRowReversePrefix}-${row.motorNumber}`}
-                      disabled={!canStageReversal(row)}
-                      onclick={() => stageReversal(row)}
-                    >
-                      {reversalQueued ? "Staged for review" : reversalButtonLabel(row)}
-                    </Button>
-                  {:else}
-                    <p class="text-sm leading-6 text-text-secondary" data-testid={`${setupWorkspaceTestIds.motorsEscRowManualPrefix}-${row.motorNumber}`}>
-                      {row.ownerReason ?? "The owning SERVOx_FUNCTION / SERVOx_REVERSED rows are unavailable, so reversal stops at manual guidance."}
-                    </p>
-                  {/if}
-
-                  {#if reversalFailure}
-                    <Alert class="mt-3" variant="danger">
-                      {reversalFailure.message}
-                    </Alert>
-                  {/if}
-                </Card.Root>
-              {/if}
-            </Card.Root>
+          {#if testSuccessByMotor[row.motorNumber]}
+            <HelperText class="mt-3">Test pulse sent. Verify that the numbered motor and its rotation match the diagram.</HelperText>
           {/if}
         </Card.Root>
       {/each}
@@ -829,7 +641,11 @@ function reverseItem(row: MotorTestRow): ParameterItemModel | null {
 
   <SetupGuideCard title="Motor/ESC test checklist">
     <p>Remove all props before sending any motor test command.</p>
-    <p>Run motors in ArduPilot test order, compare the observed spin against the expected CW/CCW direction, then stage SERVOx_REVERSED changes only for outputs that map to the tested motor.</p>
+    <p>Test order and motor number can differ. Compare rotation from above; unspecified rotation must follow the airframe documentation.</p>
+    <p>Change motor rotation in the ESC configuration or by swapping two motor phase wires. Supported DShot ESCs can use SERVO_BLH_RVMASK. SERVOx_REVERSED does not set propeller rotation.</p>
+    {#if resolveDocsUrl("motor_direction")}
+      <ExternalLink href={resolveDocsUrl("motor_direction")!}>ArduPilot motor direction setup</ExternalLink>
+    {/if}
   </SetupGuideCard>
   {/snippet}
 </SetupSectionShell>

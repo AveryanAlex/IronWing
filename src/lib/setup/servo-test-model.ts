@@ -1,17 +1,22 @@
+import type { FrameClass } from "../airframe";
+import { ArduPilotServoFunction, permitsDirectServoCommand } from "../ardupilot/servo-functions";
 import type { Telemetry } from "../../telemetry";
 import type { ParamMetadataMap } from "../../param-metadata";
 import type { ParamStore } from "../../params";
-import { isPropulsionServoFunction } from "./motor-functions";
+import { isPropulsionServoFunction, isTricopterYawFunction, outputFrameClass } from "./motor-functions";
 
 export const SERVO_OUTPUT_COUNT = 32;
 export const SERVO_LIVE_TEST_LIMIT = 16;
 export const SERVO_COMMAND_PWM_MIN = 1000;
 export const SERVO_COMMAND_PWM_MAX = 2000;
 
-const SERVO_FUNCTION_DISABLED = 0;
-
 export type ServoGroupingSubtype = "standard" | "tiltrotor" | "tailsitter" | "compound" | null;
-export type ServoLiveTestStatus = "available" | "unsupported-bridge" | "motor-function";
+export type ServoLiveTestStatus =
+  | "available"
+  | "unsupported-bridge"
+  | "motor-function"
+  | "assigned-function"
+  | "invalid-window";
 export type ServoOutputGroupKind = "vtol" | "motor" | "general";
 
 export type ServoParamsInput = {
@@ -29,7 +34,8 @@ export type ServoConfiguredOutput = {
   maxPwm: number;
   trimPwm: number;
   defaultPwm: number;
-  reverseParamName: string | null;
+  commandMinPwm: number;
+  commandMaxPwm: number;
   isMotorFunction: boolean;
   supported: boolean;
   liveTestStatus: ServoLiveTestStatus;
@@ -57,16 +63,12 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-function hasParam(input: ServoParamsInput, name: string): boolean {
-  return input.paramStore?.params[name] !== undefined;
-}
-
 function currentParamValue(input: ServoParamsInput, name: string): number | null {
   return input.paramStore?.params[name]?.value ?? null;
 }
 
 function clampWithinWindow(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, clampServoCommandPwm(value)));
+  return Math.max(min, Math.min(max, Math.round(value)));
 }
 
 function resolveServoWindow(index: number, input: ServoParamsInput) {
@@ -74,24 +76,18 @@ function resolveServoWindow(index: number, input: ServoParamsInput) {
   const maxValue = currentParamValue(input, `SERVO${index}_MAX`);
   const trimValue = currentParamValue(input, `SERVO${index}_TRIM`);
 
-  const clampedMin = isFiniteNumber(minValue)
-    ? clampServoCommandPwm(minValue)
-    : SERVO_COMMAND_PWM_MIN;
-  const clampedMax = isFiniteNumber(maxValue)
-    ? clampServoCommandPwm(maxValue)
-    : SERVO_COMMAND_PWM_MAX;
-
-  const minPwm = clampedMin <= clampedMax ? clampedMin : SERVO_COMMAND_PWM_MIN;
-  const maxPwm = clampedMin <= clampedMax ? clampedMax : SERVO_COMMAND_PWM_MAX;
-  const trimPwm = isFiniteNumber(trimValue)
-    ? clampWithinWindow(trimValue, minPwm, maxPwm)
-    : clampWithinWindow((minPwm + maxPwm) / 2, minPwm, maxPwm);
-
+  const minPwm = isFiniteNumber(minValue) ? Math.round(minValue) : SERVO_COMMAND_PWM_MIN;
+  const maxPwm = isFiniteNumber(maxValue) ? Math.round(maxValue) : SERVO_COMMAND_PWM_MAX;
+  const trimPwm = isFiniteNumber(trimValue) ? Math.round(trimValue) : Math.round((minPwm + maxPwm) / 2);
+  const commandMinPwm = Math.max(SERVO_COMMAND_PWM_MIN, minPwm);
+  const commandMaxPwm = Math.min(SERVO_COMMAND_PWM_MAX, maxPwm);
   return {
     minPwm,
     maxPwm,
     trimPwm,
-    defaultPwm: trimPwm,
+    commandMinPwm,
+    commandMaxPwm,
+    defaultPwm: clampWithinWindow(trimPwm, commandMinPwm, commandMaxPwm),
   };
 }
 
@@ -100,7 +96,10 @@ function resolveServoFunctionLabel(
   functionValue: number,
   metadata: ParamMetadataMap | null,
 ): { label: string; known: boolean } {
-  const label = metadata?.get(functionParamName)?.values?.find((entry) => entry.code === functionValue)?.label?.trim();
+  const label = metadata
+    ?.get(functionParamName)
+    ?.values?.find((entry) => entry.code === functionValue)
+    ?.label?.trim();
   if (label) {
     return {
       label,
@@ -114,7 +113,11 @@ function resolveServoFunctionLabel(
   };
 }
 
-function resolveLiveTestStatus(index: number, isMotorFunction: boolean): {
+function resolveLiveTestStatus(
+  index: number,
+  functionValue: number,
+  isMotorFunction: boolean,
+): {
   supported: boolean;
   liveTestStatus: ServoLiveTestStatus;
   liveTestReason: string | null;
@@ -124,6 +127,16 @@ function resolveLiveTestStatus(index: number, isMotorFunction: boolean): {
       supported: false,
       liveTestStatus: "motor-function",
       liveTestReason: "Motor-assigned outputs are listed here, but live motor actuation belongs in Motors & ESC.",
+    };
+  }
+
+  // AP_ServoRelayEvents::do_set_servo rejects outputs owned by control laws.
+  if (!permitsDirectServoCommand(functionValue)) {
+    return {
+      supported: false,
+      liveTestStatus: "assigned-function",
+      liveTestReason:
+        "This function owns the output. Check its motion through the transmitter and the documented vehicle setup procedure; direct PWM testing is unavailable.",
     };
   }
 
@@ -163,15 +176,17 @@ function matchesVtolServoKeyword(label: string, subtype: ServoGroupingSubtype): 
   return /vtol|tilt|transition/.test(normalized);
 }
 
-export function clampServoCommandPwm(value: number): number {
-  return Math.max(
-    SERVO_COMMAND_PWM_MIN,
-    Math.min(SERVO_COMMAND_PWM_MAX, Math.round(value)),
-  );
+/** Validate without substituting a different PWM for a named endpoint. */
+export function canSendServoPwm(output: ServoConfiguredOutput, pwm: number): boolean {
+  return output.supported && Number.isInteger(pwm) && pwm >= output.commandMinPwm && pwm <= output.commandMaxPwm;
 }
 
-export function isMotorServoFunction(functionValue: number | null): boolean {
-  return isPropulsionServoFunction(functionValue);
+export function clampServoCommandPwm(value: number): number {
+  return Math.max(SERVO_COMMAND_PWM_MIN, Math.min(SERVO_COMMAND_PWM_MAX, Math.round(value)));
+}
+
+export function isMotorServoFunction(functionValue: number | null, frameClass: FrameClass | null = null): boolean {
+  return isPropulsionServoFunction(functionValue, frameClass);
 }
 
 export function deriveConfiguredServoOutputs(input: ServoParamsInput): ServoConfiguredOutput[] {
@@ -181,23 +196,35 @@ export function deriveConfiguredServoOutputs(input: ServoParamsInput): ServoConf
     const functionParamName = `SERVO${index}_FUNCTION`;
     const functionValue = currentParamValue(input, functionParamName);
 
-    if (!isFiniteNumber(functionValue) || functionValue <= SERVO_FUNCTION_DISABLED) {
+    if (!isFiniteNumber(functionValue) || functionValue < 0) {
       continue;
     }
 
     const { label, known } = resolveServoFunctionLabel(functionParamName, functionValue, input.metadata);
-    const isMotorFunction = isMotorServoFunction(functionValue);
-    const testStatus = resolveLiveTestStatus(index, isMotorFunction);
+    const frameClass = outputFrameClass(input.paramStore);
+    const isMotorFunction = isMotorServoFunction(functionValue, frameClass);
+    const window = resolveServoWindow(index, input);
+    let testStatus = resolveLiveTestStatus(index, functionValue, isMotorFunction);
+    if (testStatus.supported && window.commandMinPwm > window.commandMaxPwm) {
+      testStatus = {
+        supported: false,
+        liveTestStatus: "invalid-window",
+        liveTestReason: "The configured PWM range does not intersect the supported 1000–2000 µs command range.",
+      };
+    }
 
     outputs.push({
       index,
       outputLabel: `SERVO${index}`,
       functionValue,
-      functionLabel: label,
+      functionLabel: isTricopterYawFunction(functionValue, frameClass)
+        ? "Tricopter yaw servo"
+        : functionValue === ArduPilotServoFunction.Disabled
+          ? "Disabled (direct PWM)"
+          : label,
       functionLabelKnown: known,
-      reverseParamName: hasParam(input, `SERVO${index}_REVERSED`) ? `SERVO${index}_REVERSED` : null,
       isMotorFunction,
-      ...resolveServoWindow(index, input),
+      ...window,
       ...testStatus,
     });
   }
@@ -206,7 +233,7 @@ export function deriveConfiguredServoOutputs(input: ServoParamsInput): ServoConf
 }
 
 export function deriveServoTestTargets(input: ServoParamsInput): ServoTestTarget[] {
-  return deriveConfiguredServoOutputs(input).filter((output) => !output.isMotorFunction);
+  return deriveConfiguredServoOutputs(input).filter((output) => output.supported);
 }
 
 export function groupServoTestTargetsByFunction(targets: ServoTestTarget[]): ServoFunctionGroup[] {
@@ -262,16 +289,18 @@ export function deriveServoOutputGroups(
   if (vtolOutputs.length > 0) {
     groups.push({
       id: "vtol",
-      title: subtype === "tiltrotor"
-        ? "VTOL transition & tilt outputs"
-        : subtype === "tailsitter"
-          ? "Tailsitter control outputs"
-          : "VTOL control outputs",
-      description: subtype === "tiltrotor"
-        ? "These outputs look like tilt or transition servos for this VTOL layout."
-        : subtype === "tailsitter"
-          ? "These outputs look like tailsitter surfaces or transition servos."
-          : "These outputs look VTOL-specific and stay grouped here without hiding the remaining configured outputs.",
+      title:
+        subtype === "tiltrotor"
+          ? "VTOL transition & tilt outputs"
+          : subtype === "tailsitter"
+            ? "Tailsitter control outputs"
+            : "VTOL control outputs",
+      description:
+        subtype === "tiltrotor"
+          ? "These outputs look like tilt or transition servos for this VTOL layout."
+          : subtype === "tailsitter"
+            ? "These outputs look like tailsitter surfaces or transition servos."
+            : "These outputs look VTOL-specific and stay grouped here without hiding the remaining configured outputs.",
       kind: "vtol",
       outputs: vtolOutputs,
     });
@@ -291,9 +320,10 @@ export function deriveServoOutputGroups(
     groups.push({
       id: "general",
       title: groups.length === 0 ? "Configured outputs" : "Other configured outputs",
-      description: groups.length === 0
-        ? "All configured outputs are shown in one list."
-        : "Outputs without a VTOL-specific label are grouped here for inspection.",
+      description:
+        groups.length === 0
+          ? "All configured outputs are shown in one list."
+          : "Outputs without a VTOL-specific label are grouped here for inspection.",
       kind: "general",
       outputs: generalOutputs,
     });
@@ -302,10 +332,7 @@ export function deriveServoOutputGroups(
   return groups.filter((group) => group.outputs.length > 0);
 }
 
-export function readServoOutputPwm(
-  servoIndex: number,
-  telemetry: Telemetry | null,
-): number | null {
+export function readServoOutputPwm(servoIndex: number, telemetry: Telemetry | null): number | null {
   if (servoIndex < 1 || servoIndex > SERVO_LIVE_TEST_LIMIT) {
     return null;
   }

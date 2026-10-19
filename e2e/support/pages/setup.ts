@@ -178,11 +178,19 @@ export class SetupWorkspacePage {
 
     await this.openSectionById("vtol");
     await expect(airframe).toBeVisible({ timeout: 10_000 });
-    await airframe.getByTestId(ids.vtolFrameClass).selectOption("7");
+    await airframe.getByTestId(ids.vtolFrameClass).selectOption("tri");
 
     const topology = this.page.getByTestId(ids.vtolTopologyDiagram);
     await expect(topology).toContainText("Proposed — not active");
     await expect(topology).toContainText("proposed Tri Standard Tri");
+    const triDiagram = topology.locator('svg[aria-label$="Tri Standard Tri diagram"]');
+    await expect(triDiagram).toBeVisible();
+    const rightMotor = triDiagram.getByText("M1", { exact: true });
+    const leftMotor = triDiagram.getByText("M2", { exact: true });
+    const rearMotor = triDiagram.getByText("M4", { exact: true });
+    expect(Number(await rightMotor.getAttribute("x"))).toBeGreaterThan(Number(await leftMotor.getAttribute("x")));
+    expect(Number(await rearMotor.getAttribute("y"))).toBeGreaterThan(Number(await rightMotor.getAttribute("y")));
+    await expect(triDiagram.getByText("M7", { exact: true })).toHaveCount(0);
     await expect(this.page.getByTestId(`${ids.reviewRowPrefix}-Q_FRAME_CLASS`)).toHaveCount(1, { timeout: 10_000 });
 
     await this.openSectionById("motors_esc");
@@ -259,18 +267,12 @@ export class SetupWorkspacePage {
 
     await this.page.getByRole("link", { name: "Servo test", exact: true }).first().click();
     await expect(this.page).toHaveURL(/\/setup\/outputs\?mode=test/);
-    const elevatorTest = this.page.getByTestId(`${ids.servoOutputsRowPrefix}-2`);
-    await expect(this.page.getByTestId("setup-workspace-servo-outputs-function-group-19")).toContainText("Elevator");
-    await expect(elevatorTest).toContainText("SERVO2");
-    await expect(elevatorTest.getByRole("button", { name: /Send Mid/ })).toBeDisabled();
-    await expect(elevatorTest.getByRole("slider", { name: "SERVO2 PWM" })).toHaveAttribute("aria-disabled", "true");
-    await this.page.getByTestId("setup-workspace-servo-outputs-unlock").click();
-    const pwmSlider = elevatorTest.getByRole("slider", { name: "SERVO2 PWM" });
-    await pwmSlider.focus();
-    await pwmSlider.press("ArrowRight");
-    await expect(elevatorTest.getByRole("alert")).toContainText("command=183, result=unsupported");
-    await expect(this.page.getByTestId("setup-workspace-servo-outputs-raw-input-2")).toHaveValue("1501");
-    await this.page.getByTestId("setup-workspace-servo-outputs-unlock").click();
+    const elevatorOutput = this.page.getByTestId("setup-workspace-servo-outputs-raw-row-2");
+    await expect(elevatorOutput).toContainText("Elevator");
+    await expect(elevatorOutput).toContainText("direct PWM testing is unavailable");
+    await expect(elevatorOutput.getByRole("button", { name: "Send PWM", exact: true })).toHaveCount(0);
+    await expect(this.page.getByTestId("setup-workspace-servo-outputs-function-group-19")).toHaveCount(0);
+    await expect(this.page.getByTestId("setup-workspace-servo-outputs-raw-input-2")).toHaveCount(0);
     await this.auditLayout("setup output servo test");
 
     await this.ensureReviewSurfaceVisible();

@@ -1,4 +1,6 @@
 <script lang="ts">
+import { FrameClass, FrameType, TiltType, isAirframe } from "../../../lib/airframe";
+import { encodeArduPilotFrame, encodeArduPilotTiltType } from "../../../lib/ardupilot/airframe";
 import { Box, GitBranch, MousePointer2 } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
@@ -14,7 +16,9 @@ import {
   type SetupControlAvailability,
 } from "../../../lib/setup/control-availability";
 import {
-  architectureParameterValues,
+  planVtolArchitectureChange,
+  planVtolFrameClassChange,
+  isVtolFrameClassAllowed,
   getVtolFrameClassOptions,
   getVtolFrameLayoutOptions,
   toggleMotorMask,
@@ -48,6 +52,7 @@ const architectureOptions = [
   { value: "tailsitter_copter", label: "Copter-motor tailsitter" },
   { value: "tailsitter_motor_only", label: "Motor-only tailsitter" },
   { value: "custom", label: "Scripted matrix — manual geometry", disabled: true },
+  { value: "unsupported", label: "Unsupported VTOL configuration", disabled: true },
   { value: "conflict", label: "Conflicting subtype flags", disabled: true },
 ] as const;
 
@@ -55,14 +60,16 @@ let params = $derived(paramsState.current);
 let itemIndex = $derived(buildParameterItemIndex(params.paramStore, params.metadata));
 let proposed = $derived(topology.proposed);
 let airframeParamsReady = $derived(
-  itemIndex.has("Q_FRAME_CLASS")
-    && itemIndex.has("Q_FRAME_TYPE")
-    && itemIndex.has("Q_TILT_ENABLE")
-    && itemIndex.has("Q_TAILSIT_ENABLE"),
+  itemIndex.has("Q_FRAME_CLASS") &&
+    itemIndex.has("Q_FRAME_TYPE") &&
+    itemIndex.has("Q_TILT_ENABLE") &&
+    itemIndex.has("Q_TAILSIT_ENABLE"),
 );
-let classOptions = $derived.by(() => getVtolFrameClassOptions()
-  .filter((option) => classAllowed(option.value, proposed.architecture))
-  .map((option) => ({ value: String(option.value), label: `${option.label} — ${option.description}` })));
+let classOptions = $derived.by(() =>
+  getVtolFrameClassOptions()
+    .filter((option) => isVtolFrameClassAllowed(option.value, proposed.architecture))
+    .map((option) => ({ value: String(option.value), label: `${option.label} — ${option.description}` })),
+);
 let layoutOptions = $derived(
   proposed.frameClass === null
     ? []
@@ -73,9 +80,9 @@ let layoutOptions = $derived(
 );
 let selectableMask = $derived(
   proposed.architecture === "tiltrotor"
-    ? "tilt" as const
+    ? ("tilt" as const)
     : proposed.architecture === "tailsitter_copter"
-      ? "forward" as const
+      ? ("forward" as const)
       : null,
 );
 let maskParamAvailable = $derived(
@@ -90,50 +97,61 @@ let requiredOutputItems = $derived([
   ...proposed.actuators.filter((actuator) => actuator.required),
 ]);
 let assignedRequiredCount = $derived(requiredOutputItems.filter((item) => item.outputOwners.length > 0).length);
-let checkpointAvailability = $derived(
-  actionsBlocked ? setupCheckpointAvailability() : SETUP_CONTROL_AVAILABLE,
+let checkpointAvailability = $derived(actionsBlocked ? setupCheckpointAvailability() : SETUP_CONTROL_AVAILABLE);
+let airframeAvailability = $derived(
+  combineSetupControlAvailability(
+    checkpointAvailability,
+    airframeParamsReady
+      ? SETUP_CONTROL_AVAILABLE
+      : missingParameterAvailability("the VTOL airframe parameters", params.stagedEdits.Q_ENABLE ? ["Q_ENABLE"] : []),
+  ),
 );
-let airframeAvailability = $derived(combineSetupControlAvailability(
-  checkpointAvailability,
-  airframeParamsReady
-    ? SETUP_CONTROL_AVAILABLE
-    : missingParameterAvailability("the VTOL airframe parameters", params.stagedEdits.Q_ENABLE ? ["Q_ENABLE"] : []),
-));
-let frameClassAvailability = $derived(combineSetupControlAvailability(
-  checkpointAvailability,
-  !itemIndex.has("Q_FRAME_CLASS")
-    ? missingParameterAvailability("Q_FRAME_CLASS", topology.pendingTopologyParams)
-    : proposed.architecture === "bicopter" || proposed.architecture === "tailsitter_single_dual"
-      ? setupControlLocked(
-          "fixed_by_configuration",
-          "Frame class is fixed",
-          `${proposed.architectureLabel} requires the Single / Dual hover frame class.`,
-        )
-      : SETUP_CONTROL_AVAILABLE,
-));
-let frameTypeAvailability = $derived(combineSetupControlAvailability(
-  checkpointAvailability,
-  itemIndex.has("Q_FRAME_TYPE")
-    ? SETUP_CONTROL_AVAILABLE
-    : missingParameterAvailability("Q_FRAME_TYPE", topology.pendingTopologyParams),
-));
-let mechanismAvailability = $derived(combineSetupControlAvailability(
-  checkpointAvailability,
-  itemIndex.has("Q_TILT_TYPE")
-    ? SETUP_CONTROL_AVAILABLE
-    : missingParameterAvailability("Q_TILT_TYPE", topology.pendingTopologyParams),
-));
-let maskAvailability = $derived(combineSetupControlAvailability(
-  checkpointAvailability,
-  maskParamAvailable
-    ? SETUP_CONTROL_AVAILABLE
-    : missingParameterAvailability(
-        selectableMask === "tilt" ? "Q_TILT_MASK" : "Q_TAILSIT_MOTMX",
-        topology.pendingTopologyParams,
-      ),
-));
+let frameClassAvailability = $derived(
+  combineSetupControlAvailability(
+    checkpointAvailability,
+    !itemIndex.has("Q_FRAME_CLASS")
+      ? missingParameterAvailability("Q_FRAME_CLASS", topology.pendingTopologyParams)
+      : proposed.architecture === "bicopter" || proposed.architecture === "tailsitter_single_dual"
+        ? setupControlLocked(
+            "fixed_by_configuration",
+            "Frame class is fixed",
+            `${proposed.architectureLabel} requires the Single / Dual hover frame class.`,
+          )
+        : SETUP_CONTROL_AVAILABLE,
+  ),
+);
+let frameTypeAvailability = $derived(
+  combineSetupControlAvailability(
+    checkpointAvailability,
+    itemIndex.has("Q_FRAME_TYPE")
+      ? SETUP_CONTROL_AVAILABLE
+      : missingParameterAvailability("Q_FRAME_TYPE", topology.pendingTopologyParams),
+  ),
+);
+let mechanismAvailability = $derived(
+  combineSetupControlAvailability(
+    checkpointAvailability,
+    itemIndex.has("Q_TILT_TYPE")
+      ? SETUP_CONTROL_AVAILABLE
+      : missingParameterAvailability("Q_TILT_TYPE", topology.pendingTopologyParams),
+  ),
+);
+let maskAvailability = $derived(
+  combineSetupControlAvailability(
+    checkpointAvailability,
+    maskParamAvailable
+      ? SETUP_CONTROL_AVAILABLE
+      : missingParameterAvailability(
+          selectableMask === "tilt" ? "Q_TILT_MASK" : "Q_TAILSIT_MOTMX",
+          topology.pendingTopologyParams,
+        ),
+  ),
+);
 
-function missingParameterAvailability(parameterName: string, stagedPrerequisites: readonly string[]): SetupControlAvailability {
+function missingParameterAvailability(
+  parameterName: string,
+  stagedPrerequisites: readonly string[],
+): SetupControlAvailability {
   if (params.applyPhase === "applying") {
     return setupControlLocked(
       "temporarily_unavailable",
@@ -160,61 +178,42 @@ function missingParameterAvailability(parameterName: string, stagedPrerequisites
   return setupUnsupportedAvailability(parameterName);
 }
 
-function classAllowed(frameClass: number, architecture: VtolArchitecture): boolean {
-  if (architecture === "bicopter" || architecture === "tailsitter_single_dual") return frameClass === 10;
-  if (architecture === "tiltrotor") return [1, 2, 3, 4, 5, 7].includes(frameClass);
-  if (architecture === "tailsitter_copter" || architecture === "tailsitter_motor_only") {
-    return [1, 2, 3, 4, 5, 7, 12, 14, 15, 17].includes(frameClass);
-  }
-  return frameClass !== 10;
-}
-
 function stage(name: string, nextValue: number) {
   stageSetupParameterEdit(paramsStore, itemIndex.get(name), nextValue, { actionsBlocked });
 }
 
 function stageArchitecture(nextArchitecture: VtolArchitecture) {
-  const values = { ...architectureParameterValues(nextArchitecture) };
-  if (nextArchitecture === "tailsitter_copter") {
-    const hasCopterLayout = proposed.frameClass !== null && proposed.frameClass !== 10 && proposed.propulsors.length > 0;
-    if (!hasCopterLayout) {
-      values.Q_FRAME_CLASS = 1;
-      values.Q_FRAME_TYPE = 1;
-      values.Q_TAILSIT_MOTMX = 15;
-    } else if (proposed.tailsitterMotorMask === 0) {
-      values.Q_TAILSIT_MOTMX = proposed.propulsors.reduce(
-        (mask, propulsor) => propulsor.motorNumber === null ? mask : mask | (1 << (propulsor.motorNumber - 1)),
-        0,
-      );
-    }
-  }
-  if (nextArchitecture === "tailsitter_motor_only" && proposed.frameClass === 10) {
-    values.Q_FRAME_CLASS = 1;
-    values.Q_FRAME_TYPE = 1;
-  }
+  const values = planVtolArchitectureChange(nextArchitecture, proposed);
   for (const [name, value] of Object.entries(values)) {
     stage(name, value);
   }
 }
 
 function stageFrameClass(value: string) {
-  const nextClass = Number(value);
-  if (!Number.isFinite(nextClass)) return;
-  stage("Q_FRAME_CLASS", nextClass);
-  const options = getVtolFrameLayoutOptions(nextClass);
-  if (options.length > 0 && (proposed.frameType === null || !options.some((option) => option.matches(proposed.frameType ?? -1)))) {
-    stage("Q_FRAME_TYPE", options[0].value);
+  const option = getVtolFrameClassOptions().find((candidate) => candidate.value === value);
+  if (!option || !isVtolFrameClassAllowed(option.value, proposed.architecture)) return;
+  for (const [name, nextValue] of Object.entries(planVtolFrameClassChange(option.value, proposed))) {
+    stage(name, nextValue);
   }
 }
 
 function stageFrameType(value: string) {
-  const nextType = Number(value);
-  if (Number.isFinite(nextType)) stage("Q_FRAME_TYPE", nextType);
+  const frameClass = proposed.frameClass;
+  if (frameClass === null) return;
+  const option = getVtolFrameLayoutOptions(frameClass).find((candidate) => candidate.value === value);
+  if (!option) return;
+  const frame = { frameClass, frameType: option.value };
+  if (isAirframe(frame)) stage("Q_FRAME_TYPE", encodeArduPilotFrame(frame).frameType);
 }
 
+const mechanismOptions = [
+  { value: TiltType.Continuous, label: "Continuous collective tilt" },
+  { value: TiltType.Binary, label: "Binary / retract mechanism" },
+  { value: TiltType.VectoredYaw, label: "Independent vectored yaw" },
+];
 function stageMechanism(value: string) {
-  const nextType = Number(value);
-  if (Number.isFinite(nextType)) stage("Q_TILT_TYPE", nextType);
+  const option = mechanismOptions.find((candidate) => candidate.value === value);
+  if (option) stage("Q_TILT_TYPE", encodeArduPilotTiltType(option.value));
 }
 
 function toggleDiagramMotor(motorNumber: number) {
@@ -227,12 +226,6 @@ function toggleDiagramMotor(motorNumber: number) {
 
 function issueTone(issue: VtolValidationIssue): "info" | "warning" | "danger" {
   return issue.severity;
-}
-
-function currentLayoutValue(): string {
-  if (proposed.frameClass === null || proposed.frameType === null) return "";
-  const option = getVtolFrameLayoutOptions(proposed.frameClass).find((candidate) => candidate.matches(proposed.frameType ?? -1));
-  return option ? String(option.value) : String(proposed.frameType);
 }
 </script>
 
@@ -255,7 +248,10 @@ function currentLayoutValue(): string {
           value={proposed.architecture}
           options={architectureOptions}
           disabled={airframeAvailability.state === "locked"}
-          onchange={(event) => stageArchitecture(event.currentTarget.value as VtolArchitecture)}
+          onchange={(event) => {
+            const option = architectureOptions.find((candidate) => candidate.value === event.currentTarget.value);
+            if (option) stageArchitecture(option.value);
+          }}
           testId="vtol-architecture-select"
         />
       </SetupControlGuard>
@@ -282,7 +278,7 @@ function currentLayoutValue(): string {
       {#if layoutOptions.length > 0}
         <SetupControlGuard availability={frameTypeAvailability} label="Hover motor layout">
           <NativeSelect
-            value={currentLayoutValue()}
+            value={proposed.frameType ?? ""}
             options={layoutOptions}
             disabled={frameTypeAvailability.state === "locked"}
             onchange={(event) => stageFrameType(event.currentTarget.value)}
@@ -291,13 +287,13 @@ function currentLayoutValue(): string {
         </SetupControlGuard>
       {:else}
         <div class="flex h-9 items-center rounded-md border border-border bg-bg-secondary px-3 text-sm text-text-muted">
-          {proposed.frameClass === 10 ? "Not applicable for Single / Dual" : "Defined by script"}
+          {proposed.frameType === FrameType.NotApplicable ? "Not applicable" : proposed.frameType === FrameType.ScriptDefined ? "Defined by script" : "Layout unavailable"}
         </div>
       {/if}
       <HelperText size="xs">
-        {proposed.frameClass === 7
+        {proposed.frameClass === FrameClass.Tri
           ? "Tri ignores X/Plus. Only the pitch-reversed mixer is a distinct choice."
-          : proposed.frameClass === 5
+          : proposed.frameClass === FrameClass.Y6
             ? "Y6 uses only A, B, and FireFly arrangements; other raw values mean Y6A."
             : proposed.frameTypeIgnored
               ? "Q_FRAME_TYPE does not affect this class."
@@ -315,12 +311,9 @@ function currentLayoutValue(): string {
         </span>
         <SetupControlGuard availability={mechanismAvailability} label="Tilt mechanism">
           <NativeSelect
-            value={proposed.mechanism === "binary" ? "1" : proposed.mechanism === "vectored_yaw" ? "2" : "0"}
-            options={[
-              { value: "0", label: "Continuous collective tilt" },
-              { value: "1", label: "Binary / retract mechanism" },
-              { value: "2", label: "Independent vectored yaw" },
-            ]}
+            value={proposed.mechanism}
+            options={mechanismOptions}
+            placeholder="Unsupported tilt mechanism"
             disabled={mechanismAvailability.state === "locked"}
             onchange={(event) => stageMechanism(event.currentTarget.value)}
             testId="vtol-tilt-mechanism-select"

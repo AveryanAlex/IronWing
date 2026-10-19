@@ -7,17 +7,15 @@ import { getParamsStoreContext, getSessionStoreContext } from "../../../../app/s
 import { setServo } from "../../../../calibration";
 import { resolveDocsUrl } from "../../../../data/ardupilot-docs";
 import { notifyUnknownError } from "../../../../lib/notifications";
-import { buildParameterItemIndex, type ParameterItemModel } from "../../../../lib/params/parameter-item-model";
-import { getDirectionGuidance } from "../../../../lib/setup/servo-direction-guidance";
 import {
   SERVO_LIVE_TEST_LIMIT,
   clampServoCommandPwm,
+  canSendServoPwm,
   deriveConfiguredServoOutputs,
   deriveServoOutputGroups,
   deriveServoTestTargets,
   groupServoTestTargetsByFunction,
   type ServoConfiguredOutput,
-  type ServoTestTarget,
 } from "../../../../lib/setup/servo-test-model";
 import { deriveVehicleProfile } from "../../../../lib/setup/vehicle-profile";
 import { selectTelemetryView } from "../../../../lib/telemetry-selectors";
@@ -34,9 +32,9 @@ import {
   Card,
   EmptyState,
   Eyebrow,
+  ExternalLink,
   HelperText,
   Input,
-  MonoValue,
   Slider,
 } from "../../../../components/ui";
 import {
@@ -53,7 +51,6 @@ let section = $derived(setupRouteSection(view, "outputs"));
 
 type Tone = "info" | "warning" | "danger";
 type Banner = { id: string; tone: Tone; text: string };
-type DirectionResult = "correct" | "reversed";
 type BadgeVariant = "destructive" | "muted" | "success" | "warning";
 type ReadbackView = {
   state: "live" | "stale" | "unavailable";
@@ -70,8 +67,6 @@ const sessionState = fromStore(sessionStore);
 let testUnlocked = $state(false);
 let activeOutputIndex = $state<number | null>(null);
 let selectedOutputIndex = $state<number | null>(requestedOutputIndex());
-let testSuccessByOutput = $state<Record<number, boolean>>({});
-let directionResultByOutput = $state<Record<number, DirectionResult>>({});
 let commandErrorByOutput = $state<Record<number, string>>({});
 let rawPwmByOutput = $state<Record<number, number>>({});
 let lastScopedGoodReadbacks = $state<Record<number, number>>({});
@@ -86,7 +81,6 @@ let profile = $derived(
     stagedEdits: {},
   }),
 );
-let itemIndex = $derived(buildParameterItemIndex(params.paramStore, params.metadata));
 let configuredOutputs = $derived(
   deriveConfiguredServoOutputs({
     paramStore: params.paramStore,
@@ -105,13 +99,9 @@ let rawGroups = $derived(deriveServoOutputGroups(configuredOutputs, profile.subt
 let liveConnected = $derived(session.sessionDomain.value?.connection.kind === "connected");
 let hasServoTelemetry = $derived(Array.isArray(telemetry.servo_outputs) && telemetry.servo_outputs.length > 0);
 let docsUrl = $derived(resolveDocsUrl("servo_outputs"));
-let pendingReversalCount = $derived(
-  configuredOutputs.filter((output) => output.reverseParamName && params.stagedEdits[output.reverseParamName]).length,
+let unsupportedOutputs = $derived(
+  configuredOutputs.filter((output) => !output.isMotorFunction && output.liveTestStatus === "unsupported-bridge"),
 );
-let retainedReversalFailures = $derived(
-  Object.values(params.retainedFailures).filter((failure) => /SERVO\d+_REVERSED/.test(failure.name)),
-);
-let unsupportedOutputs = $derived(configuredOutputs.filter((output) => !output.isMotorFunction && !output.supported));
 let motorOutputs = $derived(configuredOutputs.filter((output) => output.isMotorFunction));
 let pendingOutputEditCount = $derived(
   Object.keys(params.stagedEdits).filter((name) => /SERVO\d+_(FUNCTION|MIN|MAX|TRIM)$/.test(name)).length,
@@ -140,7 +130,7 @@ let testerSummaryDetail = $derived.by(() => {
   }
 
   if (functionGroups.length === 0) {
-    return "No live-testable non-motor outputs are currently within the SERVO1–16 bridge window.";
+    return "No outputs currently accept direct PWM testing.";
   }
 
   return `${functionGroups.length} function group${functionGroups.length === 1 ? "" : "s"} drive the grouped tester, while the advanced output list keeps every configured output visible.`;
@@ -162,7 +152,7 @@ let safetyStateLabel = $derived.by(() => {
 });
 let safetyStateDetail = $derived.by(() => {
   if (view.checkpoint.blocksActions) {
-    return "The reboot or reconnect checkpoint is unresolved, so all servo actuation stays blocked in this section.";
+    return "The reboot or reconnect checkpoint is unresolved, so all direct PWM commands stay blocked in this section.";
   }
 
   if (!liveConnected) {
@@ -197,32 +187,6 @@ let readbackSummary = $derived.by(() => {
     label: live > 0 ? `${live} live` : stale > 0 ? `${stale} stale` : "Unavailable",
     detail: `${live} live · ${stale} stale · ${unavailable} unavailable`,
   };
-});
-let reversalStateLabel = $derived.by(() => {
-  if (pendingReversalCount > 0) {
-    return `${pendingReversalCount} queued`;
-  }
-
-  if (retainedReversalFailures.length > 0) {
-    return `${retainedReversalFailures.length} retained failure${retainedReversalFailures.length === 1 ? "" : "s"}`;
-  }
-
-  return `${configuredOutputs.filter((output) => output.reverseParamName !== null).length}/${configuredOutputs.length} reversible`;
-});
-let reversalStateDetail = $derived.by(() => {
-  if (configuredOutputs.length === 0) {
-    return "No configured outputs are available to inspect or reverse yet.";
-  }
-
-  if (pendingReversalCount > 0) {
-    return "Queued SERVOx_REVERSED edits are staged and still require review + apply outside this section.";
-  }
-
-  if (retainedReversalFailures.length > 0) {
-    return "Retained SERVOx_REVERSED failures stay visible next to the affected rows until you restage or resolve them.";
-  }
-
-  return "Reversal fixes are staged for review only. This section does not apply them directly.";
 });
 let banners = $derived.by(() => {
   const next: Banner[] = [];
@@ -396,7 +360,7 @@ function updateRawDraft(output: ServoConfiguredOutput, value: string) {
 
   rawPwmByOutput = {
     ...rawPwmByOutput,
-    [output.index]: Math.max(output.minPwm, Math.min(output.maxPwm, clampServoCommandPwm(parsed))),
+    [output.index]: Math.max(output.commandMinPwm, Math.min(output.commandMaxPwm, clampServoCommandPwm(parsed))),
   };
 }
 
@@ -420,7 +384,7 @@ function servoCommandDisabled(output: ServoConfiguredOutput): boolean {
 }
 
 async function sendServoCommand(output: ServoConfiguredOutput, pwm: number) {
-  if (servoCommandDisabled(output)) {
+  if (servoCommandDisabled(output) || !canSendServoPwm(output, pwm)) {
     return;
   }
 
@@ -437,10 +401,6 @@ async function sendServoCommand(output: ServoConfiguredOutput, pwm: number) {
       ...rawPwmByOutput,
       [output.index]: pwm,
     };
-    testSuccessByOutput = {
-      ...testSuccessByOutput,
-      [output.index]: true,
-    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     commandErrorByOutput = {
@@ -454,115 +414,13 @@ async function sendServoCommand(output: ServoConfiguredOutput, pwm: number) {
     activeOutputIndex = null;
   }
 }
-
-function stageReverseButtonLabel(output: ServoConfiguredOutput): string {
-  const reverseItem = reverseParameterItem(output);
-  if (!output.reverseParamName || !reverseItem) {
-    return "Manual guidance only";
-  }
-
-  const nextValue = reverseItem.value === 1 ? 0 : 1;
-  return nextValue === 1 ? "Queue reversal" : "Queue normal direction";
-}
-
-function reverseParameterItem(output: ServoConfiguredOutput): ParameterItemModel | null {
-  if (!output.reverseParamName) {
-    return null;
-  }
-
-  return itemIndex.get(output.reverseParamName) ?? null;
-}
-
-function canStageReverse(output: ServoConfiguredOutput): boolean {
-  const reverseItem = reverseParameterItem(output);
-  return Boolean(
-    output.reverseParamName &&
-      reverseItem &&
-      reverseItem.readOnly !== true &&
-      !view.checkpoint.blocksActions &&
-      !params.stagedEdits[output.reverseParamName],
-  );
-}
-
-function stageReverse(output: ServoConfiguredOutput) {
-  if (!output.reverseParamName || !canStageReverse(output)) {
-    return;
-  }
-
-  const reverseItem = reverseParameterItem(output);
-  if (!reverseItem) {
-    return;
-  }
-
-  paramsStore.stageParameterEdit(reverseItem, reverseItem.value === 1 ? 0 : 1);
-}
-
-function reverseStateText(output: ServoConfiguredOutput): string {
-  if (!output.reverseParamName) {
-    return "Reverse param unavailable";
-  }
-
-  if (params.stagedEdits[output.reverseParamName]) {
-    return `Queued · ${params.stagedEdits[output.reverseParamName]?.nextValueText ?? "pending"}`;
-  }
-
-  const reverseItem = reverseParameterItem(output);
-  if (!reverseItem) {
-    return "Reverse param unavailable";
-  }
-
-  return reverseItem.value === 1 ? "reversed" : "normal";
-}
-
-function rawSendButtonLabel(output: ServoConfiguredOutput): string {
-  if (activeOutputIndex === output.index) {
-    return "Sending…";
-  }
-
-  if (output.liveTestStatus === "unsupported-bridge") {
-    return `SERVO1–${SERVO_LIVE_TEST_LIMIT} only`;
-  }
-
-  if (output.liveTestStatus === "motor-function") {
-    return "Use Motors & ESC";
-  }
-
-  return "Send PWM";
-}
-
-function directionControlsVisible(target: ServoTestTarget): boolean {
-  return Boolean(testSuccessByOutput[target.index]) && !view.checkpoint.blocksActions;
-}
-
-function resultVariant(result: DirectionResult | undefined): BadgeVariant {
-  if (result === "correct") {
-    return "success";
-  }
-
-  if (result === "reversed") {
-    return "destructive";
-  }
-
-  return "muted";
-}
-
-function markDirection(target: ServoTestTarget, result: DirectionResult) {
-  if (!directionControlsVisible(target)) {
-    return;
-  }
-
-  directionResultByOutput = {
-    ...directionResultByOutput,
-    [target.index]: result,
-  };
-}
 </script>
 
 <SetupSectionShell
   sectionId={section.id}
   eyebrow={section.title}
-  title="Test servo outputs and verify direction"
-  description="Exercise the applied non-motor output map by function, confirm surface direction, and use the advanced list for precise PWM checks."
+  title="Inspect outputs and test direct PWM"
+  description="Inspect the applied output map and send direct PWM only to functions that allow it."
   testId={setupWorkspaceTestIds.outputsSection}
   docs={[{ url: docsUrl, label: "ArduPilot Docs", testId: setupWorkspaceTestIds.servoOutputsDocsLink }]}
 >
@@ -598,13 +456,6 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
           </p>
           <HelperText class="mt-1">{readbackSummary.detail}</HelperText>
         </div>
-        <div>
-          <Eyebrow tracking="widest">Direction changes</Eyebrow>
-          <p class="mt-2 text-sm font-semibold text-text-primary" data-testid={setupWorkspaceTestIds.servoOutputsReversalState}>
-            {reversalStateLabel}
-          </p>
-          <HelperText class="mt-1">{reversalStateDetail}</HelperText>
-        </div>
       </div>
     </SetupSectionCard>
 
@@ -616,22 +467,6 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
       streamLabel="Servo output telemetry"
       testId={setupWorkspaceTestIds.servoOutputsTelemetryNotice}
     />
-
-  {#if retainedReversalFailures.length > 0}
-      <Alert
-        variant="danger"
-        density="compact"
-        shadow={false}
-      title="Some staged servo reversal changes still need attention."
-      testId={setupWorkspaceTestIds.servoOutputsFailure}
-    >
-      <ul class="mt-2 list-disc space-y-1 pl-5">
-        {#each retainedReversalFailures as failure (failure.name)}
-          <li>{failure.name} · {failure.message}</li>
-        {/each}
-      </ul>
-    </Alert>
-  {/if}
 
   <SetupNoticeList notices={banners} testIdPrefix={setupWorkspaceTestIds.servoOutputsBannerPrefix} />
 
@@ -666,26 +501,25 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
     <EmptyState title="No configured outputs" description="No configured SERVOx_FUNCTION rows are available for this firmware." />
   {:else}
     <div class="space-y-4">
-      <SetupSectionCard icon={Activity} title="Function-oriented tester" surface="elevated" compact>
+      <SetupSectionCard icon={Activity} title="Direct PWM tester" surface="elevated" compact>
         {#snippet actions()}
           <Badge variant="muted" testId={setupWorkspaceTestIds.servoOutputsSelectedTarget}>
             {selectedOutputIndex ? `Selected · SERVO${selectedOutputIndex}` : "Selected · none"}
           </Badge>
         {/snippet}
 
-        <HelperText>Grouped by SERVOn_FUNCTION so operators can test a surface family first, then confirm direction and stage SERVOx_REVERSED changes without moving directly to per-output PWM commands.</HelperText>
+        <HelperText>Only outputs that accept direct PWM commands are listed here.</HelperText>
 
         {#if functionGroups.length === 0}
           <EmptyState class="mt-4" title="No grouped live-test targets" description={`No non-motor SERVO1-${SERVO_LIVE_TEST_LIMIT} targets are currently available for grouped live testing. Use the advanced output list below to inspect every configured output.`} />
         {:else}
           <div class="mt-4 space-y-4">
             {#each functionGroups as group (group.id)}
-              {@const guidance = getDirectionGuidance(group.functionValue)}
               <Card.Root surface="secondary" density="compact" testId={`${setupWorkspaceTestIds.servoOutputsFunctionGroupPrefix}-${group.functionValue}`}>
                 <div class="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p class="text-sm font-semibold text-text-primary">{group.functionLabel}</p>
-                    <p class="mt-1 text-xs text-text-muted">Min → {guidance.minLabel} · Max → {guidance.maxLabel}</p>
+                    <p class="mt-1 text-xs text-text-muted">Commands send PWM values; physical motion depends on the installation.</p>
                   </div>
                   <Badge variant="muted" size="sm" case="normal" shape="pill">
                     {group.targets.length} output{group.targets.length === 1 ? "" : "s"}
@@ -695,8 +529,6 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                 <div class="mt-4 space-y-3">
                   {#each group.targets as target (target.index)}
                     {@const readback = resolveReadback(target)}
-                    {@const directionResult = directionResultByOutput[target.index]}
-                    {@const reversalFailure = target.reverseParamName ? params.retainedFailures[target.reverseParamName] : null}
                     <article
                       class={`rounded-lg border px-4 py-4 ${selectedOutputIndex === target.index ? "border-accent/40 bg-accent/5" : "border-border bg-bg-primary/80"}`}
                       data-selected={selectedOutputIndex === target.index}
@@ -727,7 +559,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                           <Button
                             variant="secondary"
                             testId={`${setupWorkspaceTestIds.servoOutputsRowMinPrefix}-${target.index}`}
-                            disabled={servoCommandDisabled(target)}
+                            disabled={servoCommandDisabled(target) || !canSendServoPwm(target, target.minPwm)}
                             onclick={() => sendServoCommand(target, target.minPwm)}
                           >
                             {activeOutputIndex === target.index ? "Sending…" : `Send Min ${target.minPwm}`}
@@ -735,7 +567,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                           <Button
                             variant="secondary"
                             testId={`setup-workspace-servo-outputs-row-mid-${target.index}`}
-                            disabled={servoCommandDisabled(target)}
+                            disabled={servoCommandDisabled(target) || !canSendServoPwm(target, target.trimPwm)}
                             onclick={() => sendServoCommand(target, target.trimPwm)}
                           >
                             {activeOutputIndex === target.index ? "Sending…" : `Send Mid ${target.trimPwm}`}
@@ -743,7 +575,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                           <Button
                             variant="secondary"
                             testId={`${setupWorkspaceTestIds.servoOutputsRowMaxPrefix}-${target.index}`}
-                            disabled={servoCommandDisabled(target)}
+                            disabled={servoCommandDisabled(target) || !canSendServoPwm(target, target.maxPwm)}
                             onclick={() => sendServoCommand(target, target.maxPwm)}
                           >
                             {activeOutputIndex === target.index ? "Sending…" : `Send Max ${target.maxPwm}`}
@@ -754,8 +586,8 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                       <div class="mt-4">
                         <Slider
                           value={rawDraftValue(target)}
-                          min={target.minPwm}
-                          max={target.maxPwm}
+                          min={target.commandMinPwm}
+                          max={target.commandMaxPwm}
                           step={1}
                           label={`SERVO${target.index} PWM`}
                           unit=" µs"
@@ -765,7 +597,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                           onValueChange={(value) => updateRawDraft(target, String(value))}
                           onValueCommit={(value) => sendServoCommand(target, value)}
                         />
-                        <HelperText class="mt-1" size="xs">Release the slider to send PWM using the applied Min/Mid/Max points.</HelperText>
+                        <HelperText class="mt-1" size="xs">Direct PWM range: {target.commandMinPwm}–{target.commandMaxPwm} µs. Configured endpoints outside this range are shown but cannot be sent.</HelperText>
                       </div>
 
                       {#if commandErrorByOutput[target.index]}
@@ -778,60 +610,6 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                         </Alert>
                       {/if}
 
-                      {#if directionControlsVisible(target)}
-                        <Card.Root class="mt-4" surface="secondary" density="default">
-                          <div class="flex flex-wrap items-center gap-2">
-                            <Eyebrow tracking="widest">Observed direction</Eyebrow>
-                            <Badge variant={resultVariant(directionResult)} size="sm" case="normal" shape="pill" testId={`${setupWorkspaceTestIds.servoOutputsRowResultPrefix}-${target.index}`}>
-                              {directionResult ?? "Awaiting confirmation"}
-                            </Badge>
-                          </div>
-                          <HelperText class="mt-2">Compare the observed motion with the group guidance above, then record whether the surface moved in the expected direction.</HelperText>
-                          <div class="mt-3 flex flex-wrap gap-2">
-                            <Button
-                              tone="success"
-                              variant={directionResult === "correct" ? "soft" : "outline"}
-                              testId={`${setupWorkspaceTestIds.servoOutputsRowCorrectPrefix}-${target.index}`}
-                              onclick={() => markDirection(target, "correct")}
-                            >
-                              Correct
-                            </Button>
-                            <Button
-                              tone="danger"
-                              variant={directionResult === "reversed" ? "soft" : "outline"}
-                              testId={`${setupWorkspaceTestIds.servoOutputsRowReversedPrefix}-${target.index}`}
-                              onclick={() => markDirection(target, "reversed")}
-                            >
-                              Reversed
-                            </Button>
-                          </div>
-
-                          {#if directionResult === "reversed"}
-                            <div class="mt-4">
-                              <p class="text-sm leading-6 text-text-secondary">Stage the corresponding SERVOx_REVERSED change for review; this section does not apply it directly.</p>
-                              <div class="mt-3 flex flex-wrap items-center gap-2">
-                                <Button
-                                  variant="secondary"
-                                  testId={`${setupWorkspaceTestIds.servoOutputsRowReversePrefix}-${target.index}`}
-                                  disabled={!canStageReverse(target)}
-                                  onclick={() => stageReverse(target)}
-                                >
-                                  {target.reverseParamName && params.stagedEdits[target.reverseParamName]
-                                    ? "Staged for review"
-                                    : stageReverseButtonLabel(target)}
-                                </Button>
-                                <HelperText as="span" size="xs">{reverseStateText(target)}</HelperText>
-                              </div>
-
-                              {#if reversalFailure}
-                                <Alert class="mt-3" variant="danger">
-                                  {reversalFailure.message}
-                                </Alert>
-                              {/if}
-                            </div>
-                          {/if}
-                        </Card.Root>
-                      {/if}
                     </article>
                   {/each}
                 </div>
@@ -860,7 +638,6 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
               <div class="mt-4 space-y-3">
                 {#each group.outputs as output (output.index)}
                   {@const readback = resolveReadback(output)}
-                  {@const reversalFailure = output.reverseParamName ? params.retainedFailures[output.reverseParamName] : null}
                   <article
                     id={`servo-output-${output.index}`}
                     class={`rounded-lg border px-4 py-4 ${selectedOutputIndex === output.index ? "border-accent/40 bg-accent/5" : "border-border bg-bg-primary/80"}`}
@@ -884,18 +661,19 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                           </Badge>
                         </div>
                         <HelperText class="mt-2" testId={`${setupWorkspaceTestIds.servoOutputsRawAvailabilityPrefix}-${output.index}`}>
-                          {output.liveTestReason ?? `Live actuation is available for this row once the section-level unlock is open. Safe window · ${output.minPwm}–${output.maxPwm} µs.`}
+                          {output.liveTestReason ?? `Live actuation is available for this row once the section-level unlock is open. Command window · ${output.commandMinPwm}–${output.commandMaxPwm} µs.`}
                         </HelperText>
-                        <HelperText class="mt-1" size="xs" tone="muted">Default PWM · <MonoValue size="xs" tone="muted" value={output.defaultPwm} /> µs · Reverse state · {reverseStateText(output)}</HelperText>
+                        <HelperText class="mt-1" size="xs" tone="muted">Configured Min / Trim / Max · {output.minPwm} / {output.trimPwm} / {output.maxPwm} µs</HelperText>
                       </div>
 
+                      {#if output.supported}
                       <div class="flex flex-col gap-2 sm:flex-row sm:items-center">
                         <Input
                           class="w-28 font-mono"
                           data-testid={`${setupWorkspaceTestIds.servoOutputsRawInputPrefix}-${output.index}`}
                           disabled={!output.supported || !testUnlocked || activeOutputIndex !== null || !liveConnected || view.checkpoint.blocksActions}
-                          max={output.maxPwm}
-                          min={output.minPwm}
+                          max={output.commandMaxPwm}
+                          min={output.commandMinPwm}
                           oninput={(event) => updateRawDraft(output, (event.currentTarget as HTMLInputElement).value)}
                           type="number"
                           value={String(rawDraftValue(output))}
@@ -906,19 +684,11 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                           disabled={servoCommandDisabled(output)}
                           onclick={() => sendServoCommand(output, rawDraftValue(output))}
                         >
-                          {rawSendButtonLabel(output)}
+                          {activeOutputIndex === output.index ? "Sending…" : "Send PWM"}
                         </Button>
-                        <Button
-                          variant="secondary"
-                          testId={`${setupWorkspaceTestIds.servoOutputsRawReversePrefix}-${output.index}`}
-                          disabled={!canStageReverse(output)}
-                          onclick={() => stageReverse(output)}
-                        >
-                          {output.reverseParamName && params.stagedEdits[output.reverseParamName]
-                            ? "Staged for review"
-                            : stageReverseButtonLabel(output)}
-                        </Button>
+
                       </div>
+                      {/if}
                     </div>
 
                     {#if commandErrorByOutput[output.index]}
@@ -931,11 +701,7 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
                       </Alert>
                     {/if}
 
-                    {#if reversalFailure}
-                      <Alert class="mt-3" variant="danger">
-                        {reversalFailure.message}
-                      </Alert>
-                    {/if}
+
                   </article>
                 {/each}
               </div>
@@ -947,8 +713,12 @@ function markDirection(target: ServoTestTarget, result: DirectionResult) {
   {/if}
 
   <SetupGuideCard title="Servo output workflow">
+    <p>Control surfaces, tilt servos and other assigned functions cannot be driven by direct PWM commands. Their test controls are hidden.</p>
+    {#if resolveDocsUrl("servo_commands")}
+      <ExternalLink href={resolveDocsUrl("servo_commands")!}>ArduPilot servo command documentation</ExternalLink>
+    {/if}
     <p>Start with the SERVOn_FUNCTION mapping to identify the surface or peripheral assigned to each output.</p>
-    <p>Use grouped min/max tests for supported non-motor outputs, then use the advanced output list for direct PWM checks and unsupported-output diagnosis.</p>
+    <p>Test control surfaces and tilt mechanisms through the transmitter and the vehicle-specific setup procedure. Configure servo reversal in Outputs assignments after checking the response.</p>
   </SetupGuideCard>
   {/snippet}
 </SetupSectionShell>

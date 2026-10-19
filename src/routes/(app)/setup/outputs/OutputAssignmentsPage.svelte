@@ -1,4 +1,5 @@
 <script lang="ts">
+import { ArduPilotServoFunction } from "../../../../lib/ardupilot/servo-functions";
 import { Cable, Cpu, Plus, Search, Trash2, TriangleAlert } from "lucide-svelte";
 import { fromStore } from "svelte/store";
 
@@ -186,7 +187,7 @@ function confirmPendingPlan() {
 
 function outputOwnerText(index: number): string {
   const output = model.outputs.find((candidate) => candidate.index === index);
-  if (!output || output.proposedFunctionValue === 0) return "Free";
+  if (!output || output.proposedFunctionValue === ArduPilotServoFunction.Disabled) return "Free";
   return `${output.proposedFunctionLabel} · Fn ${output.proposedFunctionValue}`;
 }
 
@@ -240,7 +241,7 @@ function verificationHref(row: OutputFunctionRow): string | null {
             </div>
             {#if verifyHref}
               <InternalLink href={verifyHref as "/"} variant="button">
-                {row.category === "propulsion" ? "Motor test" : "Servo test"}
+                {row.category === "propulsion" ? "Motor test" : "Inspect output"}
               </InternalLink>
             {/if}
           </div>
@@ -281,6 +282,7 @@ function verificationHref(row: OutputFunctionRow): string | null {
                   </Button>
                 </div>
                 <ServoOutputSettings
+                  showReversal={row.category !== "propulsion" || motorNumberForServoFunction(row.value) === null}
                   {outputIndex}
                   {itemIndex}
                   stagedEdits={params.stagedEdits}

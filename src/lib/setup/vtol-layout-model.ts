@@ -1,7 +1,7 @@
-import { getMotorLayout, type MotorLayout } from "../../data/motor-layouts";
+import type { Airframe, MotorLayout, MotorNumber } from "../airframe";
+import { getMotorLayout } from "../../data/motor-layouts";
 import type { VtolTopologySnapshot } from "./vtol-topology-model";
 
-export type MotorDiagramOverlay = "none" | "tiltrotor" | "tailsitter";
 export type MotorDiagramMotorRole = "lift" | "tilt" | "propulsion";
 export type MotorDiagramStatus = "supported" | "preview-only" | "unsupported";
 
@@ -14,10 +14,7 @@ export type MotorDiagramModel = {
   source: "ap-motors" | "custom";
   className: string;
   typeName: string;
-  overlay: MotorDiagramOverlay;
   motors: MotorDiagramEntry[];
-  hasLiftMotorSurface: boolean;
-  hasMotorTestSurface: boolean;
   message: string | null;
 };
 
@@ -25,26 +22,19 @@ function cloneMotors(motors: MotorLayout[]): MotorDiagramEntry[] {
   return motors.map((motor) => ({ ...motor }));
 }
 
-function propulsionEntries(frameClass: number, motors: MotorLayout[]): MotorLayout[] {
-  return motors.filter((motor) => !(frameClass === 7 && motor.motorNumber === 7));
-}
-
-export function getApMotorDiagramModel(frameClass: number, frameType: number): MotorDiagramModel | null {
-  const layout = getMotorLayout(frameClass, frameType);
+export function getApMotorDiagramModel(frame: Airframe | null): MotorDiagramModel | null {
+  const layout = getMotorLayout(frame);
   if (!layout) {
     return null;
   }
-  const motors = propulsionEntries(frameClass, layout.motors);
+  const motors = layout.motors;
 
   return {
     status: "supported",
     source: "ap-motors",
     className: layout.className,
     typeName: layout.typeName,
-    overlay: "none",
     motors: cloneMotors(motors),
-    hasLiftMotorSurface: motors.length > 0,
-    hasMotorTestSurface: motors.length > 0,
     message: null,
   };
 }
@@ -55,19 +45,21 @@ export function getVtolTopologyDiagramModel(snapshot: VtolTopologySnapshot): Mot
   }
 
   const numberedPropulsors = snapshot.propulsors.filter(
-    (propulsor): propulsor is typeof propulsor & { motorNumber: number } => propulsor.motorNumber !== null,
+    (propulsor): propulsor is typeof propulsor & { motorNumber: MotorNumber } => propulsor.motorNumber !== null,
   );
   if (numberedPropulsors.length === 0) {
+    const usesPlaneThrottle =
+      snapshot.propulsors.length > 0 &&
+      (snapshot.architecture === "bicopter" || snapshot.architecture === "tailsitter_single_dual");
     return {
-      status: "preview-only",
+      status: usesPlaneThrottle ? "preview-only" : "unsupported",
       source: "custom",
       className: snapshot.frameClassLabel,
       typeName: snapshot.frameTypeLabel,
-      overlay: snapshot.architecture.startsWith("tailsitter") ? "tailsitter" : "tiltrotor",
       motors: [],
-      hasLiftMotorSurface: false,
-      hasMotorTestSurface: false,
-      message: "This architecture uses plane throttle functions instead of the multicopter motor_test numbering. Verify its propulsion outputs through the documented tailsitter/bicopter bench procedure.",
+      message: usesPlaneThrottle
+        ? "This architecture uses plane throttle functions instead of the multicopter motor_test numbering. Verify its propulsion outputs through the documented tailsitter/bicopter bench procedure."
+        : "The selected VTOL frame or mechanism has no verified motor diagram. Review the airframe configuration before testing outputs.",
     };
   }
 
@@ -76,21 +68,13 @@ export function getVtolTopologyDiagramModel(snapshot: VtolTopologySnapshot): Mot
     source: "ap-motors",
     className: snapshot.frameClassLabel,
     typeName: snapshot.frameTypeLabel,
-    overlay: snapshot.architecture === "tiltrotor" || snapshot.architecture === "bicopter"
-      ? "tiltrotor"
-      : snapshot.architecture.startsWith("tailsitter")
-        ? "tailsitter"
-        : "none",
     motors: numberedPropulsors.map((propulsor) => ({
       motorNumber: propulsor.motorNumber,
-      rollFactor: propulsor.rollFactor,
-      pitchFactor: propulsor.pitchFactor,
-      yawFactor: propulsor.yawFactor,
+      position: propulsor.position,
+      rotation: propulsor.rotation,
       testOrder: propulsor.testOrder,
       role: propulsor.tilts ? "tilt" : "lift",
     })),
-    hasLiftMotorSurface: true,
-    hasMotorTestSurface: true,
     message: null,
   };
 }

@@ -1,3 +1,4 @@
+import { FrameClass, FrameType } from "../airframe";
 import { describe, expect, it } from "vitest";
 
 import type { ParamStore } from "../../params";
@@ -21,15 +22,10 @@ function createParamStore(entries: Record<string, number>): ParamStore {
   return { params, expected_count: index };
 }
 
-function createProfileInput(
-  entries: Record<string, number> | null,
-  stagedEntries: Record<string, number> = {},
-) {
+function createProfileInput(entries: Record<string, number> | null, stagedEntries: Record<string, number> = {}) {
   return {
     paramStore: entries ? createParamStore(entries) : null,
-    stagedEdits: Object.fromEntries(
-      Object.entries(stagedEntries).map(([name, nextValue]) => [name, { nextValue }]),
-    ),
+    stagedEdits: Object.fromEntries(Object.entries(stagedEntries).map(([name, nextValue]) => [name, { nextValue }])),
   };
 }
 
@@ -52,10 +48,7 @@ describe("vehicle-profile", () => {
   });
 
   it("keeps staged VTOL enable explicit until the reboot and refresh happen", () => {
-    const profile = deriveVehicleProfile(
-      "Fixed_Wing",
-      createProfileInput({ Q_ENABLE: 0 }, { Q_ENABLE: 1 }),
-    );
+    const profile = deriveVehicleProfile("Fixed_Wing", createProfileInput({ Q_ENABLE: 0 }, { Q_ENABLE: 1 }));
 
     expect(profile.quadPlaneEnabled).toBe(true);
     expect(profile.quadPlaneEnabledInStore).toBe(false);
@@ -158,7 +151,7 @@ describe("vehicle-profile", () => {
 
 describe("vtol-layout-model", () => {
   it("wraps AP_Motors layouts as supported diagram models", () => {
-    const model = getApMotorDiagramModel(1, 1);
+    const model = getApMotorDiagramModel({ frameClass: FrameClass.Quad, frameType: FrameType.X });
 
     expect(model).not.toBeNull();
     expect(model?.source).toBe("ap-motors");
@@ -167,6 +160,10 @@ describe("vtol-layout-model", () => {
   });
 
   it("does not present Tri Motor7 yaw actuation as a propeller", () => {
-    expect(getApMotorDiagramModel(7, 0)?.motors.map((motor) => motor.motorNumber)).toEqual([1, 2, 4]);
+    expect(
+      getApMotorDiagramModel({ frameClass: FrameClass.Tri, frameType: FrameType.TriStandard })?.motors.map(
+        (motor) => motor.motorNumber,
+      ),
+    ).toEqual([1, 2, 4]);
   });
 });

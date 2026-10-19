@@ -1,3 +1,4 @@
+import type { MotorNumber, MotorRotation } from "../airframe";
 import type { ParamStore } from "../../params";
 import type { StatusMessage } from "../../statustext";
 import type { MotorDiagramEntry, MotorDiagramModel } from "./vtol-layout-model";
@@ -6,8 +7,7 @@ import { servoFunctionForMotor } from "./motor-functions";
 export const MOTOR_TEST_BRIDGE_LIMIT = 12;
 export const MOTOR_OUTPUT_COUNT = 32;
 
-export type MotorDirection = "cw" | "ccw" | "unknown";
-export type MotorOwnerStatus = "resolved" | "function-only" | "ambiguous" | "unowned";
+export type MotorOwnerStatus = "resolved" | "ambiguous" | "unowned";
 export type MotorTestStatus = "available" | "unsupported-bridge" | "blocked-layout";
 
 export type MotorTestParamsInput = {
@@ -19,17 +19,14 @@ export type MotorOwnerResolution = {
   status: MotorOwnerStatus;
   servoIndex: number | null;
   functionParamName: string | null;
-  reverseParamName: string | null;
   reason: string | null;
 };
 
 export type MotorTestRow = {
-  motorNumber: number;
+  motorNumber: MotorNumber;
   testOrder: number;
-  expectedDirection: MotorDirection;
+  expectedDirection: MotorRotation;
   roleLabel: string;
-  rollFactor: number;
-  pitchFactor: number;
   bridgeSupported: boolean;
   testStatus: MotorTestStatus;
   testReason: string | null;
@@ -37,7 +34,6 @@ export type MotorTestRow = {
   ownerReason: string | null;
   servoIndex: number | null;
   functionParamName: string | null;
-  reversalParamName: string | null;
 };
 
 export type MotorTestUnlockInput = {
@@ -88,10 +84,7 @@ export function latestStatusTextSequence(entries: readonly StatusMessage[]): num
   return entries.reduce((latest, entry) => Math.max(latest, entry.sequence), 0);
 }
 
-export function findMotorTestFailureStatus(
-  entries: readonly StatusMessage[],
-  afterSequence: number,
-): string | null {
+export function findMotorTestFailureStatus(entries: readonly StatusMessage[], afterSequence: number): string | null {
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const entry = entries[index];
     if (entry.sequence <= afterSequence) {
@@ -133,14 +126,6 @@ function deriveRoleLabel(role: MotorDiagramEntry["role"]): string {
   }
 }
 
-export function deriveMotorDirection(yawFactor: number): MotorDirection {
-  if (!Number.isFinite(yawFactor) || yawFactor === 0) {
-    return "unknown";
-  }
-
-  return yawFactor > 0 ? "cw" : "ccw";
-}
-
 export function resolveMotorOwner(
   motorNumber: number,
   input: MotorTestParamsInput,
@@ -151,7 +136,6 @@ export function resolveMotorOwner(
       status: "unowned",
       servoIndex: null,
       functionParamName: null,
-      reverseParamName: null,
       reason: "Motor numbering is invalid, so no output can be selected for this motor.",
     };
   }
@@ -162,7 +146,6 @@ export function resolveMotorOwner(
       status: "unowned",
       servoIndex: null,
       functionParamName: null,
-      reverseParamName: null,
       reason: `Motor ${motorNumber} is outside the supported ArduPilot motor-function map.`,
     };
   }
@@ -201,8 +184,8 @@ export function resolveMotorOwner(
       status: "ambiguous",
       servoIndex: ambiguousServoIndex,
       functionParamName: `SERVO${ambiguousServoIndex}_FUNCTION`,
-      reverseParamName: null,
-      reason: "A staged SERVOx_FUNCTION remap is pending. Apply or discard it before testing this motor output.",
+      reason:
+        "This motor has multiple output owners or a pending SERVOx_FUNCTION remap. Review its output assignments before testing.",
     };
   }
 
@@ -211,19 +194,7 @@ export function resolveMotorOwner(
       status: "unowned",
       servoIndex: null,
       functionParamName: null,
-      reverseParamName: null,
       reason: "No current SERVOx_FUNCTION row maps to this motor.",
-    };
-  }
-
-  const reverseParamName = `SERVO${resolvedServoIndex}_REVERSED`;
-  if (!hasParam(input, reverseParamName)) {
-    return {
-      status: "function-only",
-      servoIndex: resolvedServoIndex,
-      functionParamName: `SERVO${resolvedServoIndex}_FUNCTION`,
-      reverseParamName: null,
-      reason: `${reverseParamName} is unavailable, so the section stops at diagnosis and manual reversal guidance.`,
     };
   }
 
@@ -231,7 +202,6 @@ export function resolveMotorOwner(
     status: "resolved",
     servoIndex: resolvedServoIndex,
     functionParamName: `SERVO${resolvedServoIndex}_FUNCTION`,
-    reverseParamName,
     reason: null,
   };
 }
@@ -242,9 +212,10 @@ function resolveLayoutTestStatus(
   bridgeLimit: number,
 ): { bridgeSupported: boolean; testStatus: MotorTestStatus; testReason: string | null } {
   if (layoutModel.status !== "supported") {
-    const layoutReason = layoutModel.status === "preview-only"
-      ? "Direction-dependent testing is blocked because this layout is preview-only. Verify the airframe manually first."
-      : "Direction-dependent testing is blocked because the active layout is unsupported. Verify the airframe manually first.";
+    const layoutReason =
+      layoutModel.status === "preview-only"
+        ? "Direction-dependent testing is blocked because this layout is preview-only. Verify the airframe manually first."
+        : "Direction-dependent testing is blocked because the active layout is unsupported. Verify the airframe manually first.";
 
     return {
       bridgeSupported: testOrder <= bridgeLimit,
@@ -257,7 +228,7 @@ function resolveLayoutTestStatus(
     return {
       bridgeSupported: false,
       testStatus: "unsupported-bridge",
-      testReason: `The current motor_test bridge only supports test sequences 1..=${bridgeLimit}. Verify this row manually before staging any reversal.`,
+      testReason: `The current motor_test bridge only supports test sequences 1..=${bridgeLimit}. Verify this row manually before testing.`,
     };
   }
 
@@ -286,10 +257,8 @@ export function buildMotorTestRows(
       return {
         motorNumber: motor.motorNumber,
         testOrder: motor.testOrder,
-        expectedDirection: deriveMotorDirection(motor.yawFactor),
+        expectedDirection: motor.rotation,
         roleLabel: deriveRoleLabel(motor.role),
-        rollFactor: motor.rollFactor,
-        pitchFactor: motor.pitchFactor,
         bridgeSupported: testability.bridgeSupported,
         testStatus: testability.testStatus,
         testReason: testability.testReason,
@@ -297,7 +266,6 @@ export function buildMotorTestRows(
         ownerReason: owner.reason,
         servoIndex: owner.servoIndex,
         functionParamName: owner.functionParamName,
-        reversalParamName: owner.reverseParamName,
       } satisfies MotorTestRow;
     });
 }

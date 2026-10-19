@@ -1,19 +1,11 @@
 import { describe, it, expect } from "vitest";
-import {
-  resolveDocsUrl,
-  isKnownTopic,
-  commonTopics,
-  vehicleSpecificTopics,
-  type VehicleSlug,
-} from "./ardupilot-docs";
+import { resolveDocsUrl, isKnownTopic, commonTopics, vehicleSpecificTopics, type VehicleSlug } from "./ardupilot-docs";
 
 describe("resolveDocsUrl", () => {
   describe("common topics", () => {
     it("resolves geofence to common URL regardless of vehicle", () => {
       const url = resolveDocsUrl("geofence");
-      expect(url).toBe(
-        "https://ardupilot.org/copter/docs/common-geofencing-landing-page.html",
-      );
+      expect(url).toBe("https://ardupilot.org/copter/docs/common-geofencing-landing-page.html");
       expect(resolveDocsUrl("geofence", "copter")).toBe(url);
       expect(resolveDocsUrl("geofence", "plane")).toBe(url);
       expect(resolveDocsUrl("geofence", "rover")).toBe(url);
@@ -24,26 +16,20 @@ describe("resolveDocsUrl", () => {
       for (const topic of commonTopics()) {
         const url = resolveDocsUrl(topic);
         expect(url).not.toBeNull();
-        expect(url).toMatch(/^https:\/\/ardupilot\.org\/.+\.html$/);
+        expect(url).toMatch(/^https:\/\/ardupilot\.org\/.+\.html(?:#.*)?$/);
       }
     });
 
     it("resolves serial_ports to the common serial options URL", () => {
-      expect(resolveDocsUrl("serial_ports")).toBe(
-        "https://ardupilot.org/copter/docs/common-serial-options.html",
-      );
+      expect(resolveDocsUrl("serial_ports")).toBe("https://ardupilot.org/copter/docs/common-serial-options.html");
     });
 
     it("resolves osd to the common OSD overview URL", () => {
-      expect(resolveDocsUrl("osd")).toBe(
-        "https://ardupilot.org/copter/docs/common-osd-overview.html",
-      );
+      expect(resolveDocsUrl("osd")).toBe("https://ardupilot.org/copter/docs/common-osd-overview.html");
     });
 
     it("resolves servo_outputs to the common RC output mapping URL", () => {
-      expect(resolveDocsUrl("servo_outputs")).toBe(
-        "https://ardupilot.org/copter/docs/common-rcoutput-mapping.html",
-      );
+      expect(resolveDocsUrl("servo_outputs")).toBe("https://ardupilot.org/copter/docs/common-rcoutput-mapping.html");
     });
 
     it("resolves flight_mode_configuration to the planner docs URL", () => {
@@ -53,9 +39,7 @@ describe("resolveDocsUrl", () => {
     });
 
     it("keeps flight_mode_configuration on the planner domain", () => {
-      expect(resolveDocsUrl("flight_mode_configuration")).not.toContain(
-        "https://ardupilot.org/copter/docs/",
-      );
+      expect(resolveDocsUrl("flight_mode_configuration")).not.toContain("https://ardupilot.org/copter/docs/");
     });
 
     it("resolves prearm_safety_checks to common URL", () => {
@@ -79,33 +63,23 @@ describe("resolveDocsUrl", () => {
     });
 
     it("resolves failsafe_battery to rover URL", () => {
-      expect(resolveDocsUrl("failsafe_battery", "rover")).toBe(
-        "https://ardupilot.org/rover/docs/rover-failsafes.html",
-      );
+      expect(resolveDocsUrl("failsafe_battery", "rover")).toBe("https://ardupilot.org/rover/docs/rover-failsafes.html");
     });
 
     it("resolves rtl_mode to plane URL", () => {
-      expect(resolveDocsUrl("rtl_mode", "plane")).toBe(
-        "https://ardupilot.org/plane/docs/rtl-mode.html",
-      );
+      expect(resolveDocsUrl("rtl_mode", "plane")).toBe("https://ardupilot.org/plane/docs/rtl-mode.html");
     });
 
     it("resolves rtl_mode to copter URL", () => {
-      expect(resolveDocsUrl("rtl_mode", "copter")).toBe(
-        "https://ardupilot.org/copter/docs/rtl-mode.html",
-      );
+      expect(resolveDocsUrl("rtl_mode", "copter")).toBe("https://ardupilot.org/copter/docs/rtl-mode.html");
     });
 
     it("resolves arming to copter URL", () => {
-      expect(resolveDocsUrl("arming", "copter")).toBe(
-        "https://ardupilot.org/copter/docs/arming_the_motors.html",
-      );
+      expect(resolveDocsUrl("arming", "copter")).toBe("https://ardupilot.org/copter/docs/arming_the_motors.html");
     });
 
     it("resolves arming to plane URL", () => {
-      expect(resolveDocsUrl("arming", "plane")).toBe(
-        "https://ardupilot.org/plane/docs/arming-your-plane.html",
-      );
+      expect(resolveDocsUrl("arming", "plane")).toBe("https://ardupilot.org/plane/docs/arming-your-plane.html");
     });
 
     it("resolves simple_super_simple_modes to copter URL", () => {
@@ -115,27 +89,15 @@ describe("resolveDocsUrl", () => {
     });
 
     it("resolves full_parameter_list for every vehicle family", () => {
-      expect(resolveDocsUrl("full_parameter_list", "copter")).toBe(
-        "https://ardupilot.org/copter/docs/parameters.html",
-      );
-      expect(resolveDocsUrl("full_parameter_list", "plane")).toBe(
-        "https://ardupilot.org/plane/docs/parameters.html",
-      );
-      expect(resolveDocsUrl("full_parameter_list", "rover")).toBe(
-        "https://ardupilot.org/rover/docs/parameters.html",
-      );
+      expect(resolveDocsUrl("full_parameter_list", "copter")).toBe("https://ardupilot.org/copter/docs/parameters.html");
+      expect(resolveDocsUrl("full_parameter_list", "plane")).toBe("https://ardupilot.org/plane/docs/parameters.html");
+      expect(resolveDocsUrl("full_parameter_list", "rover")).toBe("https://ardupilot.org/rover/docs/parameters.html");
     });
 
     it("resolves QuadPlane workflow topics only for Plane", () => {
-      expect(resolveDocsUrl("quadplane_setup", "plane")).toBe(
-        "https://ardupilot.org/plane/docs/quadplane-setup.html",
-      );
-      expect(resolveDocsUrl("quadplane_assist", "plane")).toContain(
-        "/plane/docs/assisted_fixed_wing_flight.html",
-      );
-      expect(resolveDocsUrl("quadplane_transitions", "plane")).toContain(
-        "/plane/docs/quadplane-transitions.html",
-      );
+      expect(resolveDocsUrl("quadplane_setup", "plane")).toBe("https://ardupilot.org/plane/docs/quadplane-setup.html");
+      expect(resolveDocsUrl("quadplane_assist", "plane")).toContain("/plane/docs/assisted_fixed_wing_flight.html");
+      expect(resolveDocsUrl("quadplane_transitions", "plane")).toContain("/plane/docs/quadplane-transitions.html");
       expect(resolveDocsUrl("quadplane_setup", "copter")).toBeNull();
       expect(resolveDocsUrl("quadplane_setup", "rover")).toBeNull();
     });
@@ -182,9 +144,7 @@ describe("resolveDocsUrl", () => {
     });
 
     it("resolves frame_type on plane to the QuadPlane frame setup page", () => {
-      expect(resolveDocsUrl("frame_type", "plane")).toBe(
-        "https://ardupilot.org/plane/docs/quadplane-frame-setup.html",
-      );
+      expect(resolveDocsUrl("frame_type", "plane")).toBe("https://ardupilot.org/plane/docs/quadplane-frame-setup.html");
     });
 
     it("resolves motors_esc on plane to the QuadPlane ESC calibration page", () => {
@@ -212,17 +172,14 @@ describe("resolveDocsUrl", () => {
   describe("URL correctness", () => {
     it("all resolved URLs are valid ardupilot.org links", () => {
       const vehicles: VehicleSlug[] = ["copter", "plane", "rover"];
-      const allTopics = [
-        ...commonTopics(),
-        ...vehicleSpecificTopics(),
-      ];
+      const allTopics = [...commonTopics(), ...vehicleSpecificTopics()];
 
       for (const topic of allTopics) {
         for (const v of vehicles) {
           const url = resolveDocsUrl(topic, v);
           if (url !== null) {
             expect(url).toMatch(/^https:\/\/ardupilot\.org\//);
-            expect(url).toMatch(/\.html$/);
+            expect(url).toMatch(/\.html(?:#.*)?$/);
           }
         }
       }
@@ -260,8 +217,8 @@ describe("isKnownTopic", () => {
 });
 
 describe("topic lists", () => {
-  it("commonTopics returns 13 entries", () => {
-    expect(commonTopics()).toHaveLength(13);
+  it("commonTopics includes actuator setup documentation", () => {
+    expect(commonTopics()).toEqual(expect.arrayContaining(["motor_direction", "servo_commands", "servo_outputs"]));
   });
 
   it("vehicleSpecificTopics returns 14 entries", () => {

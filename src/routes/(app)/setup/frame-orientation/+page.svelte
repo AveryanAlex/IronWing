@@ -62,11 +62,8 @@ let orientationLabel = $derived(
     orientationItem?.valueText ??
     "Orientation unavailable",
 );
-let frameClassValue = $derived(profile.frameParamFamily === "copter" ? profile.frameClassValue : null);
-let frameTypeValue = $derived(profile.frameParamFamily === "copter" ? profile.frameTypeValue : null);
-let standardLayout = $derived(
-  frameClassValue === null || frameTypeValue === null ? null : getMotorLayout(frameClassValue, frameTypeValue),
-);
+let frame = $derived(profile.frameParamFamily === "copter" ? profile.frame : null);
+let standardLayout = $derived(getMotorLayout(frame));
 let outputModel = $derived(
   buildOutputMappingModel({
     paramStore: params.paramStore,
@@ -226,7 +223,7 @@ function handleOutputsLinkClick(event: MouseEvent) {
 
         <SetupSectionCard icon={Box} title="Motor layout preview" surface="elevated" compact>
           <div class="flex min-h-56 flex-col items-center justify-center gap-3 rounded-md border border-border bg-bg-secondary/40 p-4">
-            <MotorDiagram frameClass={frameClassValue} frameType={frameTypeValue} size={180} />
+            <MotorDiagram {frame} size={180} />
             <HelperText class="text-center" size="xs">
               {standardLayout
                 ? `${standardLayout.motors.length} mapped motors in the selected mixer.`

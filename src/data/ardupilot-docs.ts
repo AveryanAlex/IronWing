@@ -15,6 +15,8 @@ export type CommonTopic =
   | "serial_ports"
   | "osd"
   | "servo_outputs"
+  | "motor_direction"
+  | "servo_commands"
   | "flight_mode_configuration";
 
 const COMMON_BASE = "https://ardupilot.org/copter/docs";
@@ -32,8 +34,9 @@ const COMMON_TOPICS: Record<CommonTopic, string> = {
   serial_ports: `${COMMON_BASE}/common-serial-options.html`,
   osd: `${COMMON_BASE}/common-osd-overview.html`,
   servo_outputs: `${COMMON_BASE}/common-rcoutput-mapping.html`,
-  flight_mode_configuration:
-    "https://ardupilot.org/planner/docs/common-rc-transmitter-flight-mode-configuration.html",
+  motor_direction: `${COMMON_BASE}/common-dshot-escs.html#dshot-commands`,
+  servo_commands: "https://ardupilot.org/dev/docs/mavlink-move-servo.html",
+  flight_mode_configuration: "https://ardupilot.org/planner/docs/common-rc-transmitter-flight-mode-configuration.html",
 };
 
 export type VehicleSpecificTopic =
@@ -58,10 +61,7 @@ export type VehicleSpecificTopic =
   | "quadplane_tailsitter"
   | "full_parameter_list";
 
-const VEHICLE_TOPICS: Record<
-  VehicleSpecificTopic,
-  Record<VehicleSlug, string | null>
-> = {
+const VEHICLE_TOPICS: Record<VehicleSpecificTopic, Record<VehicleSlug, string | null>> = {
   failsafe_battery: {
     copter: "https://ardupilot.org/copter/docs/failsafe-battery.html",
     plane: "https://ardupilot.org/plane/docs/apms-failsafe-function.html",
@@ -179,10 +179,7 @@ function isVehicleSpecificTopic(topic: string): topic is VehicleSpecificTopic {
  * Vehicle-specific topics return null when the slug is unknown or
  * when no authoritative page exists for that vehicle family.
  */
-export function resolveDocsUrl(
-  topic: DocsTopic,
-  vehicleSlug?: VehicleSlug | null,
-): string | null {
+export function resolveDocsUrl(topic: DocsTopic, vehicleSlug?: VehicleSlug | null): string | null {
   if (isCommonTopic(topic)) {
     return COMMON_TOPICS[topic];
   }

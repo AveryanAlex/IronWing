@@ -1,26 +1,25 @@
 <script lang="ts">
+import { MotorRotation, MotorLayer, type Airframe } from "../../../lib/airframe";
+import { projectMotorPositions } from "../../../lib/setup/motor-diagram-projection";
 import type { MotorDiagramModel } from "../../../lib/setup/vtol-layout-model";
 import { getApMotorDiagramModel } from "../../../lib/setup/vtol-layout-model";
 
 let {
-  frameClass = null,
-  frameType = null,
+  frame = null,
   model = null,
   activeMotor = null,
   size = 200,
 }: {
-  frameClass?: number | null;
-  frameType?: number | null;
+  frame?: Airframe | null;
   model?: MotorDiagramModel | null;
   activeMotor?: number | null;
   size?: number;
 } = $props();
 
-const VIEWBOX = 200;
+const VIEWBOX = 300;
 const CENTER = VIEWBOX / 2;
-const SPREAD = 150;
-const MOTOR_RADIUS = 22;
-const LABEL_FONT_SIZE = 13;
+const MOTOR_RADIUS = 17;
+const LABEL_FONT_SIZE = 16;
 
 function rotationArcPath(cx: number, cy: number, r: number, cw: boolean): string {
   const arcR = r + 5;
@@ -66,31 +65,26 @@ function arrowheadPoints(cx: number, cy: number, r: number, cw: boolean): string
 
 let resolvedModel = $derived.by(() => {
   if (model) return model;
-  if (frameClass == null || frameType == null) return null;
-  return getApMotorDiagramModel(frameClass, frameType);
+  return getApMotorDiagramModel(frame);
 });
 
 let motorPositions = $derived.by(() => {
   if (!resolvedModel || resolvedModel.status === "unsupported") return [];
 
-  return resolvedModel.motors.map((motor) => ({
-    motor,
-    cx: CENTER + motor.rollFactor * SPREAD,
-    cy: CENTER - motor.pitchFactor * SPREAD,
-  }));
+  return projectMotorPositions(resolvedModel.motors, VIEWBOX, VIEWBOX);
 });
 </script>
 
 {#if !resolvedModel}
   <div
-    class="flex items-center justify-center rounded-lg border border-border bg-bg-tertiary/50 px-3 text-center text-xs text-text-muted"
+    class="flex max-w-full items-center justify-center rounded-lg border border-border bg-bg-tertiary/50 px-3 text-center text-xs text-text-muted"
     style="width: {size}px; height: {size}px;"
   >
     No layout available
   </div>
-{:else if resolvedModel.status === "unsupported"}
+{:else if resolvedModel.status !== "supported"}
   <div
-    class="flex items-center justify-center rounded-lg border border-warning/30 bg-warning/10 px-3 text-center text-xs leading-relaxed text-warning"
+    class="flex max-w-full items-center justify-center rounded-lg border border-warning/30 bg-warning/10 px-3 text-center text-xs leading-relaxed text-warning"
     style="width: {size}px; height: {size}px;"
   >
     {resolvedModel.message ?? "Unsupported VTOL layout"}
@@ -100,24 +94,10 @@ let motorPositions = $derived.by(() => {
     viewBox="0 0 {VIEWBOX} {VIEWBOX}"
     width={size}
     height={size}
-    class="select-none"
+    class="h-auto max-w-full select-none"
     aria-label={`${resolvedModel.className} ${resolvedModel.typeName} motor diagram`}
   >
-    {#if resolvedModel.overlay === "tiltrotor"}
-      <g class="stroke-accent/40 fill-none">
-        <line x1={44} y1={74} x2={156} y2={74} stroke-width={5} stroke-linecap="round" />
-        <line x1={CENTER} y1={74} x2={CENTER} y2={150} stroke-width={5} stroke-linecap="round" />
-        <line x1={58} y1={64} x2={70} y2={74} stroke-width={3} stroke-linecap="round" />
-        <line x1={142} y1={64} x2={130} y2={74} stroke-width={3} stroke-linecap="round" />
-      </g>
-    {:else if resolvedModel.overlay === "tailsitter"}
-      <g class="stroke-accent/40 fill-none">
-        <line x1={CENTER} y1={34} x2={CENTER} y2={168} stroke-width={5} stroke-linecap="round" />
-        <line x1={54} y1={108} x2={146} y2={108} stroke-width={5} stroke-linecap="round" />
-        <path d="M 92 38 L 100 26 L 108 38" stroke-width={3} stroke-linecap="round" stroke-linejoin="round" />
-      </g>
-    {/if}
-
+    <text x={CENTER} y={12} text-anchor="middle" class="fill-text-muted" font-size={12}>FRONT · TOP VIEW</text>
     {#each motorPositions as { motor, cx, cy } (motor.motorNumber)}
       <line
         x1={CENTER}
@@ -140,6 +120,7 @@ let motorPositions = $derived.by(() => {
 
     {#each motorPositions as { motor, cx, cy } (motor.motorNumber)}
       <g>
+        <title>Motor {motor.motorNumber}{motor.position.layer ? ` · ${motor.position.layer}` : ""} · {motor.rotation}</title>
         {#if activeMotor === motor.motorNumber}
           <circle
             cx={cx}
@@ -170,8 +151,8 @@ let motorPositions = $derived.by(() => {
           stroke-width={2}
         />
 
-        {#if motor.yawFactor !== 0}
-          {@const isCW = motor.yawFactor > 0}
+        {#if motor.rotation !== MotorRotation.Unknown}
+          {@const isCW = motor.rotation === MotorRotation.Clockwise}
           <path
             d={rotationArcPath(cx, cy, MOTOR_RADIUS, isCW)}
             class="fill-none stroke-accent"
@@ -195,7 +176,7 @@ let motorPositions = $derived.by(() => {
           </text>
         {/if}
 
-        {#if motor.role === "tilt"}
+        {#if motor.role === "tilt" && !motor.position.layer}
           <text
             x={cx}
             y={cy - MOTOR_RADIUS - 12}
@@ -210,7 +191,7 @@ let motorPositions = $derived.by(() => {
 
         <text
           x={cx}
-          y={cy + LABEL_FONT_SIZE * 0.35}
+          y={cy + (motor.position.layer ? -1 : LABEL_FONT_SIZE * 0.35)}
           text-anchor="middle"
           class={activeMotor === motor.motorNumber ? "fill-accent" : "fill-text-primary"}
           font-size={LABEL_FONT_SIZE}
@@ -218,7 +199,13 @@ let motorPositions = $derived.by(() => {
         >
           {motor.motorNumber}
         </text>
+        {#if motor.position.layer}
+          <text x={cx} y={cy + 11} text-anchor="middle" class="fill-text-muted" font-size={10}>{motor.position.layer}</text>
+        {/if}
       </g>
     {/each}
+    {#if resolvedModel.motors.some((motor) => motor.position.layer !== null)}
+      <text x={CENTER} y={VIEWBOX - 7} text-anchor="middle" class="fill-text-muted" font-size={10}>Top / bottom motors shown separately</text>
+    {/if}
   </svg>
 {/if}

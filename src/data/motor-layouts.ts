@@ -1,129 +1,115 @@
-// ---------------------------------------------------------------------------
-// Motor layout data & lookup helpers
-// Source: MissionPlanner APMotorLayout.json (AP_Motors library test ver 1.2)
-// ---------------------------------------------------------------------------
-
+// AP_Motors mixer/test metadata from MissionPlanner APMotorLayout.json.
+// Physical conventions: https://ardupilot.org/copter/docs/connect-escs-and-motors.html
 import rawData from "./motor-layouts.json";
+import {
+  isMotorNumber,
+  type MotorNumber,
+  FrameClass,
+  FrameType,
+  MotorRotation,
+  MotorLayer,
+  type Airframe,
+  type MotorPosition,
+  type MotorLayout,
+} from "../lib/airframe";
+import { decodeArduPilotFrame } from "../lib/ardupilot/airframe";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-/** Normalised motor entry for a single motor in a frame layout. */
-export type MotorLayout = {
-  /** Motor number (1-based, matches ArduPilot SERVOx_FUNCTION output numbering). */
-  motorNumber: number;
-  /** Roll mixing factor. Negative = left, positive = right. */
-  rollFactor: number;
-  /** Pitch mixing factor. Positive = forward, negative = backward. */
-  pitchFactor: number;
-  /** Yaw mixing factor. +1 = CW, -1 = CCW, 0 = unknown/tilt. */
-  yawFactor: number;
-  /** Motor test order (1-based sequential). */
-  testOrder: number;
+export type FrameYawServo = {
+  label: string;
+  controlsMotorNumber: MotorNumber;
 };
 
-/** A complete frame layout: frame class + type → motor list. */
 export type FrameLayout = {
-  frameClass: number;
-  frameType: number;
-  /** Human-readable class name (e.g. "QUAD", "HEXA"). */
+  frame: Airframe;
   className: string;
-  /** Human-readable type name (e.g. "X", "PLUS", "H"). */
   typeName: string;
   motors: MotorLayout[];
+  yawServo: FrameYawServo | null;
 };
 
-// ---------------------------------------------------------------------------
-// Raw JSON shape
-// ---------------------------------------------------------------------------
+type RawMotor = { Number: number; TestOrder: number; Rotation: string; Roll: number; Pitch: number };
+type RawLayout = { Class: number; ClassName: string; Type: number; TypeName: string; motors: RawMotor[] };
 
-type RawMotor = {
-  Number: number;
-  TestOrder: number;
-  Rotation: string;
-  Roll: number;
-  Pitch: number;
-};
-
-type RawLayout = {
-  Class: number;
-  ClassName: string;
-  Type: number;
-  TypeName: string;
-  motors: RawMotor[];
-};
-
-type RawFile = {
-  Version: string;
-  layouts: RawLayout[];
-};
-
-// ---------------------------------------------------------------------------
-// Rotation string → yaw factor
-// ---------------------------------------------------------------------------
-
-function rotationToYaw(rotation: string): number {
-  switch (rotation) {
-    case "CW":
-      return 1;
-    case "CCW":
-      return -1;
-    default:
-      return 0;
+function physicalPosition(frame: Airframe, motor: RawMotor): MotorPosition {
+  // A positive roll command increases LEFT motor thrust. Mixer coefficients
+  // must be converted here; presentation and actuator ownership use positions.
+  let right = -motor.Roll;
+  if (
+    frame.frameClass === FrameClass.Quad &&
+    (frame.frameType === FrameType.VTail || frame.frameType === FrameType.ATail)
+  ) {
+    // V/A-tail rear motors provide no roll torque, but sit on opposite arms.
+    if (motor.Number === 2) right = -0.5;
+    if (motor.Number === 4) right = 0.5;
   }
+  // Layer membership comes from the official diagrams, independently of the
+  // test sequence and mixer factors (Y6A and BF ordering are not alternating).
+  const topMotors =
+    frame.frameClass === FrameClass.OctaQuad
+      ? frame.frameType === FrameType.ClockwiseX
+        ? [1, 3, 5, 7]
+        : [1, 2, 3, 4]
+      : frame.frameClass === FrameClass.Y6
+        ? frame.frameType === FrameType.Y6B
+          ? [1, 3, 5]
+          : frame.frameType === FrameType.Y6Firefly
+            ? [1, 2, 3]
+            : [2, 5, 6]
+        : frame.frameClass === FrameClass.DodecaHexa
+          ? [1, 3, 5, 7, 9, 11]
+          : null;
+  return {
+    right: Math.abs(right) < 1e-6 ? 0 : right,
+    forward: Math.abs(motor.Pitch) < 1e-6 ? 0 : motor.Pitch,
+    layer: topMotors ? (topMotors.includes(motor.Number) ? MotorLayer.Top : MotorLayer.Bottom) : null,
+  };
 }
 
-// ---------------------------------------------------------------------------
-// Indexed lookup map  (built once at import time)
-// ---------------------------------------------------------------------------
-
-function buildIndex(data: RawFile): Map<string, FrameLayout> {
-  const map = new Map<string, FrameLayout>();
-  for (const entry of data.layouts) {
-    const key = `${entry.Class}:${entry.Type}`;
-    map.set(key, {
-      frameClass: entry.Class,
-      frameType: entry.Type,
-      className: entry.ClassName,
-      typeName: entry.TypeName,
-      motors: entry.motors.map((m) => ({
-        motorNumber: m.Number,
-        rollFactor: m.Roll,
-        pitchFactor: m.Pitch,
-        yawFactor: rotationToYaw(m.Rotation),
-        testOrder: m.TestOrder,
-      })),
-    });
-  }
-  return map;
+const layoutIndex = new Map<string, FrameLayout>();
+function frameKey(frame: Airframe): string {
+  return `${frame.frameClass}:${frame.frameType}`;
 }
 
-const layoutIndex = buildIndex(rawData as RawFile);
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
-
-/**
- * Look up a motor layout by FRAME_CLASS and FRAME_TYPE parameter values.
- * Returns `null` for unknown combinations.
- */
-export function getMotorLayout(frameClass: number, frameType: number): FrameLayout | null {
-  return layoutIndex.get(`${frameClass}:${frameType}`) ?? null;
+for (const raw of rawData.layouts satisfies RawLayout[]) {
+  const { frame } = decodeArduPilotFrame(raw.Class, raw.Type);
+  if (!frame) throw new Error(`Invalid motor catalog frame ${raw.Class}:${raw.Type}`);
+  const key = frameKey(frame);
+  if (layoutIndex.has(key)) continue; // Tri/Y6/Deca aliases share one geometry.
+  layoutIndex.set(key, {
+    frame,
+    className: raw.ClassName,
+    typeName: raw.TypeName,
+    motors: raw.motors
+      // AP_MotorsTri stores its yaw actuator in the Motor7 slot.
+      .filter((motor) => !(frame.frameClass === FrameClass.Tri && motor.Number === 7))
+      .map((motor) => {
+        if (!isMotorNumber(motor.Number)) throw new Error(`Invalid catalog motor ${motor.Number}`);
+        return {
+          motorNumber: motor.Number,
+          position: physicalPosition(frame, motor),
+          rotation:
+            motor.Rotation === "CW"
+              ? MotorRotation.Clockwise
+              : motor.Rotation === "CCW"
+                ? MotorRotation.CounterClockwise
+                : MotorRotation.Unknown,
+          testOrder: motor.TestOrder,
+        };
+      }),
+    yawServo:
+      frame.frameClass === FrameClass.Tri
+        ? {
+            label: frame.frameType === FrameType.TriPitchReversed ? "Front yaw servo" : "Rear yaw servo",
+            controlsMotorNumber: 4,
+          }
+        : null,
+  });
 }
 
-/**
- * Convenience: motor count for a given frame class + type.
- * Returns 0 for unknown combinations.
- */
-export function getMotorCount(frameClass: number, frameType: number): number {
-  return layoutIndex.get(`${frameClass}:${frameType}`)?.motors.length ?? 0;
+export function getMotorLayout(frame: Airframe | null): FrameLayout | null {
+  return frame ? (layoutIndex.get(frameKey(frame)) ?? null) : null;
 }
 
-/**
- * All available layouts (for iteration / dropdowns).
- */
 export function getAllLayouts(): FrameLayout[] {
   return Array.from(layoutIndex.values());
 }

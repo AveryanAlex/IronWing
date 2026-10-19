@@ -1,3 +1,4 @@
+import { FrameClass, FrameType } from "../airframe";
 import { describe, expect, it } from "vitest";
 
 import type { ParamStore } from "../../params";
@@ -27,16 +28,14 @@ function createParamStore(entries: Record<string, number>): ParamStore {
 function createInput(entries: Record<string, number>, stagedEntries: Record<string, number> = {}) {
   return {
     paramStore: createParamStore(entries),
-    stagedEdits: Object.fromEntries(
-      Object.entries(stagedEntries).map(([name, nextValue]) => [name, { nextValue }]),
-    ),
+    stagedEdits: Object.fromEntries(Object.entries(stagedEntries).map(([name, nextValue]) => [name, { nextValue }])),
   };
 }
 
 describe("motor-test-model", () => {
   it("sorts Quad X rows by ArduPilot test order and resolves stable servo mapping", () => {
     const rows = buildMotorTestRows(
-      getApMotorDiagramModel(1, 1),
+      getApMotorDiagramModel({ frameClass: FrameClass.Quad, frameType: FrameType.X }),
       createInput({
         SERVO1_FUNCTION: 33,
         SERVO1_REVERSED: 0,
@@ -55,7 +54,6 @@ describe("motor-test-model", () => {
     expect(rows[0]).toMatchObject({
       ownerStatus: "resolved",
       servoIndex: 1,
-      reversalParamName: "SERVO1_REVERSED",
       testStatus: "available",
       bridgeSupported: true,
     });
@@ -71,10 +69,7 @@ describe("motor-test-model", () => {
       SERVO2_FUNCTION: 74,
     });
     const topology = buildVtolTopologyModel(input);
-    const rows = buildMotorTestRows(
-      getVtolTopologyDiagramModel(topology.applied),
-      input,
-    );
+    const rows = buildMotorTestRows(getVtolTopologyDiagramModel(topology.applied), input);
 
     expect(getVtolTopologyDiagramModel(topology.applied)?.status).toBe("preview-only");
     expect(rows).toEqual([]);
@@ -82,15 +77,16 @@ describe("motor-test-model", () => {
 
   it("supports all twelve motor-test sequences accepted by mavkit", () => {
     const servoEntries = Object.fromEntries(
-      Array.from({ length: 12 }, (_, index) => [`SERVO${index + 1}_FUNCTION`, servoFunctionForMotor(index + 1) ?? 0]).flatMap(
-        ([name, value], index) => [
-          [name, value],
-          [`SERVO${index + 1}_REVERSED`, 0],
-        ],
-      ),
+      Array.from({ length: 12 }, (_, index) => [
+        `SERVO${index + 1}_FUNCTION`,
+        servoFunctionForMotor(index + 1) ?? 0,
+      ]).flatMap(([name, value], index) => [
+        [name, value],
+        [`SERVO${index + 1}_REVERSED`, 0],
+      ]),
     ) as Record<string, number>;
     const rows = buildMotorTestRows(
-      getApMotorDiagramModel(12, 0),
+      getApMotorDiagramModel({ frameClass: FrameClass.DodecaHexa, frameType: FrameType.Plus }),
       createInput(servoEntries),
     );
 
@@ -101,7 +97,7 @@ describe("motor-test-model", () => {
 
   it("applies a bridge limit to test order rather than logical motor number", () => {
     const rows = buildMotorTestRows(
-      getApMotorDiagramModel(1, 1),
+      getApMotorDiagramModel({ frameClass: FrameClass.Quad, frameType: FrameType.X }),
       createInput({}),
       2,
     );
@@ -117,15 +113,17 @@ describe("motor-test-model", () => {
   });
 
   it("blocks motor-test unlock while the vehicle is armed", () => {
-    const layoutModel = getApMotorDiagramModel(1, 1);
+    const layoutModel = getApMotorDiagramModel({ frameClass: FrameClass.Quad, frameType: FrameType.X });
 
-    expect(resolveMotorTestUnlockDisabledReason({
-      checkpointBlocked: false,
-      liveConnected: true,
-      vehicleArmed: true,
-      layoutModel,
-      rowCount: layoutModel?.motors.length ?? 0,
-    })).toBe("Disarm the vehicle before unlocking motor testing.");
+    expect(
+      resolveMotorTestUnlockDisabledReason({
+        checkpointBlocked: false,
+        liveConnected: true,
+        vehicleArmed: true,
+        layoutModel,
+        rowCount: layoutModel?.motors.length ?? 0,
+      }),
+    ).toBe("Disarm the vehicle before unlocking motor testing.");
   });
 
   it("selects a new ArduPilot motor-test failure without reusing stale status text", () => {
@@ -141,7 +139,7 @@ describe("motor-test-model", () => {
     expect(findMotorTestFailureStatus(entries, 13)).toBeNull();
   });
 
-  it("fails owner resolution closed when a servo mapping is staged or the reverse row is missing", () => {
+  it("blocks ambiguous ownership but does not require a servo reversal parameter", () => {
     expect(
       resolveMotorOwner(
         1,
@@ -169,10 +167,9 @@ describe("motor-test-model", () => {
         }),
       ),
     ).toMatchObject({
-      status: "function-only",
+      status: "resolved",
       servoIndex: 2,
       functionParamName: "SERVO2_FUNCTION",
-      reverseParamName: null,
     });
 
     expect(
@@ -186,7 +183,6 @@ describe("motor-test-model", () => {
     ).toMatchObject({
       status: "unowned",
       servoIndex: null,
-      reverseParamName: null,
     });
   });
 });

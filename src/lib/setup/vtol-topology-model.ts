@@ -1,10 +1,30 @@
-import { getAllLayouts, getMotorLayout, type MotorLayout } from "../../data/motor-layouts";
-import type { ParamStore } from "../../params";
+import { getAllLayouts, getMotorLayout } from "../../data/motor-layouts";
 import {
-  TILT_OUTPUT_FUNCTIONS,
-  THROTTLE_OUTPUT_FUNCTIONS,
-  servoFunctionForMotor,
-} from "./motor-functions";
+  isAirframe,
+  FrameClass,
+  FrameType,
+  MotorRotation,
+  TailsitterMode,
+  TiltType,
+  type Airframe,
+  type MotorNumber,
+  type MotorLayout,
+  type MotorPosition,
+} from "../airframe";
+import {
+  decodeArduPilotFrame,
+  decodeArduPilotTiltType,
+  decodeArduPilotTailsitterMode,
+  encodeArduPilotFrame,
+  encodeArduPilotFrameClass,
+  ArduPilotTiltType,
+  ArduPilotFrameClass,
+  ArduPilotTailsitterMode,
+  type ArduPilotFrameParameters,
+} from "../ardupilot/airframe";
+import { ArduPilotServoFunction } from "../ardupilot/servo-functions";
+import type { ParamStore } from "../../params";
+import { TILT_OUTPUT_FUNCTIONS, THROTTLE_OUTPUT_FUNCTIONS, servoFunctionForMotor } from "./motor-functions";
 
 export type VtolArchitecture =
   | "disabled"
@@ -15,6 +35,7 @@ export type VtolArchitecture =
   | "tailsitter_copter"
   | "tailsitter_motor_only"
   | "conflict"
+  | "unsupported"
   | "custom";
 
 export type VtolMechanism =
@@ -38,18 +59,17 @@ export type VtolValidationIssue = {
 
 export type VtolOutputOwner = {
   outputIndex: number;
-  functionValue: number;
+  functionValue: ArduPilotServoFunction;
   functionParamName: string;
 };
 
 export type VtolPropulsor = {
   id: string;
   label: string;
-  motorNumber: number | null;
-  functionValue: number;
-  rollFactor: number;
-  pitchFactor: number;
-  yawFactor: number;
+  motorNumber: MotorNumber | null;
+  functionValue: ArduPilotServoFunction;
+  position: MotorPosition;
+  rotation: MotorRotation;
   testOrder: number;
   tilts: boolean;
   forwardActive: boolean;
@@ -62,7 +82,7 @@ export type VtolActuator = {
   id: string;
   label: string;
   kind: VtolActuatorKind;
-  functionValue: number;
+  functionValue: ArduPilotServoFunction;
   controlsPropulsorIds: string[];
   required: boolean;
   outputOwners: VtolOutputOwner[];
@@ -70,14 +90,13 @@ export type VtolActuator = {
 
 export type VtolFrameLayoutOption = {
   id: string;
-  value: number;
+  value: FrameType;
   label: string;
   description: string;
-  matches: (frameType: number) => boolean;
 };
 
 export type VtolFrameClassOption = {
-  value: number;
+  value: FrameClass;
   label: string;
   description: string;
   custom: boolean;
@@ -88,9 +107,11 @@ export type VtolTopologySnapshot = {
   architectureLabel: string;
   mechanism: VtolMechanism;
   enabled: boolean;
-  frameClass: number | null;
+  frame: Airframe | null;
+  frameParameters: ArduPilotFrameParameters;
+  frameClass: FrameClass | null;
   frameClassLabel: string;
-  frameType: number | null;
+  frameType: FrameType | null;
   frameTypeLabel: string;
   frameTypeIgnored: boolean;
   tiltMask: number;
@@ -135,59 +156,69 @@ const REFRESH_BOUNDARY_PARAM_NAMES = new Set([
 ]);
 
 const FRAME_CLASS_OPTIONS: readonly VtolFrameClassOption[] = [
-  { value: 1, label: "Quad", description: "Four hover motors", custom: false },
-  { value: 2, label: "Hexa", description: "Six hover motors", custom: false },
-  { value: 3, label: "Octa", description: "Eight hover motors", custom: false },
-  { value: 4, label: "OctaQuad", description: "Eight coaxial hover motors", custom: false },
-  { value: 5, label: "Y6", description: "Six coaxial motors on three arms", custom: false },
-  { value: 7, label: "Tri", description: "Three propellers plus a yaw actuator", custom: false },
-  { value: 10, label: "Single / Dual", description: "Tailsitter or bicopter special case", custom: false },
-  { value: 12, label: "DodecaHexa", description: "Twelve coaxial motors", custom: false },
-  { value: 14, label: "Deca", description: "Ten hover motors", custom: false },
-  { value: 15, label: "Scripting Matrix", description: "Geometry is supplied by a Lua script", custom: true },
-  { value: 17, label: "Dynamic Scripting Matrix", description: "Runtime geometry is supplied by a Lua script", custom: true },
+  { value: FrameClass.Quad, label: "Quad", description: "Four hover motors", custom: false },
+  { value: FrameClass.Hexa, label: "Hexa", description: "Six hover motors", custom: false },
+  { value: FrameClass.Octa, label: "Octa", description: "Eight hover motors", custom: false },
+  { value: FrameClass.OctaQuad, label: "OctaQuad", description: "Eight coaxial hover motors", custom: false },
+  { value: FrameClass.Y6, label: "Y6", description: "Six coaxial motors on three arms", custom: false },
+  { value: FrameClass.Tri, label: "Tri", description: "Three propellers plus a yaw actuator", custom: false },
+  {
+    value: FrameClass.SingleDual,
+    label: "Single / Dual",
+    description: "Tailsitter or bicopter special case",
+    custom: false,
+  },
+  { value: FrameClass.DodecaHexa, label: "DodecaHexa", description: "Twelve coaxial motors", custom: false },
+  { value: FrameClass.Deca, label: "Deca", description: "Ten hover motors", custom: false },
+  {
+    value: FrameClass.ScriptingMatrix,
+    label: "Scripting Matrix",
+    description: "Geometry is supplied by a Lua script",
+    custom: true,
+  },
+  {
+    value: FrameClass.DynamicScriptingMatrix,
+    label: "Dynamic Scripting Matrix",
+    description: "Runtime geometry is supplied by a Lua script",
+    custom: true,
+  },
 ] as const;
 
-const TRI_LAYOUT_OPTIONS: readonly VtolFrameLayoutOption[] = [
-  {
-    id: "tri-standard",
-    value: 0,
-    label: "Standard Tri",
-    description: "Q_FRAME_TYPE is otherwise ignored for Tri",
-    matches: (frameType) => frameType !== 6,
-  },
-  {
-    id: "tri-pitch-reversed",
-    value: 6,
-    label: "Pitch reversed",
-    description: "Reverses the front/rear pitch mixer",
-    matches: (frameType) => frameType === 6,
-  },
-];
-
-const Y6_LAYOUT_OPTIONS: readonly VtolFrameLayoutOption[] = [
-  {
-    id: "y6-a",
-    value: 0,
-    label: "Y6A",
-    description: "Default Y6 arrangement",
-    matches: (frameType) => frameType !== 10 && frameType !== 11,
-  },
-  {
-    id: "y6-b",
-    value: 10,
-    label: "Y6B",
-    description: "Y6B motor arrangement",
-    matches: (frameType) => frameType === 10,
-  },
-  {
-    id: "y6-firefly",
-    value: 11,
-    label: "FireFly Y6",
-    description: "Y6F / FireFly motor arrangement",
-    matches: (frameType) => frameType === 11,
-  },
-];
+const SPECIAL_LAYOUT_OPTIONS: Partial<Record<FrameClass, readonly VtolFrameLayoutOption[]>> = {
+  [FrameClass.Tri]: [
+    {
+      id: "tri-standard",
+      value: FrameType.TriStandard,
+      label: "Standard Tri",
+      description: "Q_FRAME_TYPE is otherwise ignored for Tri",
+    },
+    {
+      id: "tri-pitch-reversed",
+      value: FrameType.TriPitchReversed,
+      label: "Pitch reversed",
+      description: "Reverses the front/rear pitch mixer",
+    },
+  ],
+  [FrameClass.Y6]: [
+    { id: "y6-a", value: FrameType.Y6A, label: "Y6A", description: "Default Y6 arrangement" },
+    { id: "y6-b", value: FrameType.Y6B, label: "Y6B", description: "Y6B motor arrangement" },
+    {
+      id: "y6-firefly",
+      value: FrameType.Y6Firefly,
+      label: "FireFly Y6",
+      description: "Y6F / FireFly motor arrangement",
+    },
+  ],
+  [FrameClass.Deca]: [
+    { id: "deca-plus", value: FrameType.Plus, label: "Plus", description: "Deca Plus motor mixing" },
+    {
+      id: "deca-x",
+      value: FrameType.X,
+      label: "X / Clockwise X",
+      description: "Equivalent Deca X values are shown as one layout",
+    },
+  ],
+};
 
 const CLASS_NAME_BY_VALUE = new Map(FRAME_CLASS_OPTIONS.map((option) => [option.value, option.label]));
 
@@ -207,66 +238,46 @@ function titleCaseLayout(value: string): string {
     NYT_PLUS: "No-yaw-torque Plus",
     NYT_X: "No-yaw-torque X",
     X_REV: "X reversed",
-    "X/CW_X": "X / Clockwise X",
   };
-
-  return aliases[value] ?? value.replace(/_/g, " ").toLowerCase().replace(/^./, (letter: string) => letter.toUpperCase());
+  return (
+    aliases[value] ??
+    value
+      .replace(/_/g, " ")
+      .toLowerCase()
+      .replace(/^./, (letter: string) => letter.toUpperCase())
+  );
 }
 
 export function getVtolFrameClassOptions(): readonly VtolFrameClassOption[] {
   return FRAME_CLASS_OPTIONS;
 }
 
-export function getVtolFrameLayoutOptions(frameClass: number): readonly VtolFrameLayoutOption[] {
-  if (frameClass === 7) {
-    return TRI_LAYOUT_OPTIONS;
-  }
+export function isVtolFrameClassAllowed(frameClass: FrameClass, architecture: VtolArchitecture): boolean {
+  if (architecture === "bicopter" || architecture === "tailsitter_single_dual")
+    return frameClass === FrameClass.SingleDual;
+  const tiltClasses: readonly FrameClass[] = [
+    FrameClass.Quad,
+    FrameClass.Hexa,
+    FrameClass.Octa,
+    FrameClass.OctaQuad,
+    FrameClass.Y6,
+    FrameClass.Tri,
+  ];
+  if (architecture === "tiltrotor") return tiltClasses.includes(frameClass);
+  return FRAME_CLASS_OPTIONS.some((option) => option.value === frameClass) && frameClass !== FrameClass.SingleDual;
+}
 
-  if (frameClass === 5) {
-    return Y6_LAYOUT_OPTIONS;
-  }
-
-  if (frameClass === 10 || frameClass === 15 || frameClass === 17) {
-    return [];
-  }
-
-  if (frameClass === 14) {
-    return [
-      {
-        id: "deca-plus",
-        value: 0,
-        label: "Plus",
-        description: "Deca Plus motor mixing",
-        matches: (frameType) => frameType === 0,
-      },
-      {
-        id: "deca-x",
-        value: 1,
-        label: "X / Clockwise X",
-        description: "Equivalent Deca X values are shown as one layout",
-        matches: (frameType) => frameType === 1 || frameType === 14,
-      },
-    ];
-  }
-
-  const layouts = getAllLayouts()
-    .filter((layout) => layout.frameClass === frameClass)
-    .sort((left, right) => left.frameType - right.frameType);
-
-  const seen = new Set<number>();
-  return layouts.flatMap((layout) => {
-    if (seen.has(layout.frameType)) {
-      return [];
-    }
-    seen.add(layout.frameType);
-    return [{
-      id: `${frameClass}-${layout.frameType}`,
-      value: layout.frameType,
+export function getVtolFrameLayoutOptions(frameClass: FrameClass): readonly VtolFrameLayoutOption[] {
+  const special = SPECIAL_LAYOUT_OPTIONS[frameClass];
+  if (special) return special;
+  return getAllLayouts()
+    .filter((layout) => layout.frame.frameClass === frameClass)
+    .map((layout) => ({
+      id: `${frameClass}-${layout.frame.frameType}`,
+      value: layout.frame.frameType,
       label: titleCaseLayout(layout.typeName),
       description: `${CLASS_NAME_BY_VALUE.get(frameClass) ?? "Frame"} motor mixing`,
-      matches: (frameType: number) => frameType === layout.frameType,
-    } satisfies VtolFrameLayoutOption];
-  });
+    }));
 }
 
 function currentValue(input: VtolTopologyInput, name: string): number | null {
@@ -283,7 +294,11 @@ function isEnabled(value: number | null): boolean {
   return value !== null && value > 0;
 }
 
-function readOutputOwners(input: VtolTopologyInput, functionValue: number, proposed: boolean): VtolOutputOwner[] {
+function readOutputOwners(
+  input: VtolTopologyInput,
+  functionValue: ArduPilotServoFunction,
+  proposed: boolean,
+): VtolOutputOwner[] {
   const owners: VtolOutputOwner[] = [];
   for (let outputIndex = 1; outputIndex <= 32; outputIndex += 1) {
     const functionParamName = `SERVO${outputIndex}_FUNCTION`;
@@ -295,29 +310,31 @@ function readOutputOwners(input: VtolTopologyInput, functionValue: number, propo
   return owners;
 }
 
-function architectureFor(values: Record<string, number | null>): VtolArchitecture {
+function architectureFor(values: Record<string, number | null>, frameClass: FrameClass | null): VtolArchitecture {
   if (!isEnabled(values.Q_ENABLE)) {
     return "disabled";
   }
 
   const tiltEnabled = isEnabled(values.Q_TILT_ENABLE);
-  const tailsitterEnabled = isEnabled(values.Q_TAILSIT_ENABLE);
+  const tailsitterMode = decodeArduPilotTailsitterMode(values.Q_TAILSIT_ENABLE);
+  if (values.Q_TAILSIT_ENABLE !== null && tailsitterMode === null) return "unsupported";
+  const tailsitterEnabled = tailsitterMode !== null && tailsitterMode !== TailsitterMode.Disabled;
   if (tiltEnabled && tailsitterEnabled) {
     return "conflict";
   }
-  if (tiltEnabled && values.Q_TILT_TYPE === 3) {
+  if (tiltEnabled && decodeArduPilotTiltType(values.Q_TILT_TYPE) === TiltType.Bicopter) {
     return "bicopter";
   }
   if (tiltEnabled) {
     return "tiltrotor";
   }
   if (tailsitterEnabled) {
-    if (values.Q_TAILSIT_ENABLE === 2) {
+    if (tailsitterMode === TailsitterMode.MotorOnly) {
       return "tailsitter_motor_only";
     }
     return (values.Q_TAILSIT_MOTMX ?? 0) > 0 ? "tailsitter_copter" : "tailsitter_single_dual";
   }
-  if (values.Q_FRAME_CLASS === 15 || values.Q_FRAME_CLASS === 17) {
+  if (frameClass === FrameClass.ScriptingMatrix || frameClass === FrameClass.DynamicScriptingMatrix) {
     return "custom";
   }
   return "standard";
@@ -325,36 +342,47 @@ function architectureFor(values: Record<string, number | null>): VtolArchitectur
 
 function architectureLabel(architecture: VtolArchitecture): string {
   switch (architecture) {
-    case "disabled": return "VTOL disabled";
-    case "standard": return "Lift + cruise QuadPlane";
-    case "tiltrotor": return "Tiltrotor / tiltwing";
-    case "bicopter": return "Bicopter tiltrotor";
-    case "tailsitter_single_dual": return "Single / dual motor tailsitter";
-    case "tailsitter_copter": return "Copter-motor tailsitter";
-    case "tailsitter_motor_only": return "Motor-only tailsitter";
-    case "conflict": return "Conflicting VTOL architecture";
-    case "custom": return "Scripted motor matrix";
+    case "disabled":
+      return "VTOL disabled";
+    case "standard":
+      return "Lift + cruise QuadPlane";
+    case "tiltrotor":
+      return "Tiltrotor / tiltwing";
+    case "bicopter":
+      return "Bicopter tiltrotor";
+    case "tailsitter_single_dual":
+      return "Single / dual motor tailsitter";
+    case "tailsitter_copter":
+      return "Copter-motor tailsitter";
+    case "tailsitter_motor_only":
+      return "Motor-only tailsitter";
+    case "conflict":
+      return "Conflicting VTOL architecture";
+    case "custom":
+      return "Scripted motor matrix";
+    case "unsupported":
+      return "Unsupported VTOL configuration";
   }
 }
 
 function mechanismFor(
   architecture: VtolArchitecture,
-  tiltType: number | null,
+  tiltType: TiltType | null,
   input: VtolTopologyInput,
   proposed: boolean,
 ): VtolMechanism {
   if (architecture === "bicopter") return "bicopter";
   if (architecture === "tiltrotor") {
-    if (tiltType === 1) return "binary";
-    if (tiltType === 2) return "vectored_yaw";
-    return "continuous";
+    if (tiltType === TiltType.Binary) return "binary";
+    if (tiltType === TiltType.VectoredYaw) return "vectored_yaw";
+    return tiltType === TiltType.Continuous ? "continuous" : "custom";
   }
   if (architecture.startsWith("tailsitter")) {
     const leftTilt = readOutputOwners(input, TILT_OUTPUT_FUNCTIONS.frontLeft, proposed).length > 0;
     const rightTilt = readOutputOwners(input, TILT_OUTPUT_FUNCTIONS.frontRight, proposed).length > 0;
     return leftTilt || rightTilt ? "tailsitter_vectored" : "tailsitter_fixed";
   }
-  if (architecture === "custom" || architecture === "conflict") return "custom";
+  if (architecture === "custom" || architecture === "conflict" || architecture === "unsupported") return "custom";
   return "fixed";
 }
 
@@ -385,15 +413,14 @@ function propulsorFromLayout(
     label: `Motor ${motor.motorNumber}`,
     motorNumber: motor.motorNumber,
     functionValue,
-    rollFactor: motor.rollFactor,
-    pitchFactor: motor.pitchFactor,
-    yawFactor: motor.yawFactor,
+    position: motor.position,
+    rotation: motor.rotation,
     testOrder: motor.testOrder,
-    tilts: architecture === "tiltrotor"
-      ? maskIncludes(tiltMask, motor.motorNumber)
-      : mechanism === "tailsitter_vectored",
-    forwardActive: architecture === "tailsitter_motor_only"
-      || (architecture === "tailsitter_copter" && maskIncludes(forwardMask, motor.motorNumber)),
+    tilts:
+      architecture === "tiltrotor" ? maskIncludes(tiltMask, motor.motorNumber) : mechanism === "tailsitter_vectored",
+    forwardActive:
+      architecture === "tailsitter_motor_only" ||
+      (architecture === "tailsitter_copter" && maskIncludes(forwardMask, motor.motorNumber)),
     outputOwners: readOutputOwners(input, functionValue, proposed),
   };
 }
@@ -415,21 +442,50 @@ function buildSingleDualPropulsors(
   const leftOwners = readOutputOwners(input, THROTTLE_OUTPUT_FUNCTIONS.left, proposed);
   const rightOwners = readOutputOwners(input, THROTTLE_OUTPUT_FUNCTIONS.right, proposed);
   if (throttleOwners.length > 0 && leftOwners.length === 0 && rightOwners.length === 0) {
-    return [customPropulsor("throttle", "Main motor", THROTTLE_OUTPUT_FUNCTIONS.throttle, 0, 0, mechanism === "tailsitter_vectored", input, proposed)];
+    return [
+      customPropulsor(
+        "throttle",
+        "Main motor",
+        THROTTLE_OUTPUT_FUNCTIONS.throttle,
+        0,
+        0,
+        mechanism === "tailsitter_vectored",
+        input,
+        proposed,
+      ),
+    ];
   }
 
   return [
-    customPropulsor("left-throttle", "Left motor", THROTTLE_OUTPUT_FUNCTIONS.left, -0.75, 0, mechanism === "tailsitter_vectored", input, proposed),
-    customPropulsor("right-throttle", "Right motor", THROTTLE_OUTPUT_FUNCTIONS.right, 0.75, 0, mechanism === "tailsitter_vectored", input, proposed),
+    customPropulsor(
+      "left-throttle",
+      "Left motor",
+      THROTTLE_OUTPUT_FUNCTIONS.left,
+      -0.75,
+      0,
+      mechanism === "tailsitter_vectored",
+      input,
+      proposed,
+    ),
+    customPropulsor(
+      "right-throttle",
+      "Right motor",
+      THROTTLE_OUTPUT_FUNCTIONS.right,
+      0.75,
+      0,
+      mechanism === "tailsitter_vectored",
+      input,
+      proposed,
+    ),
   ];
 }
 
 function customPropulsor(
   id: string,
   label: string,
-  functionValue: number,
-  rollFactor: number,
-  pitchFactor: number,
+  functionValue: ArduPilotServoFunction,
+  right: number,
+  forward: number,
   tilts: boolean,
   input: VtolTopologyInput,
   proposed: boolean,
@@ -439,9 +495,8 @@ function customPropulsor(
     label,
     motorNumber: null,
     functionValue,
-    rollFactor,
-    pitchFactor,
-    yawFactor: 0,
+    position: { right, forward, layer: null },
+    rotation: MotorRotation.Unknown,
     testOrder: 0,
     tilts,
     forwardActive: true,
@@ -453,18 +508,19 @@ function buildActuators(
   architecture: VtolArchitecture,
   mechanism: VtolMechanism,
   propulsors: VtolPropulsor[],
-  frameClass: number | null,
+  frame: Airframe | null,
   input: VtolTopologyInput,
   proposed: boolean,
 ): VtolActuator[] {
   const actuators: VtolActuator[] = [];
+  if (mechanism === "custom") return actuators;
   const tilted = propulsors.filter((propulsor) => propulsor.tilts);
 
   const add = (
     id: string,
     label: string,
     kind: VtolActuatorKind,
-    functionValue: number,
+    functionValue: ArduPilotServoFunction,
     controlled: VtolPropulsor[],
     required = true,
   ) => {
@@ -481,23 +537,95 @@ function buildActuators(
   };
 
   if (mechanism === "continuous" || mechanism === "binary") {
-    add("front-collective", "Front tilt", "tilt", TILT_OUTPUT_FUNCTIONS.frontCollective, tilted.filter((motor) => motor.pitchFactor >= 0));
-    add("rear-collective", "Rear tilt", "tilt", TILT_OUTPUT_FUNCTIONS.rearCollective, tilted.filter((motor) => motor.pitchFactor < 0));
+    // Continuous and binary control output a single collective tilt (function 41).
+    add("collective-tilt", "Collective tilt", "tilt", TILT_OUTPUT_FUNCTIONS.collective, tilted);
   } else if (mechanism === "vectored_yaw") {
-    add("front-left", "Front left tilt", "tilt", TILT_OUTPUT_FUNCTIONS.frontLeft, tilted.filter((motor) => motor.pitchFactor >= 0 && motor.rollFactor < 0));
-    add("front-right", "Front right tilt", "tilt", TILT_OUTPUT_FUNCTIONS.frontRight, tilted.filter((motor) => motor.pitchFactor >= 0 && motor.rollFactor > 0));
-    add("rear-left", "Rear left tilt", "tilt", TILT_OUTPUT_FUNCTIONS.rearLeft, tilted.filter((motor) => motor.pitchFactor < 0 && motor.rollFactor < 0));
-    add("rear-right", "Rear right tilt", "tilt", TILT_OUTPUT_FUNCTIONS.rearRight, tilted.filter((motor) => motor.pitchFactor < 0 && motor.rollFactor > 0));
+    add(
+      "front-left",
+      "Front left tilt",
+      "tilt",
+      TILT_OUTPUT_FUNCTIONS.frontLeft,
+      tilted.filter((motor) => motor.position.forward >= 0 && motor.position.right < 0),
+    );
+    add(
+      "front-right",
+      "Front right tilt",
+      "tilt",
+      TILT_OUTPUT_FUNCTIONS.frontRight,
+      tilted.filter((motor) => motor.position.forward >= 0 && motor.position.right > 0),
+    );
+    add(
+      "rear-left",
+      "Rear left tilt",
+      "tilt",
+      TILT_OUTPUT_FUNCTIONS.rearLeft,
+      tilted.filter((motor) => motor.position.forward < 0 && motor.position.right < 0),
+    );
+    add(
+      "rear-right",
+      "Rear right tilt",
+      "tilt",
+      TILT_OUTPUT_FUNCTIONS.rearRight,
+      tilted.filter((motor) => motor.position.forward < 0 && motor.position.right > 0),
+    );
+    add(
+      "front-center",
+      "Front center tilt",
+      "tilt",
+      TILT_OUTPUT_FUNCTIONS.collective,
+      tilted.filter((motor) => motor.position.forward >= 0 && motor.position.right === 0),
+    );
+    add(
+      "rear-center",
+      "Rear center tilt",
+      "tilt",
+      TILT_OUTPUT_FUNCTIONS.rearCollective,
+      tilted.filter((motor) => motor.position.forward < 0 && motor.position.right === 0),
+    );
   } else if (mechanism === "bicopter" || mechanism === "tailsitter_vectored") {
-    add("left-vector", "Left vector servo", "tilt", TILT_OUTPUT_FUNCTIONS.frontLeft, propulsors.filter((motor) => motor.rollFactor <= 0));
-    add("right-vector", "Right vector servo", "tilt", TILT_OUTPUT_FUNCTIONS.frontRight, propulsors.filter((motor) => motor.rollFactor >= 0));
+    add(
+      "left-vector",
+      "Left vector servo",
+      "tilt",
+      TILT_OUTPUT_FUNCTIONS.frontLeft,
+      propulsors.filter((motor) => motor.position.right <= 0),
+    );
+    add(
+      "right-vector",
+      "Right vector servo",
+      "tilt",
+      TILT_OUTPUT_FUNCTIONS.frontRight,
+      propulsors.filter((motor) => motor.position.right >= 0),
+    );
   } else if (architecture.startsWith("tailsitter")) {
-    add("left-vector", "Optional left vector servo", "tilt", TILT_OUTPUT_FUNCTIONS.frontLeft, propulsors.filter((motor) => motor.rollFactor <= 0), false);
-    add("right-vector", "Optional right vector servo", "tilt", TILT_OUTPUT_FUNCTIONS.frontRight, propulsors.filter((motor) => motor.rollFactor >= 0), false);
+    add(
+      "left-vector",
+      "Optional left vector servo",
+      "tilt",
+      TILT_OUTPUT_FUNCTIONS.frontLeft,
+      propulsors.filter((motor) => motor.position.right <= 0),
+      false,
+    );
+    add(
+      "right-vector",
+      "Optional right vector servo",
+      "tilt",
+      TILT_OUTPUT_FUNCTIONS.frontRight,
+      propulsors.filter((motor) => motor.position.right >= 0),
+      false,
+    );
   }
 
-  if (frameClass === 7 && mechanism !== "vectored_yaw") {
-    add("rear-yaw", "Rear yaw servo", "yaw", 39, propulsors.filter((motor) => motor.motorNumber === 4));
+  if (frame?.frameClass === FrameClass.Tri && mechanism !== "vectored_yaw") {
+    const yawServo = getMotorLayout(frame)?.yawServo;
+    if (yawServo)
+      add(
+        "tri-yaw",
+        yawServo.label,
+        "yaw",
+        ArduPilotServoFunction.TricopterYaw,
+        propulsors.filter((motor) => motor.motorNumber === yawServo.controlsMotorNumber),
+      );
   }
 
   return actuators;
@@ -506,13 +634,22 @@ function buildActuators(
 function buildIssues(
   architecture: VtolArchitecture,
   mechanism: VtolMechanism,
-  frameClass: number | null,
+  frameClass: FrameClass | null,
   propulsors: VtolPropulsor[],
   actuators: VtolActuator[],
   tiltMask: number,
   angleBoost: number | null,
 ): VtolValidationIssue[] {
   const issues: VtolValidationIssue[] = [];
+  if (architecture === "unsupported" || (architecture === "tiltrotor" && mechanism === "custom")) {
+    issues.push({
+      id: "unsupported-vtol-type",
+      severity: "danger",
+      title: "Unsupported VTOL mechanism",
+      detail:
+        "The firmware reports a mechanism this application cannot interpret. Review its parameters before testing outputs.",
+    });
+  }
   if (architecture === "conflict") {
     issues.push({
       id: "architecture-conflict",
@@ -521,7 +658,7 @@ function buildIssues(
       detail: "Choose one VTOL architecture before changing motor or output mappings.",
     });
   }
-  if (architecture === "bicopter" && frameClass !== 10) {
+  if (architecture === "bicopter" && frameClass !== FrameClass.SingleDual) {
     issues.push({
       id: "bicopter-frame-class",
       severity: "danger",
@@ -539,7 +676,7 @@ function buildIssues(
   }
 
   const validMotorMask = propulsors.reduce(
-    (mask, propulsor) => propulsor.motorNumber === null ? mask : mask | (1 << (propulsor.motorNumber - 1)),
+    (mask, propulsor) => (propulsor.motorNumber === null ? mask : mask | (1 << (propulsor.motorNumber - 1))),
     0,
   );
   if (architecture === "tiltrotor" && (tiltMask & ~validMotorMask) !== 0) {
@@ -585,7 +722,7 @@ function buildIssues(
 }
 
 function buildSnapshot(input: VtolTopologyInput, proposed: boolean): VtolTopologySnapshot {
-  const read = (name: string) => proposed ? proposedValue(input, name) : currentValue(input, name);
+  const read = (name: string) => (proposed ? proposedValue(input, name) : currentValue(input, name));
   const values = {
     Q_ENABLE: read("Q_ENABLE"),
     Q_FRAME_CLASS: read("Q_FRAME_CLASS"),
@@ -595,53 +732,63 @@ function buildSnapshot(input: VtolTopologyInput, proposed: boolean): VtolTopolog
     Q_TAILSIT_ENABLE: read("Q_TAILSIT_ENABLE"),
     Q_TAILSIT_MOTMX: read("Q_TAILSIT_MOTMX"),
   };
-  const architecture = architectureFor(values);
-  const mechanism = mechanismFor(architecture, values.Q_TILT_TYPE, input, proposed);
-  const frameClass = values.Q_FRAME_CLASS;
-  const frameType = values.Q_FRAME_TYPE;
+  const decodedFrame = decodeArduPilotFrame(values.Q_FRAME_CLASS, values.Q_FRAME_TYPE);
+  const { frame, frameClass, parameters: frameParameters } = decodedFrame;
+  const frameType = frame?.frameType ?? null;
+  const architecture = architectureFor(values, frameClass);
+  const mechanism = mechanismFor(architecture, decodeArduPilotTiltType(values.Q_TILT_TYPE), input, proposed);
   const tiltMask = normalizeMask(read("Q_TILT_MASK"));
   const tailsitterMotorMask = normalizeMask(values.Q_TAILSIT_MOTMX);
-  const frameClassLabel = frameClass === null ? "Not selected" : CLASS_NAME_BY_VALUE.get(frameClass) ?? `Class ${frameClass}`;
+  const frameClassLabel =
+    frameParameters.frameClass === null
+      ? "Not selected"
+      : frameClass === null
+        ? `Class ${frameParameters.frameClass}`
+        : (CLASS_NAME_BY_VALUE.get(frameClass) ?? frameClass);
   const layoutOptions = frameClass === null ? [] : getVtolFrameLayoutOptions(frameClass);
-  const layoutOption = frameType === null ? null : layoutOptions.find((option) => option.matches(frameType)) ?? null;
-  const frameTypeIgnored = layoutOptions.length === 0 || frameClass === 7 || frameClass === 5;
-  const frameTypeLabel = frameTypeIgnored && frameClass === 10
-    ? "Not applicable"
-    : layoutOption?.label ?? (frameType === null ? "Not selected" : `Type ${frameType}`);
+  const layoutOption = frameType === null ? null : (layoutOptions.find((option) => option.value === frameType) ?? null);
+  const frameTypeIgnored = frameType === FrameType.NotApplicable || frameType === FrameType.ScriptDefined;
+  const frameTypeLabel =
+    frameType === FrameType.NotApplicable
+      ? "Not applicable"
+      : frameType === FrameType.ScriptDefined
+        ? "Defined by script"
+        : (layoutOption?.label ??
+          (frameParameters.frameType === null ? "Not selected" : `Type ${frameParameters.frameType}`));
 
   let propulsors: VtolPropulsor[] = [];
   if (architecture === "bicopter" || architecture === "tailsitter_single_dual") {
     propulsors = buildSingleDualPropulsors(architecture, mechanism, input, proposed);
-  } else if (frameClass !== null && frameType !== null) {
-    const lookupType = frameClass === 7 && frameType !== 6
-      ? 0
-      : frameClass === 5 && frameType !== 10 && frameType !== 11
-        ? 0
-        : frameType;
-    const layout = getMotorLayout(frameClass, lookupType);
-    propulsors = (layout?.motors ?? [])
-      .filter((motor) => !(frameClass === 7 && motor.motorNumber === 7))
-      .flatMap((motor) => {
-        const propulsor = propulsorFromLayout(
-          motor,
-          tiltMask,
-          tailsitterMotorMask,
-          architecture,
-          mechanism,
-          input,
-          proposed,
-        );
-        return propulsor ? [propulsor] : [];
-      });
+  } else if (frame !== null) {
+    const layout = getMotorLayout(frame);
+    propulsors = (layout?.motors ?? []).flatMap((motor) => {
+      const propulsor = propulsorFromLayout(
+        motor,
+        tiltMask,
+        tailsitterMotorMask,
+        architecture,
+        mechanism,
+        input,
+        proposed,
+      );
+      return propulsor ? [propulsor] : [];
+    });
   }
 
-  const actuators = buildActuators(architecture, mechanism, propulsors, frameClass, input, proposed);
-  const supportedDiagram = architecture !== "custom" && architecture !== "conflict" && propulsors.length > 0;
+  const actuators = buildActuators(architecture, mechanism, propulsors, frame, input, proposed);
+  const supportedDiagram =
+    architecture !== "custom" &&
+    architecture !== "conflict" &&
+    architecture !== "unsupported" &&
+    mechanism !== "custom" &&
+    propulsors.length > 0;
   return {
     architecture,
     architectureLabel: architectureLabel(architecture),
     mechanism,
     enabled: architecture !== "disabled",
+    frame,
+    frameParameters,
     frameClass,
     frameClassLabel,
     frameType,
@@ -662,7 +809,8 @@ export function buildVtolTopologyModel(input: VtolTopologyInput): VtolTopologyMo
   return {
     applied: buildSnapshot(input, false),
     proposed: buildSnapshot(input, true),
-    hasProposedChanges: pendingTopologyParams.length > 0 || stagedParamNames.some((name) => /^SERVO\d+_FUNCTION$/.test(name)),
+    hasProposedChanges:
+      pendingTopologyParams.length > 0 || stagedParamNames.some((name) => /^SERVO\d+_FUNCTION$/.test(name)),
     hasTopologyChanges: pendingTopologyParams.length > 0,
     requiresRefreshBeforeMapping: pendingTopologyParams.some((name) => REFRESH_BOUNDARY_PARAM_NAMES.has(name)),
     pendingTopologyParams,
@@ -679,20 +827,81 @@ export function toggleMotorMask(mask: number, motorNumber: number): number {
 export function architectureParameterValues(architecture: VtolArchitecture): Record<string, number> {
   switch (architecture) {
     case "standard":
-      return { Q_ENABLE: 1, Q_TILT_ENABLE: 0, Q_TAILSIT_ENABLE: 0 };
+      return { Q_ENABLE: 1, Q_TILT_ENABLE: 0, Q_TAILSIT_ENABLE: ArduPilotTailsitterMode.Disabled };
     case "tiltrotor":
-      return { Q_ENABLE: 1, Q_TILT_ENABLE: 1, Q_TAILSIT_ENABLE: 0, Q_TILT_TYPE: 0 };
+      return {
+        Q_ENABLE: 1,
+        Q_TILT_ENABLE: 1,
+        Q_TAILSIT_ENABLE: ArduPilotTailsitterMode.Disabled,
+        Q_TILT_TYPE: ArduPilotTiltType.Continuous,
+      };
     case "bicopter":
-      return { Q_ENABLE: 1, Q_TILT_ENABLE: 1, Q_TAILSIT_ENABLE: 0, Q_TILT_TYPE: 3, Q_FRAME_CLASS: 10 };
+      return {
+        Q_ENABLE: 1,
+        Q_TILT_ENABLE: 1,
+        Q_TAILSIT_ENABLE: ArduPilotTailsitterMode.Disabled,
+        Q_TILT_TYPE: ArduPilotTiltType.Bicopter,
+        Q_FRAME_CLASS: ArduPilotFrameClass.Tailsitter,
+      };
     case "tailsitter_single_dual":
-      return { Q_ENABLE: 1, Q_TILT_ENABLE: 0, Q_TAILSIT_ENABLE: 1, Q_TAILSIT_MOTMX: 0, Q_FRAME_CLASS: 10 };
+      return {
+        Q_ENABLE: 1,
+        Q_TILT_ENABLE: 0,
+        Q_TAILSIT_ENABLE: ArduPilotTailsitterMode.Enabled,
+        Q_TAILSIT_MOTMX: 0,
+        Q_FRAME_CLASS: ArduPilotFrameClass.Tailsitter,
+      };
     case "tailsitter_copter":
-      return { Q_ENABLE: 1, Q_TILT_ENABLE: 0, Q_TAILSIT_ENABLE: 1 };
+      return { Q_ENABLE: 1, Q_TILT_ENABLE: 0, Q_TAILSIT_ENABLE: ArduPilotTailsitterMode.Enabled };
     case "tailsitter_motor_only":
-      return { Q_ENABLE: 1, Q_TILT_ENABLE: 0, Q_TAILSIT_ENABLE: 2 };
+      return { Q_ENABLE: 1, Q_TILT_ENABLE: 0, Q_TAILSIT_ENABLE: ArduPilotTailsitterMode.MotorOnly };
     case "disabled":
       return { Q_ENABLE: 0 };
     default:
       return {};
   }
+}
+
+/** Compute staged wire edits in the model, so components never invent firmware codes. */
+export function planVtolArchitectureChange(
+  architecture: VtolArchitecture,
+  current: VtolTopologySnapshot,
+): Record<string, number> {
+  const values = architectureParameterValues(architecture);
+  const defaultFrame = encodeArduPilotFrame({ frameClass: FrameClass.Quad, frameType: FrameType.X });
+  if (architecture === "tailsitter_copter") {
+    const hasCopterLayout =
+      current.frameClass !== null && current.frameClass !== FrameClass.SingleDual && current.propulsors.length > 0;
+    if (!hasCopterLayout) {
+      values.Q_FRAME_CLASS = defaultFrame.frameClass;
+      values.Q_FRAME_TYPE = defaultFrame.frameType;
+      values.Q_TAILSIT_MOTMX = 0b1111;
+    } else if (current.tailsitterMotorMask === 0) {
+      values.Q_TAILSIT_MOTMX = current.propulsors.reduce(
+        (mask, motor) => (motor.motorNumber === null ? mask : mask | (1 << (motor.motorNumber - 1))),
+        0,
+      );
+    }
+  }
+  if (architecture === "tailsitter_motor_only" && current.frameClass === FrameClass.SingleDual) {
+    values.Q_FRAME_CLASS = defaultFrame.frameClass;
+    values.Q_FRAME_TYPE = defaultFrame.frameType;
+  }
+  return values;
+}
+
+/** A class change keeps the existing wire type when the new backend accepts it. */
+export function planVtolFrameClassChange(
+  frameClass: FrameClass,
+  current: VtolTopologySnapshot,
+): Record<string, number> {
+  const code = encodeArduPilotFrameClass(frameClass);
+  const values: Record<string, number> = { Q_FRAME_CLASS: code };
+  const options = getVtolFrameLayoutOptions(frameClass);
+  const prospective = decodeArduPilotFrame(code, current.frameParameters.frameType).frame;
+  if (options.length > 0 && !options.some((option) => option.value === prospective?.frameType)) {
+    const frame = { frameClass, frameType: options[0].value };
+    if (isAirframe(frame)) values.Q_FRAME_TYPE = encodeArduPilotFrame(frame).frameType;
+  }
+  return values;
 }
