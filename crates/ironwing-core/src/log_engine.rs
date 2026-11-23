@@ -2,7 +2,8 @@ use std::collections::{BTreeMap, HashMap};
 use std::io::{Cursor, Write};
 
 use mavkit::dialect::MavMessage;
-use mavlink::{Message, ReadVersion, peek_reader::PeekReader, read_versioned_raw_message};
+use mavlink::{MavlinkVersion, Message};
+use mavlink_tlog::{TlogSlice, Version as TlogVersion};
 use serde::Serialize;
 use serde_json::{Map as JsonMap, Value as JsonValue};
 
@@ -620,41 +621,50 @@ fn parse_bin_bytes(path: &str, bytes: &[u8]) -> Result<ParsedLog, String> {
 }
 
 fn parse_tlog_bytes(path: &str, bytes: &[u8]) -> Result<ParsedLog, String> {
-    let mut reader = PeekReader::new(Cursor::new(bytes));
     let mut entries = Vec::new();
     let mut sequence = 0_u64;
-    loop {
-        let ts_bytes = match reader.read_exact(8) {
-            Ok(bytes) => bytes,
-            Err(mavlink::error::MessageReadError::Io(error))
-                if error.kind() == std::io::ErrorKind::UnexpectedEof =>
-            {
-                break;
-            }
-            Err(error) => return Err(format!("failed to parse TLOG timestamp: {error}")),
+    let mut reader = TlogSlice::new(bytes);
+    for record in reader.by_ref() {
+        let frame = record.frame;
+        let version = match frame.version() {
+            TlogVersion::V1 => MavlinkVersion::V1,
+            TlogVersion::V2 => MavlinkVersion::V2,
         };
-        let timestamp_usec = u64::from_le_bytes(
-            ts_bytes
-                .try_into()
-                .map_err(|_| "invalid TLOG timestamp width")?,
-        );
-        let raw = read_versioned_raw_message::<MavMessage, _>(&mut reader, ReadVersion::Any)
-            .map_err(|error| format!("failed to parse TLOG frame: {error}"))?;
-        let message = MavMessage::parse(raw.version(), raw.message_id(), raw.payload())
-            .map_err(|error| format!("failed to decode TLOG payload: {error}"))?;
+        let message = match MavMessage::parse(version, frame.msg_id(), frame.payload()) {
+            Ok(message) => message,
+            Err(_) => continue,
+        };
         entries.push(tlog_to_stored(
             sequence,
-            timestamp_usec,
-            raw.system_id(),
-            raw.component_id(),
-            raw.payload().to_vec(),
+            record.timestamp_us,
+            frame.sys_id(),
+            frame.comp_id(),
+            frame.payload().to_vec(),
             message,
         ));
         sequence += 1;
     }
+    let stats = reader.stats();
+    let mut diagnostics = Vec::new();
+    if stats.bad_crc > 0 || stats.skipped_bytes > 0 || stats.truncated_tail > 0 {
+        diagnostics.push(log_diagnostic(
+            LogDiagnosticSeverity::Warning,
+            LogDiagnosticSource::Parse,
+            "tlog_recovered_damage",
+            format!(
+                "Recovered {} frames after dropping {} bad-CRC frame(s), skipping {} damaged byte(s) and {} truncated trailing byte(s)",
+                entries.len(),
+                stats.bad_crc,
+                stats.skipped_bytes,
+                stats.truncated_tail
+            ),
+            !entries.is_empty(),
+            entries.last().map(|entry| entry.timestamp_usec),
+        ));
+    }
     Ok(ParsedLog {
         store: build_store(path, LogType::Tlog, entries),
-        diagnostics: Vec::new(),
+        diagnostics,
     })
 }
 
@@ -1547,6 +1557,70 @@ mod tests {
         assert_close(fields["alt"], 123.456);
         assert_close(fields["relative_alt"], 7.89);
         assert_close(fields["hdg"], 90.01);
+    }
+
+    fn heartbeat(custom_mode: u32) -> MavMessage {
+        MavMessage::HEARTBEAT(HEARTBEAT_DATA {
+            custom_mode,
+            mavtype: MavType::MAV_TYPE_QUADROTOR,
+            autopilot: MavAutopilot::MAV_AUTOPILOT_ARDUPILOTMEGA,
+            base_mode: MavModeFlag::MAV_MODE_FLAG_SAFETY_ARMED,
+            system_status: MavState::MAV_STATE_ACTIVE,
+            mavlink_version: 3,
+        })
+    }
+
+    fn build_tlog(messages: &[MavMessage]) -> Vec<u8> {
+        use mavlink::{MavHeader, write_versioned_msg};
+        let header = MavHeader {
+            system_id: 1,
+            component_id: 1,
+            sequence: 0,
+        };
+        let mut buf = Vec::new();
+        for (index, message) in messages.iter().enumerate() {
+            let mut frame = Vec::new();
+            write_versioned_msg(&mut frame, MavlinkVersion::V2, header, message)
+                .expect("encode frame");
+            // .tlog prefixes every frame with an 8 byte big-endian timestamp.
+            let timestamp_us = 1_000 + index as u64 * 1_000;
+            buf.extend_from_slice(&timestamp_us.to_be_bytes());
+            buf.extend_from_slice(&frame);
+        }
+        buf
+    }
+
+    #[test]
+    fn parse_tlog_recovers_frames_after_a_damaged_frame() {
+        // Two valid frames. The old reader used `?` on the first frame error
+        // and aborted the whole parse; a single damaged frame made the entire
+        // log unopenable. mavlink-tlog drops the damaged frame (bad CRC) and
+        // resyncs to the next valid one.
+        let good = build_tlog(&[heartbeat(7), heartbeat(9)]);
+        let clean = parse_tlog_bytes("clean.tlog", &good).expect("clean tlog parses");
+        assert_eq!(clean.store.entries().len(), 2);
+        assert!(clean.diagnostics.is_empty());
+
+        // Corrupt a payload byte of the first frame so its CRC no longer
+        // matches. Frame starts right after the 8 byte timestamp; byte 20 is
+        // inside the first frame's payload, leaving the frame structure intact.
+        let mut damaged = good.clone();
+        damaged[20] ^= 0xFF;
+        let parsed = parse_tlog_bytes("damaged.tlog", &damaged)
+            .expect("a damaged frame must not abort the whole log");
+        assert_eq!(
+            parsed.store.entries().len(),
+            1,
+            "the undamaged frame is still read"
+        );
+        assert_eq!(parsed.store.entries()[0].msg_name, "HEARTBEAT");
+        assert!(
+            parsed
+                .diagnostics
+                .iter()
+                .any(|d| d.code == "tlog_recovered_damage"),
+            "damage is reported, not silently accepted"
+        );
     }
 
     #[test]
